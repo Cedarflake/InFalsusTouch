@@ -3,6 +3,7 @@ add_executable(ift_core_tests
   protocol-tests.cpp
   input-tests.cpp
   mapping-tests.cpp
+  direct-field-tests.cpp
   video-tests.cpp
   profile-tests.cpp
   coop-tests.cpp

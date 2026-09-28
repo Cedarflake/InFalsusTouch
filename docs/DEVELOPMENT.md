@@ -66,6 +66,9 @@ uv run --python 3.13 tests/multiplayer-video.py
 
 常规自动化使用 dry-run 输入接收端。`native-input`、`game-input` 和 `game-field`
 验收工具会向指定前台窗口发送实际输入，运行前应核对目标窗口。
+`tests/direct-field-game.py --window 0xHANDLE` 验证新版绝对 Field：重复落点、
+立即抬手和每秒 120 次连续目标更新。它仅支持已校验的游戏版本，读取游戏状态
+但不写入内存，要求正常谱面在前台且鼠标锁定。详情见 [Field 调查](FIELD-MAPPING.md)。
 真机测试注入的 MotionEvent 是合成事件，不能证明物理七指能力或完整谱面的操作效果。
 
 RTT 是控制协议往返耗时，视频统计是各个处理阶段的测量；

@@ -62,7 +62,7 @@ int wmain(int argc, wchar_t** argv) {
     if (options.dryRun) {
       sink = std::make_unique<ift::TraceInput>(options.tracePath);
     } else {
-      sink = std::make_unique<ift::Win32Input>();
+      sink = std::make_unique<ift::Win32Input>(window);
     }
     shutdownComplete = CreateEventW(nullptr, TRUE, FALSE, nullptr);
     if (!shutdownComplete || !SetConsoleCtrlHandler(handleConsoleSignal, TRUE)) {

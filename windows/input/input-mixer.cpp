@@ -20,16 +20,46 @@ bool InputMixer::key(std::size_t device, std::uint8_t lane, bool down) noexcept 
 void InputMixer::field(std::size_t device, bool down) noexcept {
   if (down) {
     if (fieldOrder_[device] == 0) fieldOrder_[device] = ++nextOrder_;
-    if (owner_ == maxControllers) owner_ = device;
+    if (owner_ == maxControllers) {
+      owner_ = device;
+      finisher_ = maxControllers;
+      sink_.field(true);
+    }
     return;
   }
+  releaseField(device, false);
+}
+
+void InputMixer::finishField(std::size_t device) noexcept {
+  releaseField(device, true);
+}
+
+void InputMixer::releaseField(std::size_t device, bool finish) noexcept {
   fieldOrder_[device] = 0;
-  if (owner_ != device) return;
+  if (owner_ != device) {
+    if (finisher_ == device && !finish) {
+      finisher_ = maxControllers;
+      sink_.field(false);
+    }
+    return;
+  }
+  if (finish) sink_.finishField();
+  else sink_.field(false);
+  finisher_ = finish ? device : maxControllers;
   owner_ = maxControllers;
   for (std::size_t index = 0; index < fieldOrder_.size(); ++index) {
     if (fieldOrder_[index] != 0 &&
         (owner_ == maxControllers || fieldOrder_[index] < fieldOrder_[owner_])) owner_ = index;
   }
+  if (owner_ != maxControllers) {
+    finisher_ = maxControllers;
+    sink_.field(true);
+  }
+}
+
+bool InputMixer::fieldPosition(std::size_t device, double normalized, Point point) noexcept {
+  field(device, true);
+  return !ownsField(device) || sink_.fieldPosition(normalized, point);
 }
 
 bool InputMixer::absolute(std::size_t device, Point point) noexcept {

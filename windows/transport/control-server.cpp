@@ -124,7 +124,8 @@ void runControlServer(const HostOptions& options, const GameWindow& target,
       FD_SET(controller->socket.get(), &readable);
       if (!controller->replies.empty()) FD_SET(controller->socket.get(), &writable);
     }
-    timeval timeout{0, 8000};
+    sink.tick();
+    timeval timeout{0, sink.pendingField() ? 2000L : 8000L};
     if (select(0, &readable, &writable, nullptr, &timeout) == SOCKET_ERROR) throw socketError("select controllers");
     for (std::size_t index = 0; index < controllers.size(); ++index) {
       auto* controller = controllers[index].get();

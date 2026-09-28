@@ -2,15 +2,76 @@
 
 ## Current result
 
+On 2026-09-29, the replacement direct-positioning Host passed a normal-chart
+game-state test: down/up at 0.25, 0.5, 0.75, 0, 1, 0.25 and 0.5 reached the requested
+positions, followed by 240 target updates at 120 events/second and a final midpoint.
+The largest settled error was 0.000317 of the Field range; the moving sweep's
+largest target/readback difference was 0.02110. This verifies game-state positioning,
+not physical phone-to-picture alignment or touch-to-photon latency. The user reported
+improved hand feel after the input changes; full physical acceptance remains open.
+
+Relative remains the default and now preserves actual horizontal View-pixel
+displacement. Absolute is selectable for mobile-style down-to-position and tracking
+in the supported game build. Neither mode fixes game sensitivity at 1.8.
+
+## Direct game positioning
+
+The inspected Windows In Falsus 1.0.4b build accumulates input as:
+
+```text
+rawPosition += relativeMouseUnits / primaryDisplaySystemWidth * effectiveSensitivity
+visiblePosition = clamp(rawPosition, 0, 1)
+```
+
+Raw position may lie outside the visible range, so the visible edge cannot be
+used as a new origin. The Host reads raw position and effective sensitivity through
+`ReadProcessMemory`, then sends an ordinary relative `SendInput` correction to the
+requested normalized coordinate. It does not patch the game, write its memory,
+change its settings or inject a library. Sensitivity is read for every correction;
+1.8 was the effective value in this run, not a constant in the control algorithm.
+
+The reader accepts only the inspected `GameAssembly.dll` SHA-256
+`ab1d8fa7739078510fab5f8580095c90ea0f5e9236ac9b918e934cb9ae1b7d9c`.
+The GameScene and Field objects are resolved at runtime and samples are checked for
+stable pointers, finite values and consistency between raw and visible position.
+Unknown binaries disable direct gameplay positioning instead of guessing offsets.
+Relative input remains available. A game update requires fresh verification.
+
+Only one mouse correction is pending at a time. New finger coordinates replace the
+target while the Host waits for game feedback, preventing a backlog of duplicated
+movement. Normal UP completes the final sample; cancel, disconnect and loss of
+foreground cancel future corrections. Missing feedback or ignored input stops the
+gesture after 100 ms. The selected game must be foreground with its cursor locked;
+unlocked menus retain OS cursor positioning.
+
+Production-path evidence:
+`build/game-input-test/direct-field-20260928T200723742918Z.json` and its Host log.
+The display width was 2560, effective sensitivity 1.8. Settled request-to-state
+readbacks were 5.00–11.92 ms; these exclude phone, USB, video and physical display.
+The pure controller suite also verifies sensitivity changes, offscreen raw positions,
+rapid retouch, ignored input and cancellation. Physical mouse concurrency, multi-phone
+handoff and other display arrangements still need real-game checks.
+
+Reproduce only in a foreground normal chart, without concurrent physical input:
+
+```powershell
+uv run --python 3.13 tests/direct-field-game.py --window 0xHANDLE
+```
+
+The test fails before input on unsupported binaries or unlocked/nonforeground windows.
+It retains failed-run observations after starting a session and does not alter ADB
+reverse mappings or the normal Host. Game-state feedback is read-only.
+
+## Earlier OS-absolute result
+
 The previous default `SendInput` absolute-client mapping does not reliably select a fixed
 position on In Falsus's Field. A normal-chart test on 2026-09-29 reproduced
 different visible Field positions for the same normalized input. Adjusting only
 the two mapping endpoints is insufficient.
 
-Following the tablet trial and the user's direction on 2026-09-29, Relative is
-now the default gameplay path, with sensitivity managed in In Falsus. Absolute
-remains experimental and has not passed alignment acceptance. This changes the
-chosen control behavior; it does not turn the failed absolute test into a pass.
+Following the tablet trial, Relative became the default gameplay path, with
+sensitivity managed in In Falsus. The later direct-position implementation above
+replaces the failed OS-absolute mechanism; it does not turn those earlier tests into passes.
 
 ## Relative input decision and source comparison
 
@@ -35,18 +96,18 @@ Sources were inspected on 2026-09-29 at the revisions linked below:
   [Windows documentation](https://github.com/LizardByte/Sunshine/blob/8ed7f5bc51eb0e33b779abb77246caf179885a2b/docs/getting_started.md)
   distinguishes driver-backed relative Raw Input from absolute Windows injection.
 
-InFalsusTouch now converts normalized Field displacement to a fixed 1280 mouse
-units per full Field touch span. Fractional units accumulate until they can be
-sent, and clear on gesture end or input release. Window size and packet timing
-cannot change this conversion. The previous Host sensitivity, acceleration,
-smoothing and speed cap are removed. In particular, the former speed cap could
-discard movement from packets received close together.
+The first revision used 1280 mouse units per Field touch span. Phone testing
+showed this reduced movement on the 2400-pixel display and made calibration affect
+speed. Android now preserves horizontal View pixels, including movement outside
+the calibrated Field edges while a finger owns Field. The v2 wire still uses
+1280-unit blocks; larger swipes split into ordered packets rather than being capped.
+Fractional mouse units accumulate within a gesture. Host sensitivity, acceleration,
+smoothing and speed limiting remain removed.
 
-This borrows the fixed-reference approach, not Moonlight's general desktop tap,
-drag or scrolling gestures. The existing single Field owner, immediate native
+The existing single Field owner, immediate native
 touch handling and ordered USB queue remain in use. No reference-project code or
-driver is incorporated. SendInput is still the Windows backend; this change does
-not claim to bypass Windows pointer processing or read the game's internal Field.
+driver is incorporated. SendInput is still the Windows backend. Relative input does
+not depend on game feedback; only the direct-positioning path reads game state.
 
 ## Test conditions
 
@@ -83,9 +144,9 @@ counterexamples to correct alignment, not pixel-accuracy measurements.
 
 The last two sequences reject a simple “move far left, then offset from that edge”
 calibration: the visible edge did not provide a reliable new position reference.
-These observations are consistent with accumulated game input and an invisible
-offset outside the displayed range. The game's exact accumulation and clamping
-rules have **not** been established.
+These historical observations suggested accumulated input and an invisible offset.
+The subsequent read-only investigation established the accumulation and clamping
+rules described above.
 
 Unity's [mouse documentation](https://docs.unity3d.com/Packages/com.unity.inputsystem@1.14/manual/Mouse.html#cursor-warping)
 describes cursor recentering while locked. That explains why an OS cursor reading
@@ -164,7 +225,7 @@ device ownership handoff, focus changes and game sensitivity/window-size changes
 Automated transport and mapping tests establish the transmitted displacement,
 not the final in-game hand feel or touch-to-photon latency.
 
-Any future absolute mapping still needs a dependable game position reference or
-observed game feedback. Neither the recentered OS cursor nor the visible Field
-edge has proved sufficient. It would require repeated-position and left/center/right
-round-trip tests in actual charts before becoming a supported gameplay mode.
+Direct positioning now has a game-state reference and passing repeated-position
+checks. It still needs physical finger/video alignment, simultaneous lane holds,
+focus transitions and multi-device tests. Neither the recentered OS cursor nor
+the visible Field edge should be used as the positioning reference.

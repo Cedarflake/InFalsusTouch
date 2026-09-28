@@ -8,6 +8,38 @@
 
 void coopTests() {
   using namespace ift;
+  {
+    struct DirectSink : RecordingSink {
+      std::vector<int> gestures;
+      double position = -1;
+      void field(bool down) noexcept override { gestures.push_back(down ? 1 : -1); }
+      void finishField() noexcept override { gestures.push_back(0); }
+      bool fieldPosition(double value, Point) noexcept override { position = value; return true; }
+    } direct;
+    InputMixer groupInput(direct);
+    groupInput.field(0, true);
+    groupInput.field(1, true);
+    groupInput.fieldPosition(0, 0.25, {});
+    groupInput.fieldPosition(1, 0.75, {});
+    check(direct.position == 0.25 && direct.gestures == std::vector<int>{1},
+          "Only the Field owner may start or change direct positioning");
+    groupInput.finishField(0);
+    check(direct.gestures == std::vector<int>({1, 0, 1}), "Handoff must finish the old gesture and start the next");
+    groupInput.fieldPosition(1, 0.75, {});
+    check(direct.position == 0.75, "Handoff must forward normalized coordinates");
+    groupInput.field(0, false);
+    check(direct.gestures.size() == 3, "An unrelated disconnect must not cancel the owner");
+    groupInput.field(1, false);
+    check(direct.gestures.back() == -1, "Owner disconnect must cancel pending corrections");
+    groupInput.field(1, true);
+    groupInput.finishField(1);
+    const auto finished = direct.gestures.size();
+    groupInput.field(0, false);
+    check(direct.gestures.size() == finished, "Unrelated reconnect must not discard the final touch sample");
+    groupInput.field(1, false);
+    check(direct.gestures.back() == -1 && direct.gestures.size() == finished + 1,
+          "Finishing owner's disconnect must still cancel pending corrections");
+  }
   RecordingSink sink;
   InputMixer mixer(sink);
   ControllerInput a(mixer, 0), b(mixer, 1);

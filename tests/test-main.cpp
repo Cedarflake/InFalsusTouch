@@ -5,6 +5,7 @@
 void videoTests();
 void profileTests();
 void coopTests();
+void directFieldTests();
 
 int main(int argc, char** argv) {
   try {
@@ -17,6 +18,7 @@ int main(int argc, char** argv) {
     }
     if (suite == "mapping" || suite == "all") {
       mappingTests();
+      directFieldTests();
     }
     if (suite == "video" || suite == "all") videoTests();
     if (suite == "profile" || suite == "all") profileTests();

@@ -5,6 +5,7 @@ add_executable(InFalsusTouchHost
   config/field-calibration.cpp
   config/game-bindings.cpp
   input/win32-input.cpp
+  input/game-field-reader.cpp
   input/trace-input.cpp
   target/game-window.cpp
   transport/control-server.cpp
@@ -16,7 +17,7 @@ add_executable(InFalsusTouchHost
   encoder/hardware-encoder.cpp
 )
 target_link_libraries(InFalsusTouchHost PRIVATE ift_core ws2_32 user32
-  windowsapp d3d11 dxgi mfplat mf mfuuid ole32 dxguid dwmapi shell32)
+  windowsapp d3d11 dxgi mfplat mf mfuuid ole32 dxguid dwmapi shell32 bcrypt)
 target_compile_definitions(InFalsusTouchHost PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX UNICODE _UNICODE)
 if(MSVC)
   target_link_options(InFalsusTouchHost PRIVATE /MANIFEST:EMBED

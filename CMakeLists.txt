@@ -16,6 +16,7 @@ add_library(ift_core
   protocol/cpp/video-packet.cpp
   protocol/cpp/h264.cpp
   windows/input/field-mapper.cpp
+  windows/input/direct-field.cpp
   windows/input/input-state.cpp
   windows/input/input-session.cpp
   windows/input/input-mixer.cpp

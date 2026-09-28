@@ -56,10 +56,11 @@ bool InputState::apply(const Packet& packet) {
       pressed = down;
     }
   } else if (packet.type == MessageType::fieldBegin || packet.type == MessageType::fieldEnd) {
-    sink_.field(packet.type == MessageType::fieldBegin);
+    if (packet.type == MessageType::fieldBegin) sink_.field(true);
+    else sink_.finishField();
     relative_.reset();
   } else if (packet.type == MessageType::fieldAbsolute) {
-    if (!sink_.absolute(mapField(packet.value, client_, config_))) {
+    if (!sink_.fieldPosition(packet.value, mapField(packet.value, client_, config_))) {
       throw std::runtime_error("Absolute mouse injection failed");
     }
   } else if (packet.type == MessageType::fieldRelative) {

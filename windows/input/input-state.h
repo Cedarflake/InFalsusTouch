@@ -15,7 +15,14 @@ public:
   virtual bool key(std::uint8_t lane, bool down) noexcept = 0;
   virtual bool absolute(Point clientPoint) noexcept = 0;
   virtual bool relative(int deltaX) noexcept = 0;
+  virtual bool fieldPosition(double normalized, Point clientPoint) noexcept {
+    (void)normalized;
+    return absolute(clientPoint);
+  }
   virtual void field(bool down) noexcept { (void)down; }
+  virtual void finishField() noexcept { field(false); }
+  virtual void tick() noexcept {}
+  virtual bool pendingField() const noexcept { return false; }
   virtual void setBindings(const KeyBindings& bindings) { (void)bindings; }
 };
 
