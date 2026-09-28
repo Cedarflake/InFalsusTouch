@@ -32,8 +32,8 @@ void validate(const HostProfile& profile) {
   profile.field.validate();
   const auto& video = profile.video;
   if (!((video.width == 1280 && video.height == 720) || (video.width == 1920 && video.height == 1080)) ||
-      video.fps < 24 || video.fps > 60 || video.bitrate < 500'000 || video.bitrate > 40'000'000) {
-    throw std::invalid_argument("Invalid video profile; expected 720p/1080p, 24-60 FPS, 0.5-40 Mbps");
+      video.fps < 24 || video.fps > 120 || video.bitrate < 500'000 || video.bitrate > 40'000'000) {
+    throw std::invalid_argument("Invalid video profile; expected 720p/1080p, 24-120 FPS, 0.5-40 Mbps");
   }
 }
 

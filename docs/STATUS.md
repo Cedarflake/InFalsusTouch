@@ -52,7 +52,7 @@ and button shapes are unchanged.
 | Windows host compilation | Passed, MSVC 19.44 / CMake 3.31.6 / Windows SDK 10.0.26100.0 |
 | Android APK compilation | Passed, Gradle 8.11.1 / AGP 8.9.2 / Kotlin 2.1.20 / JDK 21 |
 | C++ input protocol / input state / mapping / video / profile / cooperative suites | 6/6 passed |
-| Kotlin settings / touch / input+video protocol / queue / socket / native-host / video timing tests | 44/44 passed, no skips; includes gap-free Field/button boundaries, pixel-preserving relative movement, large swipes, native-host deltas, haptic-setting codecs, 186 partial-selection/layout combinations and bounded local-clock latency statistics |
+| Kotlin settings / touch / input+video protocol / queue / socket / native-host / video timing tests | 45/45 passed, no skips; includes gap-free Field/button boundaries, pixel-preserving relative movement, large swipes, native-host deltas, haptic-setting codecs, 186 partial-selection/layout combinations, bounded local-clock latency statistics and high-frame-rate protocol bounds |
 | Flutter analysis and UI tests | No analysis issues; 20/20 tests passed, including bilingual vibration toggle and immediate saving |
 | Native profile persistence and CLI precedence integration | Passed, including legacy tuning migration, retired flags, invalid/missing profile and unchanged-file failure checks |
 | TCP disconnect / malformed / reconnect integration | 8/8 checks passed, including coalesced full-width relative movement |
@@ -71,7 +71,8 @@ and button shapes are unchanged.
 | WGC / GPU conversion / hardware H.264 / TCP | Passed, including Baseline SPS and >=58 FPS gate |
 | PC source resize / aspect changes / minimize and restore | 720p decoded color, centered bars, animation and independent input passed; minimize triggered a stream restart which the test receiver recovered |
 | Android hardware decode / output colors / seven-pointer input / settings and calibration isolation / reconnect | Passed at both 720p and 1080p with relative Field movement and restored device settings |
-| 720p60 short-run throughput | Latest USB phone steady receive 60.00 FPS, present callbacks 59.62 FPS; 21.02-second steady interval |
+| 720p60 short-run throughput | Latest USB phone steady receive 59.99 FPS, decode 59.95 FPS, present callbacks 59.33 FPS; 21.02-second steady interval |
+| Experimental 720p120 throughput | PC 120.13 FPS passed; phone receive 120.03 FPS, decode 113.68 FPS, present callbacks 87.66 FPS failed the unchanged proportional presentation gate; default remains 60 FPS |
 | 1080p60 short-run throughput | Earlier PC 60.13 FPS; latest USB phone steady receive 60.00 FPS, present callbacks 59.52 FPS; native source and received dimensions verified |
 | Measured latency tuning | Bounded queues, WGC pacing, low-latency codec selection and local statistics implemented |
 | Settings / calibration UX | Implemented; phone persistence/dialog/calibration and PC profile/mapping checks passed; physical PC cursor wizard use remains manual |
@@ -91,6 +92,8 @@ uv run --python 3.13 tests\video-integration.py --resolution 1080p --seconds 10 
 uv run --python 3.13 tests\video-recovery.py
 uv run --python 3.13 tests\video-device.py
 uv run --python 3.13 tests\video-device.py --resolution 1080p --skip-install
+uv run --python 3.13 tests\video-integration.py --fps 120 --seconds 10 --min-fps 116
+uv run --python 3.13 tests\video-device.py --fps 120 --seconds 20 --skip-install
 uv run --python 3.13 tests\multiplayer-video.py
 ```
 
@@ -181,6 +184,45 @@ The remaining diagnosis requires comparing the same phone controls while watchin
 the PC versus the phone, plus real chart timing results. These tests do not prove
 that the reported Late judgments are resolved. No total touch-to-photon latency
 is inferred from independent PC and phone clocks.
+
+### High-frame-rate probe, 2026-09-29
+
+Host CLI/profile validation and both IFV1 implementations now accept 24–120 FPS.
+Defaults remain 720p60. The APK reports the requested rate separately from actual
+receive, decode and presentation counts. Test runners accept an explicit Host
+binary and FPS so experiments do not replace the running Host. Failed throughput
+checks retain their fresh measurements rather than losing the diagnostic data.
+
+The PC-only 720p120 run delivered 120.13 FPS for 10.01 seconds; capture-available to
+encode averaged 2.71 ms. Evidence: `build/video-test/720p120-20260928T212040949869Z/`.
+Two USB phone runs did not pass the presentation gate of at least 110 FPS. The
+first reported 86.70 callbacks/s. The second added cumulative decode counts to
+locate the deficit, without changing playback or lowering the gate:
+
+| Requested stream | Steady interval | Receive FPS | Decode FPS | Present callbacks/s | Receive to present mean / P95 |
+| --- | --- | --- | --- | --- | --- |
+| 720p120 | 28.03 s | 120.03 | 113.68 | 87.66 | 29.71 / 35.84 ms |
+| 720p60 regression, same build | 21.02 s | 59.99 | 59.95 | 59.33 | 31.81 / 37.68 ms |
+
+Both used the 120 Hz display and Qualcomm low-latency option. Latency windows still
+cover only the last 240 presented frames, approximately 2.7 and 4.0 seconds, not the
+whole steady interval. At 120 FPS, mean receive-to-submit/decode/decode-to-present
+were 2.12/5.00/22.60 ms; at 60 FPS they were 2.10/5.52/24.19 ms. The small difference
+does not establish a useful latency reduction. Presentation callbacks are software
+measurements, not a high-speed recording of the physical screen.
+
+PC encoding and phone reception sustained the requested 120 FPS, while the larger
+deficit occurred after decoded output. Decoder/queue behavior and presentation
+cadence need further isolation; these results do not justify blaming USB speed or
+claiming that the phone cannot decode high-frame-rate video. The 60 FPS regression
+passed colors, simultaneous input, settings/calibration isolation and reconnect.
+All runs restored phone preferences exactly and restored the previous ADB mappings.
+
+Evidence under `build/video-device-test/`: `720p120-20260928T212411027376Z/`
+(first failure), `720p120-20260928T212919147260Z/` (full stage metrics), and
+`720p60-20260928T213154961149Z/` (passing regression). High-rate operation remains
+experimental; it is not enabled in the user's normal connection. No new real-game
+120 FPS or physical Late-judgment acceptance is claimed.
 
 ### PC window recovery, 2026-09-29
 

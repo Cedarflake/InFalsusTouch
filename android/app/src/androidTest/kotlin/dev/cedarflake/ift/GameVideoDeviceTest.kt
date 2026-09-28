@@ -41,12 +41,15 @@ class GameVideoDeviceTest {
     assumeTrue(InstrumentationRegistry.getArguments().getString("gameVideo") == "true")
     val instrumentation = InstrumentationRegistry.getInstrumentation()
     val highRefresh = InstrumentationRegistry.getArguments().getString("highRefresh") != "false"
+    val fps = InstrumentationRegistry.getArguments().getString("videoFps", "60").toInt()
+    require(fps in 24..120)
     DeviceSettings { it.copy(controlsMask = 127, showStatistics = false, autoConnect = false, autoHideControls = true,
       highRefreshDisplay = highRefresh, layoutMode = LayoutMode.ALIGNED, laneHeight = 0.4f, videoScale = VideoScale.FIT,
       fieldMode = FieldMode.RELATIVE, judgment = JudgmentLayout()) }.use {
       DeviceActivity.launch().use { scenario ->
         scenario.onActivity { it.toggleConnection() }
         val first = waitForSample(scenario) { it.presentedFrames >= 100 }
+        assertEquals("Received video frame rate", fps, first.targetFps)
         val cadence = FrameCadence()
         val display = JSONObject()
         scenario.onActivity { cadence.start() }
@@ -126,6 +129,7 @@ class GameVideoDeviceTest {
         }
         SystemClock.sleep(250)
         val metrics = JSONObject().put("steadySeconds", elapsed).put("receiveFps", received).put("presentFps", presented)
+          .put("targetFps", last.targetFps)
           .put("presentedFrames", last.presentedFrames).put("droppedFrames", last.droppedFrames)
           .put("queueDepth", last.queueDepth).put("megabitsPerSecond", last.megabitsPerSecond)
           .put("captureAvailableToEncodeMs", last.captureToEncodeMs).put("decoderMs", last.decoderMs)

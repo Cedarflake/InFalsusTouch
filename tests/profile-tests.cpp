@@ -14,6 +14,8 @@ void profileTests() {
     "Calibration must use physical client coordinates, including negative desktop origins");
   check(decoded.video.height == 1080 && decoded.video.fps == 30 && decoded.video.bitrate == 12'000'000,
     "Video options must survive profile round-trip");
+  profile.video.fps = 120;
+  check(parseProfile(serializeProfile(profile)).video.fps == 120, "High-refresh video rate must survive profile round-trip");
   check(parseProfile("# profile\r\nversion = 1\r\nfield-left = 0.1\r\n").field.left == 0.1, "CRLF profile parsing failed");
   profile.field.left = 0.123456789012345;
   check(parseProfile(serializeProfile(profile)).field.left == profile.field.left, "Profile numbers must round-trip without precision loss");
@@ -26,7 +28,7 @@ void profileTests() {
     migrated.find("max-speed") == std::string::npos && !parseProfile(migrated).hasLegacyRelativeSettings,
     "Migrated profiles must not retain hidden relative tuning");
   for (const auto text : {"", "version=3", "version=1\nversion=1", "version=1\nunknown=0",
-       "version=1\nfps=65560", "version=1\nfps=nan", "version=1\nfield-left=nan", "version=1\nfield-left=0.99",
+       "version=1\nfps=65560", "version=2\nfps=121", "version=2\nfps=23", "version=1\nfps=nan", "version=1\nfield-left=nan", "version=1\nfield-left=0.99",
        "version=1\nbitrate=-1", "version=1\nresolution=4k", "version=1\nsmoothing=1", "version=1\nfps=30junk",
        "version=1\nsensitivity=nan", "version=2\nsensitivity=2", "smoothing=0.5\nversion=2"}) {
     expectError<std::invalid_argument>([&] { parseProfile(text); });

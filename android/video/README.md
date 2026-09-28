@@ -16,11 +16,16 @@ Frames released for the same display refresh can be replaced by newer output.
 The compressed queue contains two packets. Overflow discards dependent pictures
 until the next IDR, then flushes and resends SPS/PPS. Codec input is bounded, stale
 decoded output is not presented, and surface destruction closes the session.
-`VideoStatistics` reports FPS, bitrate, queue/drops and local clock intervals.
+`VideoStatistics` reports the requested FPS separately from received, decoded and
+presented frame counts/rates, plus bitrate, queue/drops and local clock intervals.
 Its bounded 240-presented-frame window separates receive-to-submit, decoding and
 decode-to-present time, with mean and nearest-rank P95 values. These intervals stop
 at the codec presentation callback and do not measure physical screen latency.
 No video lock, callback or queue is shared with touch/control processing.
+
+The receiver accepts 24–120 FPS, provided a hardware decoder advertises support
+for the requested size and rate. Host defaults to 60 FPS. Accepting a format or
+using a 120 Hz display does not establish sustained 120 FPS presentation.
 
 References: [Android Surface presentation timestamps](https://developer.android.com/reference/android/media/MediaCodec#releaseOutputBuffer(int,%20long)),
 [vendor parameter discovery](https://developer.android.com/reference/android/media/MediaCodec#getSupportedVendorParameters()),

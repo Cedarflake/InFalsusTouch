@@ -112,7 +112,7 @@ HostOptions parseOptions(int argc, wchar_t** argv) {
       else throw std::invalid_argument("Resolution must be 720p or 1080p");
     } else if (option == L"--fps") {
       const auto fps = integer(value);
-      if (fps < 24 || fps > 60) throw std::invalid_argument("FPS must be in [24, 60]");
+      if (fps < 24 || fps > 120) throw std::invalid_argument("FPS must be in [24, 120]");
       options.video.fps = static_cast<std::uint16_t>(fps);
     } else if (option == L"--bitrate") {
       const auto bitrate = integer(value);
@@ -161,8 +161,8 @@ void printHelp() {
     "  --no-video              Input only (video is enabled by default)\n"
     "  --video-port 27183      Independent loopback video listener\n"
     "  --resolution 720p       720p or 1080p, client aspect preserved\n"
-    "  --fps 60 --bitrate 8000000\n"
-    "Relative Field uses 1280 mouse units per touch-area width; tune sensitivity in In Falsus.\n"
+    "  --fps 60 --bitrate 8000000  FPS range: 24-120; default 60\n"
+    "Relative Field preserves horizontal touch pixels; tune sensitivity in In Falsus.\n"
     "Experimental absolute mapping only:\n"
     "  --field-left 0.05 --field-right 0.95 --field-y 0.5\n"
     "  --calibrate             Pick game Field endpoints with the PC mouse, save and exit\n"

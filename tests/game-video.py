@@ -13,7 +13,7 @@ device = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(device)
 
 
-def main(window, system_refresh, skip_install, output):
+def main(window, system_refresh, skip_install, output, host_path, fps):
     output = output or ROOT / "build" / ("game-video-system-refresh-test" if system_refresh else "game-video-test")
     serial = device.adb("get-serialno").strip()
     if not serial or serial == "unknown":
@@ -26,7 +26,8 @@ def main(window, system_refresh, skip_install, output):
     host = None
     try:
         with (output / "host.log").open("w", encoding="utf-8") as log:
-            host = subprocess.Popen([str(ROOT / "dist/InFalsusTouchHost.exe"), "--no-profile", "--dry-run", "--video", "--window", hex(window),
+            host = subprocess.Popen([str(host_path.resolve()), "--no-profile", "--dry-run", "--video", "--window", hex(window),
+                                     "--fps", str(fps),
                                      "--port", assigned["tcp:27184"].split(":")[1],
                                      "--video-port", assigned["tcp:27183"].split(":")[1],
                                      "--trace", str(output / "input-trace.txt")],
@@ -38,6 +39,7 @@ def main(window, system_refresh, skip_install, output):
                 print(device.adb("install", "-r", str(ROOT / "dist/InFalsusTouch.apk")), flush=True)
                 print(device.adb("install", "-r", "-t", str(ROOT / "android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk")), flush=True)
             result = device.adb("shell", "am", "instrument", "-w", "-r", "-e", "gameVideo", "true",
+                                "-e", "videoFps", str(fps),
                                 "-e", "highRefresh", "false" if system_refresh else "true", "-e", "class",
                                 "dev.cedarflake.ift.GameVideoDeviceTest", f"{device.APP}.test/androidx.test.runner.AndroidJUnitRunner")
             (output / "instrumentation.txt").write_text(result, encoding="utf-8")
@@ -47,6 +49,7 @@ def main(window, system_refresh, skip_install, output):
             for name in ("game-surface.png", "game-phone.png", "game-phone-pressed.png", "game-metrics.json"):
                 (output / name).write_bytes(device.adb("exec-out", "run-as", device.APP, "cat", f"files/{name}", binary=True))
             metrics = json.loads((output / "game-metrics.json").read_text())
+            assert metrics["targetFps"] == fps
             print(json.dumps(metrics, indent=2))
             trace = (output / "input-trace.txt").read_text(encoding="utf-8")
             for lane in range(1, 7):
@@ -73,9 +76,11 @@ def main(window, system_refresh, skip_install, output):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
+    parser.add_argument("--host", type=pathlib.Path, default=ROOT / "dist/InFalsusTouchHost.exe")
+    parser.add_argument("--fps", type=int, choices=range(24, 121), default=60)
     parser.add_argument("--window", type=lambda value: int(value, 0), required=True)
     parser.add_argument("--system-refresh", action="store_true")
     parser.add_argument("--skip-install", action="store_true")
     parser.add_argument("--output", type=pathlib.Path)
     args = parser.parse_args()
-    main(args.window, args.system_refresh, args.skip_install, args.output)
+    main(args.window, args.system_refresh, args.skip_install, args.output, args.host, args.fps)

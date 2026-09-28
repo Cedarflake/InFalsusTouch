@@ -52,13 +52,14 @@ def main():
     parser.add_argument("--seconds", type=float, default=10)
     parser.add_argument("--min-fps", type=float, default=0)
     parser.add_argument("--resolution", choices=("720p", "1080p"), default="720p")
+    parser.add_argument("--fps", type=int, choices=range(24, 121), default=60)
     parser.add_argument("--output", type=pathlib.Path)
     args = parser.parse_args()
     if not 2 <= args.seconds <= 300:
         parser.error("--seconds must be within [2, 300]")
     dimensions = (1920, 1080) if args.resolution == "1080p" else (1280, 720)
     run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
-    output = args.output or pathlib.Path("build/video-test") / f"{args.resolution}-{run_id}"
+    output = args.output or pathlib.Path("build/video-test") / f"{args.resolution}{args.fps}-{run_id}"
     output.mkdir(parents=True, exist_ok=True)
     control_port, video_port = unused_port(), unused_port()
     while video_port == control_port:
@@ -72,7 +73,7 @@ def main():
             raise RuntimeError("Test window did not provide its handle")
         with (output / "host.log").open("w", encoding="utf-8") as log:
             host = subprocess.Popen([str(args.host.resolve()), "--dry-run", "--video", "--window", window,
-                                     "--no-profile", "--resolution", args.resolution,
+                                     "--no-profile", "--resolution", args.resolution, "--fps", str(args.fps),
                                      "--port", str(control_port), "--video-port", str(video_port),
                                      "--trace", str((output / "input-trace.txt").resolve())],
                                     stdout=log, stderr=log, creationflags=subprocess.CREATE_NO_WINDOW)
@@ -128,7 +129,7 @@ def main():
                         payload = read_exact(video, size)
                         if kind == 3:
                             raise RuntimeError(payload.decode("utf-8"))
-                        assert (width, height, fps) == (*dimensions, 60)
+                        assert (width, height, fps) == (*dimensions, args.fps)
                         bitstream.write(payload)
                         if kind == 1:
                             assert seq == 0 and count == 0
@@ -154,7 +155,7 @@ def main():
                     send_input(6)
                 elapsed = time.monotonic() - started
                 result = {
-                    "width": dimensions[0], "height": dimensions[1], "targetFps": 60,
+                    "width": dimensions[0], "height": dimensions[1], "targetFps": args.fps,
                     "frames": count, "seconds": elapsed, "fps": count / elapsed,
                     "megabitsPerSecond": total_bytes * 8 / elapsed / 1e6,
                     "keyframes": keyframes,

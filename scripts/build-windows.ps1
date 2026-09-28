@@ -1,4 +1,4 @@
-param([switch]$CoreOnly)
+param([switch]$CoreOnly, [switch]$SkipDistCopy)
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $cmakeCommand = Get-Command cmake -ErrorAction SilentlyContinue
@@ -20,7 +20,7 @@ try {
   if ($LASTEXITCODE -ne 0) { throw 'C++ build failed' }
   & $ctestPath --preset windows
   if ($LASTEXITCODE -ne 0) { throw 'C++ tests failed' }
-  if (-not $CoreOnly) {
+  if (-not $CoreOnly -and -not $SkipDistCopy) {
     New-Item -ItemType Directory -Force -Path (Join-Path $repoRoot 'dist') | Out-Null
     Copy-Item -LiteralPath 'build\windows\windows\Release\InFalsusTouchHost.exe' -Destination 'dist\InFalsusTouchHost.exe'
   }

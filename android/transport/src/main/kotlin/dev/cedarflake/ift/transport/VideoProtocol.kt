@@ -54,7 +54,7 @@ object VideoProtocol {
     val bitrate = buffer.int
     require(buffer.int == 0) { "Video reserved field is set" }
     require(width in 128..1920 && width % 2 == 0 && height in 128..1080 && height % 2 == 0 &&
-      fps in 24..60 && bitrate in 500_000..40_000_000) { "Unsupported video format" }
+      fps in 24..120 && bitrate in 500_000..40_000_000) { "Unsupported video format" }
     if (type == VideoPacketType.FRAME) {
       require(capture > 0 && encode >= capture && send >= encode && pts == capture / 1000) { "Invalid PC timestamps" }
     }

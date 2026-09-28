@@ -16,6 +16,16 @@ void videoTests() {
   check(decoded.captureTimestamp == header.captureTimestamp && decoded.sequence == 123 && decoded.keyFrame,
     "Video header endian mismatch");
   check(encodeHeader(decoded) == good, "Video header roundtrip mismatch");
+  for (const auto fps : {24, 60, 90, 120}) {
+    auto highRate = header;
+    highRate.fps = static_cast<std::uint16_t>(fps);
+    check(decodeHeader(encodeHeader(highRate)).fps == fps, "Supported video rate did not round-trip");
+  }
+  for (const auto fps : {0, 23, 121, 65535}) {
+    auto invalidRate = header;
+    invalidRate.fps = static_cast<std::uint16_t>(fps);
+    expectError<std::invalid_argument>([&] { encodeHeader(invalidRate); });
+  }
   for (std::size_t size = 0; size < headerSize; ++size) {
     expectError<std::invalid_argument>([&] { decodeHeader(std::span(good).first(size)); });
   }

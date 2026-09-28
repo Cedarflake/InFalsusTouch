@@ -24,7 +24,7 @@ allocating a payload. The maximum payload is 4 MiB; configuration is limited to
 | 40 | 8 | Presentation timestamp = captureTimestamp / 1000 |
 | 48 | 2 | Width, even, 128..1920 |
 | 50 | 2 | Height, even, 128..1080 |
-| 52 | 2 | Target FPS, 24..60 |
+| 52 | 2 | Target FPS, 24..120; default 60 |
 | 54 | 2 | Reserved, zero |
 | 56 | 4 | Requested bitrate, 500000..40000000 bits/s |
 | 60 | 4 | Reserved, zero |
@@ -84,5 +84,8 @@ subtraction or one-way network-latency inference is made from that window.
   not reconnect or replay input. Surface destruction closes the video socket.
 
 Static-window update rate, source frame rate, GPU load, USB behavior and decoder
-support affect delivered FPS. A configured 60 FPS is a ceiling, not proof of 60
-frames presented every second.
+support affect delivered FPS. The configured FPS is a ceiling, not a measurement
+of presented frames. Rates above 60 require an updated Android receiver; older
+receivers reject them as unsupported. The wire layout is unchanged. Android
+selects a hardware decoder that advertises support for both the size and rate;
+the phone's display refresh setting alone does not change the Host's stream rate.

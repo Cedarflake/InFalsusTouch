@@ -155,8 +155,16 @@ Dry-run tests ignore the default file, but can load an explicitly named profile.
 | `--field-left`, `--field-right` | 0.05 / 0.95; normalized selected client, left < right |
 | `--field-y` | 0.5; normalized fixed client Y |
 | `--resolution` | `720p`; also `1080p` |
-| `--fps` | 60; 24–60 |
+| `--fps` | 60; 24–120 |
 | `--bitrate` | 8000000; 500000–40000000 bits/second |
+
+For a 120 Hz phone, `--resolution 720p --fps 120` requests an experimental 120 FPS stream.
+Use the updated Host and APK together. The phone display preference is independent
+of this setting; actual capture, encoding and presentation must keep up with the
+requested rate. The default remains 60 FPS. Compare delivered FPS and latency
+before saving a higher rate, especially at 1080p or with multiple viewers. The
+connected phone has not passed the 120 FPS presentation gate; see the measured
+results in [STATUS.md](STATUS.md#high-frame-rate-probe-2026-09-29).
 
 Relative Field preserves horizontal View-pixel displacement as mouse movement
 units. Calibration no longer changes the amount of movement, and a swipe can

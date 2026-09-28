@@ -55,6 +55,19 @@ class VideoProtocolTest {
     assertFailsWith<EOFException> { VideoPacketReader(ByteArrayInputStream(header() + byteArrayOf(0))) { true }.read() }
   }
 
+  @Test fun acceptsHighRefreshStreamsAndRejectsUnsupportedRates() {
+    for (fps in listOf(24, 60, 90, 120)) {
+      val bytes = header()
+      ByteBuffer.wrap(bytes).putShort(52, fps.toShort())
+      assertEquals(fps, VideoProtocol.decodeHeader(bytes).fps)
+    }
+    for (fps in listOf(0, 23, 121, 65535)) {
+      val bytes = header()
+      ByteBuffer.wrap(bytes).putShort(52, fps.toShort())
+      assertFailsWith<IllegalArgumentException> { VideoProtocol.decodeHeader(bytes) }
+    }
+  }
+
   @Test fun overflowDropsDependencyChainUntilIdr() {
     val queue = VideoFrameQueue(2)
     queue.offer(packet(false))

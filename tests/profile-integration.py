@@ -1,5 +1,6 @@
 """Verify Host profile file I/O and CLI precedence without injecting input."""
 
+import argparse
 import pathlib
 import subprocess
 import tempfile
@@ -24,13 +25,14 @@ def main():
         initial = path.read_text()
         assert initial.startswith("version=2\n")
         assert "field-left=0.12" in initial and "resolution=1080p" in initial
-        run("--fps", "60", "--field-right", "0.87", "--profile", path, "--save-profile")
+        run("--fps", "120", "--field-right", "0.87", "--profile", path, "--save-profile")
         saved = path.read_text()
-        assert "field-left=0.12" in saved and "field-right=0.87" in saved and "fps=60" in saved
+        assert "field-left=0.12" in saved and "field-right=0.87" in saved and "fps=120" in saved
         assert "resolution=1080p" in saved and "bitrate=12000000" in saved
         assert not list(path.parent.glob("*.tmp")), "Temporary profile file was not cleaned up"
-        run("--profile", path, "--save-profile", "--fps", "200", success=False)
-        assert path.read_text() == saved, "Invalid flags changed the existing profile"
+        for fps in (23, 121, 65536):
+            run("--profile", path, "--save-profile", "--fps", fps, success=False)
+            assert path.read_text() == saved, "Invalid flags changed the existing profile"
         for flag in ("--sensitivity", "--acceleration", "--smoothing", "--max-speed"):
             result = run("--profile", path, "--save-profile", flag, "1", success=False)
             assert "adjust mouse sensitivity in In Falsus" in result.stderr
@@ -51,4 +53,7 @@ def main():
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--host", type=pathlib.Path, default=HOST)
+    HOST = parser.parse_args().host.resolve()
     main()

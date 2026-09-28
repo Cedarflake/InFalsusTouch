@@ -20,6 +20,7 @@ data class VideoSnapshot(
   val droppedFrames: Long,
   val queueDepth: Int,
   val receivedFrames: Long,
+  val decodedFrames: Long,
   val presentedFrames: Long,
   val captureToEncodeMs: Double,
   val decoderMs: Double,
@@ -29,6 +30,7 @@ data class VideoSnapshot(
   val width: Int,
   val height: Int,
   val latency: VideoLatencySnapshot?,
+  val targetFps: Int,
 )
 
 internal class VideoStatistics {
@@ -47,6 +49,7 @@ internal class VideoStatistics {
   private var lastTiming: FrameTiming? = null
   private var width = 0
   private var height = 0
+  private var targetFps = 0
   private val latency = VideoLatencyWindow()
 
   @Synchronized
@@ -55,6 +58,7 @@ internal class VideoStatistics {
     bytes += packet.bytes.size
     width = packet.header.width
     height = packet.header.height
+    targetFps = packet.header.fps
     encodeMs = (packet.header.encodeTimestamp - packet.header.captureTimestamp) / 1e6
   }
 
@@ -80,7 +84,7 @@ internal class VideoStatistics {
     val snapshot = VideoSnapshot(
       (received - previousReceived) / seconds, (decoded - previousDecoded) / seconds,
       (presented - previousPresented) / seconds, (bytes - previousBytes) * 8 / seconds / 1e6,
-      dropped, queued, received, presented, encodeMs, decodeMs, presentMs, lastTiming, now, width, height, latency.snapshot(),
+      dropped, queued, received, decoded, presented, encodeMs, decodeMs, presentMs, lastTiming, now, width, height, latency.snapshot(), targetFps,
     )
     previousReceived = received
     previousDecoded = decoded

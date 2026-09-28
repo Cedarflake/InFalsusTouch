@@ -28,7 +28,7 @@ void validate(const Header& header) {
   }
   if (header.width < 128 || header.width > 1920 || header.width % 2 ||
       header.height < 128 || header.height > 1080 || header.height % 2 ||
-      header.fps < 24 || header.fps > 60 || header.bitrate < 500'000 || header.bitrate > 40'000'000) {
+      header.fps < 24 || header.fps > 120 || header.bitrate < 500'000 || header.bitrate > 40'000'000) {
     throw std::invalid_argument("Unsupported video format");
   }
   if (header.type != Type::frame && header.keyFrame) throw std::invalid_argument("Unexpected key-frame flag");

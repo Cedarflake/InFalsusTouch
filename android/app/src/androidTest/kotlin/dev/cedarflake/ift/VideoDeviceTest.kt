@@ -41,16 +41,20 @@ class VideoDeviceTest {
 
   private fun verifyVideo() {
     val instrumentation = InstrumentationRegistry.getInstrumentation()
+    val metricsFile = File(instrumentation.targetContext.filesDir, "video-metrics.json")
+    metricsFile.delete()
     val arguments = InstrumentationRegistry.getArguments()
     val width = arguments.getString("videoWidth", "1280").toInt()
     val height = arguments.getString("videoHeight", "720").toInt()
     val seconds = arguments.getString("videoSeconds", "10").toInt()
-    require((width == 1280 && height == 720 || width == 1920 && height == 1080) && seconds in 6..60)
+    val fps = arguments.getString("videoFps", "60").toInt()
+    require((width == 1280 && height == 720 || width == 1920 && height == 1080) && seconds in 6..60 && fps in 24..120)
     DeviceActivity.launch().use { scenario ->
       scenario.onActivity { it.toggleConnection() }
       val first = waitForFrames(scenario, 100)
       assertEquals("Received video width", width, first.width)
       assertEquals("Received video height", height, first.height)
+      assertEquals("Received video frame rate", fps, first.targetFps)
       assertTrue("Decoder should make sustained progress", first.presentFps > 20)
       val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
       val copied = CountDownLatch(1)
@@ -84,12 +88,11 @@ class VideoDeviceTest {
         dispatch(view, 7, MotionEvent.ACTION_MOVE, started, 0.75f)
         dispatch(view, 7, MotionEvent.ACTION_MOVE, started, 0.625f)
       }
-      val held = waitForFrames(scenario, first.presentedFrames + seconds * 60, (seconds + 15) * 1000L)
+      val held = waitForFrames(scenario, first.presentedFrames + seconds * fps, (seconds + 15) * 1000L)
       val steadySeconds = (held.sampleTimestamp - first.sampleTimestamp) / 1e9
       val steadyReceiveFps = (held.receivedFrames - first.receivedFrames) / steadySeconds
+      val steadyDecodeFps = (held.decodedFrames - first.decodedFrames) / steadySeconds
       val steadyPresentFps = (held.presentedFrames - first.presentedFrames) / steadySeconds
-      assertTrue("Expected sustained ${height}p60 reception, got $steadyReceiveFps", steadyReceiveFps in 58.0..62.0)
-      assertTrue("Presentation rate fell below the acceptance bound: $steadyPresentFps", steadyPresentFps in 55.0..63.0)
       scenario.onActivity { it.setPanel("settings") }
       SystemClock.sleep(500)
       run {
@@ -126,8 +129,10 @@ class VideoDeviceTest {
       assertTrue(timing.presentTimestamp >= timing.decodeTimestamp)
       val metrics = JSONObject().put("receiveFps", held.receiveFps).put("decodeFps", held.decodeFps)
         .put("width", held.width).put("height", held.height)
+        .put("targetFps", held.targetFps)
         .put("touchWidth", touchWidth)
         .put("steadySeconds", steadySeconds).put("steadyReceiveFps", steadyReceiveFps).put("steadyPresentFps", steadyPresentFps)
+        .put("steadyDecodeFps", steadyDecodeFps)
         .put("presentFps", held.presentFps).put("presentedFrames", held.presentedFrames)
         .put("droppedFrames", held.droppedFrames).put("queueDepth", held.queueDepth)
         .put("captureAvailableToEncodeMs", held.captureToEncodeMs).put("decodeMs", held.decoderMs)
@@ -151,8 +156,11 @@ class VideoDeviceTest {
       val reconnected = waitForFrames(scenario, 60)
       assertEquals(width, reconnected.width)
       assertEquals(height, reconnected.height)
+      assertEquals(fps, reconnected.targetFps)
       metrics.put("reconnectPresentedFrames", reconnected.presentedFrames)
-      File(instrumentation.targetContext.filesDir, "video-metrics.json").writeText(metrics.toString(2))
+      metricsFile.writeText(metrics.toString(2))
+      assertTrue("Expected sustained ${height}p$fps reception, got $steadyReceiveFps", steadyReceiveFps in (fps * 58.0 / 60)..(fps * 62.0 / 60))
+      assertTrue("Presentation rate fell below the acceptance bound: $steadyPresentFps", steadyPresentFps in (fps * 55.0 / 60)..(fps * 63.0 / 60))
     }
   }
 
