@@ -26,6 +26,7 @@ class SettingsStore(context: Context, name: String = "controller-settings") : Cl
     return try {
       LoadedSettings(ControlSettings(
         language = preferences.getString("language", defaults.language) ?: defaults.language,
+        theme = preferences.getString("theme", defaults.theme) ?: defaults.theme,
         controlsMask = preferences.getInt("controlsMask", defaults.controlsMask),
         fieldMode = FieldMode.valueOf(preferences.getString("fieldMode", defaults.fieldMode.name) ?: defaults.fieldMode.name),
         layoutMode = LayoutMode.valueOf(preferences.getString("layoutMode", defaults.layoutMode.name) ?: defaults.layoutMode.name),
@@ -69,6 +70,7 @@ class SettingsStore(context: Context, name: String = "controller-settings") : Cl
     writer.execute {
       val success = try { preferences.edit()
         .putString("language", value.language)
+        .putString("theme", value.theme)
         .putInt("controlsMask", value.controlsMask)
         .putString("fieldMode", value.fieldMode.name)
         .putString("layoutMode", value.layoutMode.name)

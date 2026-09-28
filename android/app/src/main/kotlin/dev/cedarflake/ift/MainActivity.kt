@@ -113,9 +113,13 @@ class MainActivity : FlutterActivity(), SurfaceHolder.Callback {
           }
           "save" -> {
             val next = SettingsCodec.apply(settings, requireNotNull(call.arguments as? Map<*, *>))
-            saveSettings(next) { result.success(uiSnapshot()) }
+            saveSettings(next) { success ->
+              if (success) result.success(uiSnapshot()) else result.error("settings_save_failed", "Settings could not be saved", null)
+            }
           }
-          "defaults" -> saveSettings(ControlSettings(language = settings.language)) { result.success(uiSnapshot()) }
+          "defaults" -> saveSettings(ControlSettings(language = settings.language, theme = settings.theme)) { success ->
+            if (success) result.success(uiSnapshot()) else result.error("settings_save_failed", "Settings could not be saved", null)
+          }
           "dismissNotice" -> { notice = null; result.success(uiSnapshot()) }
           else -> result.notImplemented()
         }
@@ -273,14 +277,14 @@ class MainActivity : FlutterActivity(), SurfaceHolder.Callback {
     queueState()
   }
 
-  private fun saveSettings(value: ControlSettings, completed: () -> Unit) {
+  private fun saveSettings(value: ControlSettings, completed: (Boolean) -> Unit) {
     val enableAutoConnect = !settings.autoConnect && value.autoConnect
     applySettings(value)
     settingsStore.save(value) { success ->
       if (!isDestroyed) {
-        if (!success) notice = "settings_save_failed"
+        if (!success) notice = "settings_save_failed" else if (notice == "settings_save_failed") notice = null
         publishState()
-        completed()
+        completed(success)
       }
     }
     if (!value.autoConnect) {

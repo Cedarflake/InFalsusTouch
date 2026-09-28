@@ -13,8 +13,11 @@ Aligned/Overlay/Reserved layouts, Fit/Stretch/Crop, USB discovery and PC video-q
 The latest aligned layout has taller 40% buttons, native pressed feedback, six-point
 judgment calibration, centered full-frame video and an independent 120 Hz display hint.
 Physical gameplay and absolute Field alignment remain open; the full goal is active.
-The 2026-09-29 UI update consolidates USB logs and centers partial key selections;
-its validation is Flutter analysis/tests, Kotlin tests, lint and APK installation.
+The 2026-09-29 UI update consolidates USB logs, centers partial key selections,
+adds automatic settings saving and appearance preferences, and keeps the connection
+action on the status row. The Controls page combines cooperative play and key/IME
+guidance in one top card. Validation includes Flutter analysis/tests, Kotlin tests,
+lint and APK installation; the latest device UI flow has not been rerun.
 
 ## Acceptance gates
 
@@ -25,7 +28,7 @@ its validation is Flutter analysis/tests, Kotlin tests, lint and APK installatio
 | Android APK compilation | Passed, Gradle 8.11.1 / AGP 8.9.2 / Kotlin 2.1.20 / JDK 21 |
 | C++ input protocol / input state / mapping / video / profile / cooperative suites | 6/6 passed |
 | Kotlin settings / touch / input+video protocol / queue / socket / native-host tests | 35/35 passed, no skips; includes 186 partial-selection/layout combinations |
-| Flutter analysis and UI tests | No analysis issues; 13/13 tests passed |
+| Flutter analysis and UI tests | No analysis issues; 16/16 tests passed |
 | Native profile persistence and CLI precedence integration | Passed, including invalid/missing profile and unchanged-file failure checks |
 | TCP disconnect / malformed / reconnect integration | 8/8 checks passed |
 | Android lint | Passed, 0 errors; 5 advisory warnings for pinned test dependencies and KTX suggestions |
@@ -124,9 +127,14 @@ color pattern. These short runs are not measurements of In Falsus under load.
   centered labels prevent connection-state text from shifting surrounding controls.
   The small settings entry requires two taps within two seconds, with a first-tap
   Android system Toast, verified through an Android Toast accessibility event. The
-  return button now sits opposite the gameplay entry. The previous device run's
-  rapid-tap case hit the old overlapping return button; that case has not been rerun
-  after the position change. Gameplay shapes are unchanged.
+  return button stays at the top left. The obsolete device test requiring the
+  return button at the opposite corner was removed; the earlier 10/11 device
+  result remains historical and is not a pass for the current UI. Gameplay shapes are unchanged.
+- Settings save automatically with serialized writes and coalesced slider edits;
+  leaving settings and backgrounding flush pending changes. Failed writes retain
+  edits for retry. Defaults is at the top right and preserves language and theme.
+  The sidebar is Connection, Touch, Controls, Picture, Other. Other contains
+  English/Chinese and Light/Dark/System appearance, with Dark as the initial preference.
 - USB logs are integrated into the USB status/action card; automatic discovery is
   separate. Partial key selections pack in lane order at the center without resizing
   their shapes. Hit testing uses the translated regions and original lane IDs.

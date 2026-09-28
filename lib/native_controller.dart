@@ -1,5 +1,7 @@
-import "package:flutter/foundation.dart";
+import "dart:async";
+
 import "package:flutter/services.dart";
+import "package:flutter/widgets.dart";
 
 Map<String, Object?> objectMap(Object? value) {
   if (value is! Map<Object?, Object?>) return {};
@@ -88,7 +90,7 @@ class ControllerState {
   }
 }
 
-class NativeController extends ChangeNotifier {
+class NativeController extends ChangeNotifier with WidgetsBindingObserver {
   NativeController({MethodChannel? channel})
     : _channel = channel ?? const MethodChannel("dev.cedarflake.ift/ui");
 
@@ -97,8 +99,25 @@ class NativeController extends ChangeNotifier {
   String? error;
   bool _isDisposed = false;
   bool isConnectionCommandPending = false;
+  final _queuedSettings = <String, Object?>{};
+  Map<String, Object?> _writingSettings = {};
+  Timer? _settingsTimer;
+  Future<bool>? _settingsWrite;
+  bool isResettingDefaults = false;
+
+  ControllerSettings get settings => ControllerSettings({
+    ...?state?.settings.values,
+    ..._writingSettings,
+    ..._queuedSettings,
+  });
+  String get language => switch (settings.text("language")) {
+    "en" => "en",
+    "zh" => "zh",
+    _ => state?.language ?? "en",
+  };
 
   Future<void> initialize() async {
+    WidgetsBinding.instance.addObserver(this);
     _channel.setMethodCallHandler((call) async {
       if (call.method == "state") _receive(call.arguments);
     });
@@ -126,7 +145,70 @@ class NativeController extends ChangeNotifier {
     return false;
   }
 
-  Future<bool> panel(String value) => command("panel", value);
+  void updateSetting(String key, Object value, {bool defer = false}) {
+    if (_isDisposed || isResettingDefaults) return;
+    _queuedSettings[key] = value;
+    notifyListeners();
+    _settingsTimer?.cancel();
+    if (defer) {
+      _settingsTimer = Timer(const Duration(milliseconds: 180), flushSettings);
+    } else {
+      unawaited(flushSettings());
+    }
+  }
+
+  Future<bool> flushSettings() {
+    _settingsTimer?.cancel();
+    if (_settingsWrite case final Future<bool> active) return active;
+    if (_queuedSettings.isEmpty) return Future.value(true);
+    final operation = _writeSettings().whenComplete(() {
+      _settingsWrite = null;
+      if (!_isDisposed) notifyListeners();
+    });
+    _settingsWrite = operation;
+    return operation;
+  }
+
+  Future<bool> _writeSettings() async {
+    while (_queuedSettings.isNotEmpty) {
+      _writingSettings = Map.of(_queuedSettings);
+      _queuedSettings.clear();
+      final saved = await command("save", _writingSettings);
+      if (!saved) {
+        final newer = Map.of(_queuedSettings);
+        _queuedSettings.addAll({..._writingSettings, ...newer});
+      }
+      _writingSettings = {};
+      if (!saved) return false;
+    }
+    return true;
+  }
+
+  Future<bool> restoreDefaults() async {
+    if (isResettingDefaults) return false;
+    isResettingDefaults = true;
+    notifyListeners();
+    try {
+      await flushSettings();
+      final restored = await command("defaults");
+      if (restored) _queuedSettings.clear();
+      return restored;
+    } finally {
+      isResettingDefaults = false;
+      if (!_isDisposed) notifyListeners();
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) unawaited(flushSettings());
+  }
+
+  Future<bool> panel(String value) async {
+    await flushSettings();
+    return command("panel", value);
+  }
+
   Future<bool> settingsHint(String message) => command("settingsHint", message);
   Future<void> toggleConnection() async {
     if (isConnectionCommandPending) return;
@@ -148,11 +230,15 @@ class NativeController extends ChangeNotifier {
             [rect.left, rect.top, rect.right, rect.bottom],
         ],
       });
-  Future<bool> save(ControllerSettings value) => command("save", value.values);
-  Future<bool> language(String value) => command("save", {"language": value});
+  Future<bool> save(ControllerSettings value) async {
+    await flushSettings();
+    return command("save", value.values);
+  }
 
   @override
   void dispose() {
+    unawaited(flushSettings());
+    WidgetsBinding.instance.removeObserver(this);
     _isDisposed = true;
     _channel.setMethodCallHandler(null);
     super.dispose();

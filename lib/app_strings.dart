@@ -9,9 +9,10 @@ class AppStrings {
   String get touch => zh ? "触控" : "Touch";
   String get controls => zh ? "按键显示" : "Controls";
   String get myControls => zh ? "这台设备显示什么" : "Choose this device’s controls";
-  String get controlsHint => zh
-      ? "隐藏的操作不会触发输入。其他手机可独立选择，电脑键盘和鼠标也能参与。"
-      : "Hidden controls send no input. Other phones choose independently, and the PC keyboard and mouse can join in.";
+  String get cooperativePlay => zh ? "多人合作" : "Play together";
+  String get cooperativePlayHint => zh
+      ? "最多 7 台设备可通过 USB 同时连接同一台电脑，共同游玩同一局 In Falsus。每个人选择自己负责的按键或 Field，分工完成谱面；电脑键盘和鼠标也能一起参与。各设备自由选择显示内容，无需凑齐全部操作。"
+      : "Connect up to 7 devices to the same PC over USB to play one In Falsus session together. Each player chooses the keys or Field they handle and shares the chart. The PC keyboard and mouse can join in too. Each device chooses its own controls; there is no required combination.";
   String get allControls => zh ? "全部" : "All";
   String get keysOnly => zh ? "仅按键" : "Keys only";
   String get fieldOnly => zh ? "仅 Field" : "Field only";
@@ -27,6 +28,11 @@ class AppStrings {
   String peers(int count) => zh ? "$count 台设备已连接" : "$count devices connected";
   String get picture => zh ? "画面" : "Picture";
   String get connection => zh ? "连接" : "Connection";
+  String get other => zh ? "其他" : "Other";
+  String get theme => zh ? "主题" : "Theme";
+  String get systemTheme => zh ? "跟随系统" : "System";
+  String get lightTheme => zh ? "浅色" : "Light";
+  String get darkTheme => zh ? "深色" : "Dark";
   String get connect => zh ? "连接 USB" : "Connect USB";
   String get disconnect => zh ? "断开" : "Disconnect";
   String get connecting => zh ? "正在连接…" : "Connecting…";
@@ -83,8 +89,8 @@ class AppStrings {
   String get align => zh ? "校准游戏判定线" : "Align judgment lines";
   String get calibrateField => zh ? "校准横向滑动范围" : "Calibrate Field area";
   String get calibrationHint => zh
-      ? "进入校准前会保存当前设置，校准期间暂停游戏输入。"
-      : "Current settings are saved before calibration. Game input pauses while calibrating.";
+      ? "设置自动保存，校准期间暂停游戏输入。"
+      : "Settings save automatically. Game input pauses while calibrating.";
   String get framing => zh ? "完整画面，居中显示" : "Keep the whole chart in view";
   String get fit => zh ? "完整显示" : "Fit";
   String get stretch => zh ? "拉伸铺满" : "Stretch";

@@ -7,16 +7,20 @@ remain on the PC; neither side uploads configuration to a service.
 
 Tap the small **Settings** entry twice within two seconds. The first tap uses an
 Android system Toast for “Tap again to open settings”; expiration resets the guard.
-The return control sits on the opposite side from the gameplay entry. Save applies the
-changes and commits them on a background writer. A failed write is reported;
+The return control stays at the top left; **Defaults** is at the top right.
+Settings apply and save automatically, with no Save/Cancel footer. Slider changes
+are coalesced while dragging and flushed on release, exit or backgrounding.
+Writes are serialized so incoming status updates cannot overwrite newer edits.
+A failed write is reported and pending edits remain available for retry;
 session settings remain usable. Invalid stored values fall back to defaults
-with a visible notification. Defaults resets phone controls while retaining the chosen language.
-The Material 3 UI switches English/Chinese immediately; unsaved control edits remain in the draft.
+with a visible notification. Defaults resets phone controls while retaining the chosen language and theme.
+The sidebar order is **Connection, Touch, Controls, Picture, Other**.
+**Other** holds English/Chinese and Light/Dark/System appearance; changes take effect immediately.
 The app fills the physical screen. Settings transitions keep a fixed Flutter surface;
 only controls and text avoid the camera cutout. USB actions and connection details
 live in **Connection**, which opens first when disconnected. The latest transport
-log is inside the USB card; automatic discovery remains in a separate section. Its action stays fixed
-in size, with centered text, immediate progress feedback and cancelable automatic
+log is inside the USB card; automatic discovery remains in a separate section. Its action stays on
+the same row as the connection status, fixed in size with centered text, immediate progress feedback and cancelable automatic
 retries. Gameplay shows only a 48 dp settings entry with equal 8 dp edge margins;
 it switches corners only if the actual cutout overlaps. UI buttons/chips use full
 pill shapes, the settings entry is circular, and cards have larger 32 dp corners.
@@ -30,6 +34,7 @@ width; only controls intersecting an actual cutout receive local padding.
 | Setting | Default / bounds |
 | --- | --- |
 | Language | System initially; English or 中文 can be chosen and persisted |
+| Theme | Dark initially; Light, Dark or System can be chosen and persisted |
 | Visible controls | All six lanes and Field; any subset including none is valid and saved per phone |
 | Field mode | Absolute; Relative is available |
 | Layout | Aligned Field + Floor; fixed Overlay and Reserved are also available |
@@ -74,7 +79,9 @@ Each lane places a large bold number above a smaller synchronized IF key name.
 Both lines are centered, with consistent type sizes and fitting for long key names.
 
 **Controls / 按键显示** uses seven independent chips with current IF key names.
-Hidden lanes cannot acquire a touch; visible lanes keep their original positions.
+A top information card combines the seven-device cooperative play explanation
+with key synchronization and IME guidance. The selection card follows without additional help text.
+Hidden lanes cannot acquire a touch; selected lane subsets keep their widths and center as a group.
 All / Keys only / Field only / View only presets affect only this device. In Field-only
 mode the gesture region extends farther down the picture. Other phones can overlap
 these choices, and unassigned operations may be handled by the PC keyboard/mouse.
@@ -91,7 +98,7 @@ The fixed-layout Field calibration screen covers the same usable display area as
 controller; its toolbar separately avoids the cutout. Tap the comfortable left
 edge, then the right edge, within the Field region. The minimum calibrated span
 is 5% of the controller width. Save commits the range; Cancel leaves it unchanged.
-Opening calibration first saves any pending settings in the dialog. Editing an
+Opening calibration first saves any pending settings. Editing an
 unrelated setting preserves the full precision of calibrated endpoints.
 
 All input is released and disabled during settings/calibration. After closing,

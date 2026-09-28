@@ -13,43 +13,30 @@ class SettingsPage extends StatefulWidget {
     required this.controller,
     required this.state,
     required this.strings,
-    required this.entryIsOnRight,
   });
   final NativeController controller;
   final ControllerState state;
   final AppStrings strings;
-  final bool entryIsOnRight;
 
   @override
   State<SettingsPage> createState() => _SettingsPageState();
 }
 
 class _SettingsPageState extends State<SettingsPage> {
-  late ControllerSettings draft = widget.state.settings;
-  late int category = widget.state.connected ? 1 : 3;
-  bool isSaving = false;
+  ControllerSettings get draft => widget.controller.settings;
+  late int category = widget.state.connected ? 1 : 0;
   AppStrings get s => widget.strings;
 
-  @override
-  void didUpdateWidget(covariant SettingsPage oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.state.settings.text("language") !=
-        widget.state.settings.text("language")) {
-      draft = draft.withValue(
-        "language",
-        widget.state.settings.text("language"),
+  void change(String key, Object value, {bool defer = false}) {
+    if (key == "fieldLeft" && value is double) {
+      value = value.clamp(
+        0.0,
+        math.max(0.0, draft.number("fieldRight") - 0.01),
       );
+    } else if (key == "fieldRight" && value is double) {
+      value = value.clamp(math.min(1.0, draft.number("fieldLeft") + 0.01), 1.0);
     }
-  }
-
-  void change(String key, Object value) =>
-      setState(() => draft = draft.withValue(key, value));
-
-  Future<void> save([String panel = "compact"]) async {
-    setState(() => isSaving = true);
-    final succeeded = await widget.controller.save(draft);
-    if (succeeded) await widget.controller.panel(panel);
-    if (mounted) setState(() => isSaving = false);
+    widget.controller.updateSetting(key, value, defer: defer);
   }
 
   @override
@@ -70,12 +57,7 @@ class _SettingsPageState extends State<SettingsPage> {
       return EdgeInsets.only(left: left, right: right);
     }
 
-    final navigationInsets = edgeInsets(64, screen.height - 65);
-    final back = IconButton(
-      tooltip: s.back,
-      onPressed: () => widget.controller.panel("compact"),
-      icon: const Icon(Icons.close_rounded),
-    );
+    final navigationInsets = edgeInsets(64, screen.height);
     return Material(
       color: colors.surface,
       child: Column(
@@ -86,7 +68,11 @@ class _SettingsPageState extends State<SettingsPage> {
                 const EdgeInsets.fromLTRB(12, 8, 20, 8) + edgeInsets(0, 64),
             child: Row(
               children: [
-                if (widget.entryIsOnRight) back,
+                IconButton(
+                  tooltip: s.back,
+                  onPressed: () => widget.controller.panel("compact"),
+                  icon: const Icon(Icons.arrow_back_rounded),
+                ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -94,25 +80,13 @@ class _SettingsPageState extends State<SettingsPage> {
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                 ),
-                const Icon(Icons.translate_rounded, size: 20),
-                const SizedBox(width: 12),
-                Semantics(
-                  label: s.languageLabel,
-                  child: SegmentedButton<String>(
-                    showSelectedIcon: false,
-                    segments: const [
-                      ButtonSegment(value: "en", label: Text("English")),
-                      ButtonSegment(value: "zh", label: Text("中文")),
-                    ],
-                    selected: {widget.state.language},
-                    onSelectionChanged: (values) =>
-                        widget.controller.language(values.single),
-                  ),
+                TextButton(
+                  key: const ValueKey("restore-defaults"),
+                  onPressed: widget.controller.isResettingDefaults
+                      ? null
+                      : widget.controller.restoreDefaults,
+                  child: Text(s.defaults),
                 ),
-                if (!widget.entryIsOnRight) ...[
-                  const SizedBox(width: 12),
-                  back,
-                ],
               ],
             ),
           ),
@@ -131,11 +105,10 @@ class _SettingsPageState extends State<SettingsPage> {
                           setState(() => category = value),
                       children: [
                         NavigationDrawerDestination(
-                          icon: const Icon(Icons.visibility_outlined),
-                          selectedIcon: const Icon(Icons.visibility_rounded),
+                          icon: const Icon(Icons.usb_rounded),
                           label: Flexible(
                             child: Text(
-                              s.controls,
+                              s.connection,
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
@@ -151,6 +124,16 @@ class _SettingsPageState extends State<SettingsPage> {
                           ),
                         ),
                         NavigationDrawerDestination(
+                          icon: const Icon(Icons.visibility_outlined),
+                          selectedIcon: const Icon(Icons.visibility_rounded),
+                          label: Flexible(
+                            child: Text(
+                              s.controls,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ),
+                        NavigationDrawerDestination(
                           icon: const Icon(Icons.crop_landscape_rounded),
                           label: Flexible(
                             child: Text(
@@ -160,10 +143,10 @@ class _SettingsPageState extends State<SettingsPage> {
                           ),
                         ),
                         NavigationDrawerDestination(
-                          icon: const Icon(Icons.usb_rounded),
+                          icon: const Icon(Icons.more_horiz_rounded),
                           label: Flexible(
                             child: Text(
-                              s.connection,
+                              s.other,
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
@@ -174,6 +157,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
                 Expanded(
                   child: ListView(
+                    key: ValueKey(category),
                     padding: EdgeInsets.fromLTRB(
                       12,
                       8,
@@ -212,48 +196,14 @@ class _SettingsPageState extends State<SettingsPage> {
                           ),
                         ),
                       ...switch (category) {
-                        0 => controlsSections(),
+                        0 => connectionSections(),
                         1 => touchSections(),
-                        2 => pictureSections(),
-                        _ => connectionSections(),
+                        2 => controlsSections(),
+                        3 => pictureSections(),
+                        _ => otherSections(),
                       },
                     ],
                   ),
-                ),
-              ],
-            ),
-          ),
-          const Divider(height: 1),
-          Padding(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 20, vertical: 8) +
-                edgeInsets(screen.height - 65, screen.height),
-            child: Row(
-              children: [
-                TextButton(
-                  onPressed: isSaving
-                      ? null
-                      : () async {
-                          if (await widget.controller.command("defaults") &&
-                              mounted) {
-                            setState(
-                              () => draft = widget.controller.state!.settings,
-                            );
-                          }
-                        },
-                  child: Text(s.defaults),
-                ),
-                const Spacer(),
-                TextButton(
-                  onPressed: isSaving
-                      ? null
-                      : () => widget.controller.panel("compact"),
-                  child: Text(s.cancel),
-                ),
-                const SizedBox(width: 12),
-                FilledButton(
-                  onPressed: isSaving ? null : () => save(),
-                  child: Text(s.save, textAlign: TextAlign.center),
                 ),
               ],
             ),
@@ -286,7 +236,7 @@ class _SettingsPageState extends State<SettingsPage> {
         }),
         const SizedBox(height: 12),
         FilledButton.tonal(
-          onPressed: isSaving ? null : () => save("calibrateJudgment"),
+          onPressed: () => widget.controller.panel("calibrateJudgment"),
           child: Text(s.align, textAlign: TextAlign.center),
         ),
         const SizedBox(height: 8),
@@ -303,7 +253,7 @@ class _SettingsPageState extends State<SettingsPage> {
           slider(s.leftEdge, "fieldLeft", 0, 99),
           slider(s.rightEdge, "fieldRight", 1, 100),
           FilledButton.tonal(
-            onPressed: isSaving ? null : () => save("calibrateField"),
+            onPressed: () => widget.controller.panel("calibrateField"),
             child: Text(s.calibrateField, textAlign: TextAlign.center),
           ),
         ],
@@ -314,9 +264,18 @@ class _SettingsPageState extends State<SettingsPage> {
 
   List<Widget> controlsSections() => [
     _Section(
-      title: s.myControls,
-      subtitle: s.controlsHint,
+      title: s.cooperativePlay,
       children: [
+        const SizedBox(height: 8),
+        Text(s.cooperativePlayHint),
+        const SizedBox(height: 12),
+        Text(s.inputHint, style: Theme.of(context).textTheme.bodySmall),
+      ],
+    ),
+    _Section(
+      title: s.myControls,
+      children: [
+        const SizedBox(height: 12),
         Wrap(
           spacing: 8,
           runSpacing: 8,
@@ -355,30 +314,6 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
           ],
         ),
-      ],
-    ),
-    _Section(
-      title: widget.state.connected
-          ? s.peers(widget.state.peers)
-          : s.disconnected,
-      children: [
-        Text(switch (widget.state.bindingStatus) {
-          0 when widget.state.connected => s.syncedKeys,
-          2 when widget.state.connected => s.invalidKeys,
-          _ => s.defaultKeys,
-        }),
-        Padding(
-          padding: const EdgeInsets.only(top: 12),
-          child: Text(
-            s.inputHint,
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-        ),
-        if (widget.state.fieldBusy)
-          Padding(
-            padding: const EdgeInsets.only(top: 12),
-            child: Text(s.fieldBusy),
-          ),
       ],
     ),
   ];
@@ -431,18 +366,41 @@ class _SettingsPageState extends State<SettingsPage> {
     ),
   ];
 
-  Widget choice(String key, Map<String, String> options) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 4),
-    child: SegmentedButton<String>(
-      showSelectedIcon: false,
-      segments: [
-        for (final entry in options.entries)
-          ButtonSegment(value: entry.key, label: Text(entry.value)),
+  List<Widget> otherSections() => [
+    _Section(
+      title: s.languageLabel,
+      children: [
+        choice("language", {
+          "en": "English",
+          "zh": "中文",
+        }, selected: widget.controller.language),
       ],
-      selected: {draft.text(key)},
-      onSelectionChanged: (values) => change(key, values.single),
     ),
-  );
+    _Section(
+      title: s.theme,
+      children: [
+        choice("theme", {
+          "system": s.systemTheme,
+          "light": s.lightTheme,
+          "dark": s.darkTheme,
+        }),
+      ],
+    ),
+  ];
+
+  Widget choice(String key, Map<String, String> options, {String? selected}) =>
+      Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: SegmentedButton<String>(
+          showSelectedIcon: false,
+          segments: [
+            for (final entry in options.entries)
+              ButtonSegment(value: entry.key, label: Text(entry.value)),
+          ],
+          selected: {selected ?? draft.text(key)},
+          onSelectionChanged: (values) => change(key, values.single),
+        ),
+      );
 
   Widget slider(
     String title,
@@ -484,7 +442,8 @@ class _SettingsPageState extends State<SettingsPage> {
             label: "${value.round()} $unit",
             semanticFormatterCallback: (value) =>
                 "$title ${value.round()} $unit",
-            onChanged: (next) => change(key, next / divisor),
+            onChanged: (next) => change(key, next / divisor, defer: true),
+            onChangeEnd: (_) => widget.controller.flushSettings(),
           ),
         ],
       ),

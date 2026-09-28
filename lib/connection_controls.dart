@@ -72,40 +72,15 @@ class ConnectionControls extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 12),
-            SizedBox(
-              height: 24,
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  status,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.titleSmall,
-                ),
-              ),
-            ),
-            SizedBox(
-              height: 40,
-              child: Text(
-                hint,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(color: colors.onSurfaceVariant),
-              ),
-            ),
             Row(
               children: [
                 Expanded(
                   child: Text(
-                    state.connected
-                        ? "${strings.peers(state.peers)}\nRTT ${state.rtt.toStringAsFixed(1)} ms"
-                        : "",
-                    maxLines: 2,
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      fontFeatures: [const FontFeature.tabularFigures()],
-                    ),
+                    status,
+                    key: const ValueKey("connection-status"),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.titleSmall,
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -129,6 +104,30 @@ class ConnectionControls extends StatelessWidget {
                   ),
                 ),
               ],
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              height: 40,
+              child: Text(
+                hint,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: colors.onSurfaceVariant),
+              ),
+            ),
+            SizedBox(
+              height: 36,
+              child: Text(
+                state.connected
+                    ? "${strings.peers(state.peers)}\nRTT ${state.rtt.toStringAsFixed(1)} ms"
+                    : "",
+                maxLines: 2,
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  fontFeatures: [const FontFeature.tabularFigures()],
+                ),
+              ),
             ),
             if (state.detail.isNotEmpty) ...[
               const Divider(height: 28),

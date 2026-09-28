@@ -2,7 +2,7 @@ package dev.cedarflake.ift.settings
 
 object SettingsCodec {
   fun encode(value: ControlSettings): Map<String, Any> = with(value) { mapOf(
-    "language" to language, "controlsMask" to controlsMask, "fieldMode" to fieldMode.name, "layoutMode" to layoutMode.name,
+    "language" to language, "theme" to theme, "controlsMask" to controlsMask, "fieldMode" to fieldMode.name, "layoutMode" to layoutMode.name,
     "videoScale" to videoScale.name, "laneHeight" to laneHeight.toDouble(), "fieldHeight" to fieldHeight.toDouble(),
     "fieldLeft" to fieldLeft.toDouble(), "fieldRight" to fieldRight.toDouble(),
     "laneOpacity" to laneOpacity.toDouble(), "laneGapDp" to laneGapDp.toDouble(), "brightness" to brightness.toDouble(),
@@ -35,6 +35,7 @@ object SettingsCodec {
     } else base.judgment
     return base.copy(
       language = string("language", base.language),
+      theme = string("theme", base.theme),
       controlsMask = if ("controlsMask" in patch) requireNotNull(patch["controlsMask"] as? Int) else base.controlsMask,
       fieldMode = FieldMode.valueOf(string("fieldMode", base.fieldMode.name)),
       layoutMode = LayoutMode.valueOf(string("layoutMode", base.layoutMode.name)),

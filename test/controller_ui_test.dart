@@ -11,6 +11,7 @@ import "package:infalsus_touch/native_controller.dart";
 
 Map<String, Object?> settingsFixture() => {
   "language": "en",
+  "theme": "dark",
   "controlsMask": 127,
   "layoutMode": "ALIGNED",
   "fieldMode": "ABSOLUTE",
@@ -61,6 +62,8 @@ class UiHost {
   final calls = <MethodCall>[];
   Completer<void>? connectionCommand;
   Completer<void>? panelCommand;
+  Completer<void>? saveCommand;
+  bool saveFails = false;
   late final controller = NativeController(channel: channel);
 
   Future<void> mount(WidgetTester tester) async {
@@ -80,11 +83,25 @@ class UiHost {
             state["panel"] = call.arguments;
           }
           if (call.method == "save") {
+            await saveCommand?.future;
+            if (saveFails) {
+              state["notice"] = "settings_save_failed";
+              throw PlatformException(code: "settings_save_failed");
+            }
             state["settings"] = {
               ...objectMap(state["settings"]),
               ...objectMap(call.arguments),
             };
             state["language"] = objectMap(state["settings"])["language"];
+            state["notice"] = null;
+          }
+          if (call.method == "defaults") {
+            final previous = objectMap(state["settings"]);
+            state["settings"] = {
+              ...settingsFixture(),
+              "language": previous["language"],
+              "theme": previous["theme"],
+            };
           }
           return state;
         });
@@ -115,9 +132,19 @@ void main() {
         tester.getRect(find.byKey(const ValueKey("settings-fullscreen"))),
         const Rect.fromLTWH(0, 0, 800, 360),
       );
-      final divider = find.byType(Divider).first;
-      expect(tester.getRect(divider).left, 0);
-      expect(tester.getRect(divider).right, 800);
+      final back = tester.getRect(
+        find.widgetWithIcon(IconButton, Icons.arrow_back_rounded),
+      );
+      final defaults = tester.getRect(
+        find.byKey(const ValueKey("restore-defaults")),
+      );
+      expect(back.left, 12);
+      expect(back.top, 8);
+      expect(defaults.right, 780);
+      expect(defaults.center.dy, back.center.dy);
+      expect(find.text("Save"), findsNothing);
+      expect(find.text("Cancel"), findsNothing);
+      expect(find.text("English"), findsNothing);
       expect(tester.takeException(), isNull);
     },
   );
@@ -239,6 +266,8 @@ void main() {
       final action = find.byKey(const ValueKey("connection-action"));
       final panelBounds = tester.getRect(panel);
       final actionBounds = tester.getRect(action);
+      final status = find.byKey(const ValueKey("connection-status"));
+      expect(tester.getCenter(status).dy, actionBounds.center.dy);
       expect(find.byType(Card), findsNWidgets(2));
       expect(
         find.descendant(of: panel, matching: find.byType(SwitchListTile)),
@@ -257,6 +286,7 @@ void main() {
         findsOneWidget,
       );
       expect(tester.getRect(action), actionBounds);
+      expect(tester.getCenter(status).dy, actionBounds.center.dy);
       await tester.tap(
         find.descendant(of: action, matching: find.text("Cancel")),
       );
@@ -292,7 +322,17 @@ void main() {
         await tester.pump(const Duration(milliseconds: 250));
         expect(tester.getRect(panel), panelBounds);
         expect(tester.getRect(action), actionBounds);
+        expect(tester.getCenter(status).dy, actionBounds.center.dy);
       }
+      host.controller.updateSetting("language", "zh");
+      await tester.pumpAndSettle();
+      expect(tester.getCenter(find.text("连接 USB")).dx, actionBounds.center.dx);
+      host.state["searching"] = true;
+      await host.controller.command("state");
+      await tester.pump(const Duration(milliseconds: 250));
+      expect(find.text("正在连接…"), findsOneWidget);
+      expect(tester.getRect(action), actionBounds);
+      expect(tester.getCenter(status).dy, actionBounds.center.dy);
       expect(tester.takeException(), isNull);
     },
   );
@@ -305,9 +345,13 @@ void main() {
       await host.mount(tester);
       await tester.tap(find.text("Controls"));
       await tester.pumpAndSettle();
-      expect(find.text("2 · J"), findsOneWidget);
-      await tester.ensureVisible(find.text("Field only"));
+      await tester.scrollUntilVisible(
+        find.text("Field only"),
+        150,
+        scrollable: find.byType(Scrollable).last,
+      );
       await tester.pumpAndSettle();
+      expect(find.text("2 · J"), findsOneWidget);
       await tester.tap(find.text("Field only"));
       await tester.pumpAndSettle();
       expect(
@@ -326,17 +370,16 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text("View only"));
       await tester.pumpAndSettle();
-      await tester.tap(find.text("Save"));
-      await tester.pumpAndSettle();
       final saved = objectMap(host.state["settings"]);
       expect(saved["controlsMask"], 0);
       expect(saved["judgment"], settingsFixture()["judgment"]);
+      expect(host.state["panel"], "settings");
       expect(tester.takeException(), isNull);
     },
   );
 
   testWidgets(
-    "Material 3 language changes immediately without losing unsaved touch settings",
+    "Other changes language immediately and touch settings save automatically",
     (tester) async {
       final host = UiHost();
       await host.mount(tester);
@@ -347,42 +390,54 @@ void main() {
       await tester.drag(find.byType(Slider).first, const Offset(50, 0));
       await tester.pumpAndSettle();
       final height = tester.widget<Slider>(find.byType(Slider).first).value;
+      await tester.tap(find.text("Other"));
+      await tester.pumpAndSettle();
       await tester.tap(find.text("中文"));
       await tester.pumpAndSettle();
       expect(find.text("控制设置"), findsOneWidget);
+      expect(find.text("主题"), findsOneWidget);
+      await tester.tap(find.text("触控"));
+      await tester.pumpAndSettle();
       expect(find.text("按钮触控高度"), findsOneWidget);
       expect(tester.widget<Slider>(find.byType(Slider).first).value, height);
       expect(objectMap(host.state["settings"])["language"], "zh");
+      expect(objectMap(host.state["settings"])["laneHeight"], height / 100);
       expect(tester.takeException(), isNull);
     },
   );
 
-  testWidgets("touch edits are sent only on Save", (tester) async {
+  testWidgets("touch changes save on release without leaving settings", (
+    tester,
+  ) async {
     final host = UiHost();
     await host.mount(tester);
     await tester.drag(find.byType(Slider).first, const Offset(50, 0));
-    await tester.pumpAndSettle();
-    expect(host.calls.where((call) => call.method == "save"), isEmpty);
-    await tester.tap(find.text("Save"));
     await tester.pumpAndSettle();
     final saved = objectMap(
       host.calls.singleWhere((call) => call.method == "save").arguments,
     );
     expect(saved["laneHeight"], isNot(0.4));
-    expect(saved["judgment"], settingsFixture()["judgment"]);
-    expect(host.state["panel"], "compact");
+    expect(
+      objectMap(host.state["settings"])["judgment"],
+      settingsFixture()["judgment"],
+    );
+    expect(host.state["panel"], "settings");
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets("Cancel discards draft control edits", (tester) async {
+  testWidgets("returning to the game flushes the latest pending setting", (
+    tester,
+  ) async {
     final host = UiHost();
     await host.mount(tester);
-    await tester.drag(find.byType(Slider).first, const Offset(-40, 0));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text("Cancel"));
-    await tester.pumpAndSettle();
+    host.controller.updateSetting("laneHeight", 0.31, defer: true);
+    host.controller.updateSetting("laneHeight", 0.32, defer: true);
     expect(host.calls.where((call) => call.method == "save"), isEmpty);
-    expect(objectMap(host.state["settings"])["laneHeight"], 0.4);
+    await tester.tap(find.byTooltip("Back to game"));
+    await tester.pumpAndSettle();
+    expect(host.calls.where((call) => call.method == "save").length, 1);
+    expect(objectMap(host.state["settings"])["laneHeight"], 0.32);
+    expect(host.state["panel"], "compact");
   });
 
   testWidgets(
@@ -391,7 +446,8 @@ void main() {
       final host = UiHost();
       await host.mount(tester);
       for (final language in ["en", "zh"]) {
-        await host.controller.language(language);
+        host.controller.updateSetting("language", language);
+        await host.controller.flushSettings();
         await tester.pumpAndSettle();
         await tester.tap(find.text(language == "en" ? "Picture" : "画面"));
         await tester.pumpAndSettle();
@@ -408,6 +464,102 @@ void main() {
         );
         expect(tester.takeException(), isNull);
       }
+    },
+  );
+
+  testWidgets(
+    "theme follows the chosen mode and defaults preserve language and appearance",
+    (tester) async {
+      final host = UiHost();
+      tester.binding.platformDispatcher.platformBrightnessTestValue =
+          Brightness.light;
+      addTearDown(
+        tester.binding.platformDispatcher.clearPlatformBrightnessTestValue,
+      );
+      await host.mount(tester);
+      Brightness brightness() => Theme.of(
+        tester.element(find.byKey(const ValueKey("settings-fullscreen"))),
+      ).brightness;
+      expect(brightness(), Brightness.dark);
+      await tester.tap(find.text("Other"));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text("Light"));
+      await tester.pumpAndSettle();
+      expect(brightness(), Brightness.light);
+      expect(objectMap(host.state["settings"])["theme"], "light");
+      await tester.tap(find.text("System"));
+      await tester.pumpAndSettle();
+      expect(brightness(), Brightness.light);
+      tester.binding.platformDispatcher.platformBrightnessTestValue =
+          Brightness.dark;
+      await tester.pumpAndSettle();
+      expect(brightness(), Brightness.dark);
+      await tester.tap(find.text("Light"));
+      await tester.tap(find.text("中文"));
+      await tester.pumpAndSettle();
+      host.controller.updateSetting("controlsMask", 64);
+      await tester.pumpAndSettle();
+      host.controller.updateSetting("laneHeight", 0.31, defer: true);
+      await tester.tap(find.byKey(const ValueKey("restore-defaults")));
+      await tester.pumpAndSettle();
+      final saved = objectMap(host.state["settings"]);
+      expect(saved["controlsMask"], 127);
+      expect(saved["laneHeight"], 0.4);
+      expect(saved["language"], "zh");
+      expect(saved["theme"], "light");
+      expect(brightness(), Brightness.light);
+      expect(find.text("控制设置"), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    "delayed saves and native status updates cannot overwrite newer edits",
+    (tester) async {
+      final host = UiHost();
+      await host.mount(tester);
+      host.saveCommand = Completer<void>();
+      host.controller.updateSetting("laneHeight", 0.31);
+      await tester.pump();
+      host.controller.updateSetting("laneHeight", 0.35, defer: true);
+      host.controller.updateSetting("controlsMask", 73);
+      await host.controller.command("state");
+      await tester.pump();
+      expect(host.calls.where((call) => call.method == "save").length, 1);
+      expect(tester.widget<Slider>(find.byType(Slider).first).value, 35);
+      host.saveCommand!.complete();
+      await tester.pumpAndSettle();
+      final saved = objectMap(host.state["settings"]);
+      expect(saved["laneHeight"], 0.35);
+      expect(saved["controlsMask"], 73);
+      expect(saved["judgment"], settingsFixture()["judgment"]);
+      expect(host.calls.where((call) => call.method == "save").length, 2);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    "a failed automatic save retains edits and retries when backgrounded",
+    (tester) async {
+      final host = UiHost();
+      await host.mount(tester);
+      host.saveFails = true;
+      host.controller.updateSetting("laneHeight", 0.31);
+      await tester.pumpAndSettle();
+      expect(host.controller.error, "settings_save_failed");
+      expect(objectMap(host.state["settings"])["laneHeight"], 0.4);
+      await host.controller.command("state");
+      await tester.pumpAndSettle();
+      expect(host.controller.settings.number("laneHeight"), 0.31);
+      host.saveFails = false;
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      await tester.pumpAndSettle();
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      expect(objectMap(host.state["settings"])["laneHeight"], 0.31);
+      expect(host.calls.where((call) => call.method == "save").length, 2);
+      expect(host.controller.error, isNull);
+      expect(host.controller.state?.notice, isNull);
+      expect(tester.takeException(), isNull);
     },
   );
 

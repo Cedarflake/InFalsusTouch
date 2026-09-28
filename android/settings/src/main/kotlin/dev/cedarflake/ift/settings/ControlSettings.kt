@@ -6,6 +6,7 @@ enum class VideoScale { FIT, FILL, CROP }
 
 data class ControlSettings(
   val language: String = "system",
+  val theme: String = "dark",
   val controlsMask: Int = 127,
   val fieldMode: FieldMode = FieldMode.ABSOLUTE,
   val layoutMode: LayoutMode = LayoutMode.ALIGNED,
@@ -27,6 +28,7 @@ data class ControlSettings(
 ) {
   init {
     require(language in setOf("system", "en", "zh"))
+    require(theme in setOf("system", "light", "dark"))
     require(controlsMask in 0..127)
     require(laneHeight in 0.1f..0.5f)
     require(fieldHeight in 0.1f..1f)

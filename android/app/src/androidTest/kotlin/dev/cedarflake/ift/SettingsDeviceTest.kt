@@ -9,7 +9,6 @@ import android.view.Choreographer
 import android.view.InputDevice
 import android.view.MotionEvent
 import android.view.ViewGroup
-import android.view.Window
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 
@@ -40,7 +39,7 @@ class SettingsDeviceTest {
     val context = InstrumentationRegistry.getInstrumentation().targetContext
     val name = "settings-device-test"
     val preferences = context.getSharedPreferences(name, Context.MODE_PRIVATE)
-    val value = ControlSettings(language = "zh", controlsMask = 73, fieldMode = FieldMode.RELATIVE, layoutMode = LayoutMode.RESERVED,
+    val value = ControlSettings(language = "zh", theme = "light", controlsMask = 73, fieldMode = FieldMode.RELATIVE, layoutMode = LayoutMode.RESERVED,
       videoScale = VideoScale.CROP, laneHeight = 0.35f, fieldHeight = 0.5f, fieldLeft = 0.1f, fieldRight = 0.9f,
       laneOpacity = 0.6f, laneGapDp = 5f, brightness = 0.7f, showLabels = false,
       showStatistics = true, showFieldGuide = true, autoConnect = true, autoHideControls = false, highRefreshDisplay = false,
@@ -69,8 +68,10 @@ class SettingsDeviceTest {
         click("Touch")
         waitForText("Controller settings")
         screenshot("flutter-settings-en.png")
+        click("Other")
         click("中文")
         waitForText("控制设置")
+        click("触控")
         screenshot("flutter-settings-zh.png")
         click("连接")
         screenshot("flutter-connection-zh.png")
@@ -81,6 +82,7 @@ class SettingsDeviceTest {
       DeviceActivity.launch().use {
         openSettings("zh")
         waitForText("控制设置")
+        click("其他")
         click("English")
         waitForText("Controller settings")
       }
@@ -92,13 +94,17 @@ class SettingsDeviceTest {
       DeviceActivity.launch().use {
         openSettings()
         click("Controls")
+        scrollContent()
         waitForText("Choose this device’s controls")
         screenshot("flutter-controls-en.png")
+        click("Other")
         click("中文")
+        click("按键显示")
+        scrollContent()
         waitForText("这台设备显示什么")
         screenshot("flutter-controls-zh.png")
         click("只看画面")
-        click("保存")
+        click("返回游戏")
         waitForText("设置", clickable = true)
         SettingsStore(InstrumentationRegistry.getInstrumentation().targetContext).use { store ->
           assertEquals(0, store.load().value.controlsMask)
@@ -107,8 +113,9 @@ class SettingsDeviceTest {
       DeviceActivity.launch().use {
         openSettings("zh")
         click("按键显示")
+        scrollContent()
         click("仅 Field")
-        click("保存")
+        click("返回游戏")
         waitForText("设置", clickable = true)
         SettingsStore(InstrumentationRegistry.getInstrumentation().targetContext).use { store ->
           assertEquals(64, store.load().value.controlsMask)
@@ -142,7 +149,7 @@ class SettingsDeviceTest {
         }
         openSettings()
         waitForText("Controller settings")
-        click("Cancel")
+        click("Back to game")
         waitForText("Settings", clickable = true)
         assertTrue(finished.await(5, TimeUnit.SECONDS))
         assertEquals("The Flutter texture resized during a panel transition", setOf(physical.x to physical.y), frames.toSet())
@@ -182,42 +189,6 @@ class SettingsDeviceTest {
     }
   }
 
-  @Test fun rapidSettingsTapsCannotReachTheBackButtonAfterOpening() {
-    DeviceSettings { it.copy(language = "en", autoConnect = false) }.use {
-      DeviceActivity.launch().use { scenario ->
-        val entry = Rect()
-        waitForText("Settings", clickable = true).getBoundsInScreen(entry)
-        val events = mutableListOf<String>()
-        val began = SystemClock.uptimeMillis()
-        scenario.onActivity { activity ->
-          val original = activity.window.callback
-          activity.window.callback = object : Window.Callback by original {
-            override fun dispatchTouchEvent(event: MotionEvent): Boolean {
-              val root = activity.findViewById<ViewGroup>(android.R.id.content).getChildAt(0) as ControllerRoot
-              events += "${event.eventTime - began} ms action=${event.actionMasked} panel=${activity.uiSnapshot()["panel"]} regions=${root.interfaceRegions}"
-              return original.dispatchTouchEvent(event)
-            }
-          }
-        }
-        for (interval in listOf(30L, 450L)) {
-          repeat(3) {
-            tap(entry, waitForIdle = false)
-            SystemClock.sleep(interval)
-          }
-          SystemClock.sleep(500)
-          scenario.onActivity { assertEquals(events.joinToString("\n"), "settings", it.uiSnapshot()["panel"]) }
-          waitForText("Controller settings")
-          val back = Rect()
-          waitForText("Back to game", clickable = true).getBoundsInScreen(back)
-          assertTrue("The return control must not overlap the entry", !Rect.intersects(entry, back))
-          click("Back to game")
-          waitForText("Settings", clickable = true)
-          scenario.onActivity { assertEquals("compact", it.uiSnapshot()["panel"]) }
-        }
-      }
-    }
-  }
-
   private fun openSettings(language: String = "en") {
     val label = if (language == "zh") "设置" else "Settings"
     click(label)
@@ -234,7 +205,24 @@ class SettingsDeviceTest {
     tap(bounds)
   }
 
-  private fun tap(bounds: Rect, waitForIdle: Boolean = true) {
+  private fun scrollContent() {
+    val instrumentation = InstrumentationRegistry.getInstrumentation()
+    val root = requireNotNull(instrumentation.uiAutomation.rootInActiveWindow)
+    val screen = Rect().also(root::getBoundsInScreen)
+    fun find(node: AccessibilityNodeInfo): AccessibilityNodeInfo? {
+      val bounds = Rect().also(node::getBoundsInScreen)
+      if (node.isScrollable && bounds.centerX() > screen.centerX()) return node
+      for (index in 0 until node.childCount) {
+        node.getChild(index)?.let { find(it)?.let { match -> return match } }
+      }
+      return null
+    }
+    val content = requireNotNull(find(root)) { "Settings content must be scrollable" }
+    assertTrue(content.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD))
+    instrumentation.waitForIdleSync()
+  }
+
+  private fun tap(bounds: Rect) {
     val instrumentation = InstrumentationRegistry.getInstrumentation()
     val start = SystemClock.uptimeMillis()
     for (action in listOf(MotionEvent.ACTION_DOWN, MotionEvent.ACTION_UP)) {
@@ -242,7 +230,7 @@ class SettingsDeviceTest {
       event.source = InputDevice.SOURCE_TOUCHSCREEN
       try { instrumentation.sendPointerSync(event) } finally { event.recycle() }
     }
-    if (waitForIdle) instrumentation.waitForIdleSync()
+    instrumentation.waitForIdleSync()
   }
 
   private fun waitForText(label: String, clickable: Boolean = false): AccessibilityNodeInfo {

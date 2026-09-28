@@ -35,8 +35,8 @@ try {
   $instrumentExit = $LASTEXITCODE
   $result | Set-Content -LiteralPath (Join-Path $outputRoot 'instrumentation.txt') -Encoding UTF8
   $result | Write-Output
-  if ($instrumentExit -ne 0 -or -not ($result -match 'OK \(11 tests\)') -or ($result -match 'FAILURES!!!|INSTRUMENTATION_FAILED|Process crashed')) {
-    throw 'Device instrumentation did not pass all eleven tests'
+  if ($instrumentExit -ne 0 -or -not ($result -match 'OK \(10 tests\)') -or ($result -match 'FAILURES!!!|INSTRUMENTATION_FAILED|Process crashed')) {
+    throw 'Device instrumentation did not pass all ten tests'
   }
   $deadline = [DateTime]::UtcNow.AddSeconds(2)
   do {

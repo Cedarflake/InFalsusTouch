@@ -30,52 +30,63 @@ class ControllerApp extends StatelessWidget {
   const ControllerApp({super.key, required this.controller});
   final NativeController controller;
 
-  static final _scheme = ColorScheme.fromSeed(
-    seedColor: const Color(0xFF67D9C5),
-    brightness: Brightness.dark,
-  );
   static const _buttonStyle = ButtonStyle(
     shape: WidgetStatePropertyAll(_corners),
   );
-  static final _theme = ThemeData(
-    useMaterial3: true,
-    colorScheme: _scheme,
-    scaffoldBackgroundColor: _scheme.surface,
-    cardTheme: CardThemeData(
-      elevation: 0,
-      color: _scheme.surfaceContainerLow,
-      margin: EdgeInsets.zero,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.all(Radius.circular(32)),
+  static final _lightTheme = _createTheme(Brightness.light);
+  static final _darkTheme = _createTheme(Brightness.dark);
+
+  static ThemeData _createTheme(Brightness brightness) {
+    final scheme = ColorScheme.fromSeed(
+      seedColor: const Color(0xFF67D9C5),
+      brightness: brightness,
+    );
+    return ThemeData(
+      useMaterial3: true,
+      colorScheme: scheme,
+      scaffoldBackgroundColor: scheme.surface,
+      cardTheme: CardThemeData(
+        elevation: 0,
+        color: scheme.surfaceContainerLow,
+        margin: EdgeInsets.zero,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(32)),
+        ),
       ),
-    ),
-    filledButtonTheme: const FilledButtonThemeData(style: _buttonStyle),
-    outlinedButtonTheme: const OutlinedButtonThemeData(style: _buttonStyle),
-    textButtonTheme: const TextButtonThemeData(style: _buttonStyle),
-    iconButtonTheme: const IconButtonThemeData(style: _buttonStyle),
-    segmentedButtonTheme: const SegmentedButtonThemeData(style: _buttonStyle),
-    chipTheme: const ChipThemeData(shape: _corners),
-    navigationDrawerTheme: const NavigationDrawerThemeData(
-      indicatorShape: _corners,
-    ),
-    tooltipTheme: const TooltipThemeData(
-      waitDuration: Duration(milliseconds: 500),
-    ),
-  );
+      filledButtonTheme: const FilledButtonThemeData(style: _buttonStyle),
+      outlinedButtonTheme: const OutlinedButtonThemeData(style: _buttonStyle),
+      textButtonTheme: const TextButtonThemeData(style: _buttonStyle),
+      iconButtonTheme: const IconButtonThemeData(style: _buttonStyle),
+      segmentedButtonTheme: const SegmentedButtonThemeData(style: _buttonStyle),
+      chipTheme: const ChipThemeData(shape: _corners),
+      navigationDrawerTheme: const NavigationDrawerThemeData(
+        indicatorShape: _corners,
+      ),
+      tooltipTheme: const TooltipThemeData(
+        waitDuration: Duration(milliseconds: 500),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: controller,
     builder: (context, _) {
       final state = controller.state;
-      final strings = AppStrings(state?.language ?? "en");
+      final strings = AppStrings(controller.language);
       return MaterialApp(
         title: "InFalsusTouch",
         debugShowCheckedModeBanner: false,
         locale: Locale(strings.language),
         supportedLocales: const [Locale("en"), Locale("zh")],
         localizationsDelegates: GlobalMaterialLocalizations.delegates,
-        theme: _theme,
+        theme: _lightTheme,
+        darkTheme: _darkTheme,
+        themeMode: switch (controller.settings.text("theme", "dark")) {
+          "light" => ThemeMode.light,
+          "system" => ThemeMode.system,
+          _ => ThemeMode.dark,
+        },
         home: state == null
             ? const SizedBox.expand()
             : _ControllerShell(
@@ -152,12 +163,6 @@ class _ControllerShellState extends State<_ControllerShell> {
           controller: widget.controller,
           state: state,
           strings: strings,
-          entryIsOnRight:
-              settingsEntryBounds(
-                MediaQuery.sizeOf(context),
-                state.cutouts,
-              ).center.dx >
-              MediaQuery.sizeOf(context).width / 2,
         ),
         _ => LayoutBuilder(
           builder: (context, constraints) {
