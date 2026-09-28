@@ -138,7 +138,14 @@ Local artifacts and evidence (ignored by Git):
 
 The user reports frequent Late judgments while playing muted and reading the phone
 display; normal audio output is the PC. Saved IF audio offset was read as zero and
-was not changed. No sign or value for game timing compensation has been verified.
+was not changed. Read-only analysis of the exact 1.0.4b binary now traces the saved
+offset into the gameplay clock used by input processing and track rendering.
+Increasing it makes that clock earlier at a fixed player position, so a positive
+adjustment is the direction to test for Late presses relative to music. It also
+shifts the displayed chart; it is not independent judgment compensation for muted
+phone-screen play. [TIMING-CALIBRATION.md](TIMING-CALIBRATION.md) records the evidence,
+scope and comparison procedure. No physical compensation value or improvement in
+the user's judgments has been established.
 
 The phone's Qualcomm OMX AVC decoder does not advertise Android's standard
 low-latency capability or the vendor option through parameter discovery. The

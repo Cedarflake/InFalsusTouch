@@ -143,6 +143,9 @@ does not substitute for the following checks with In Falsus:
 - For Late-heavy play, compare the same chart segment using phone controls while
   watching the PC and then the phone. Keep game offsets and sound setup unchanged
   during comparison; separately record muted visual play and PC-audio play.
-- Distinguish measured pipeline delay from in-game calibration. Confirm what IF's
-  offset setting changes and its direction before suggesting a compensation value.
+- Distinguish measured pipeline delay from in-game calibration. The inspected
+  1.0.4b audio offset changes the clock shared by input and track rendering; it
+  cannot independently compensate delayed video during muted visual play. Follow
+  [the timing comparison procedure](../docs/TIMING-CALIBRATION.md#practical-verification)
+  and verify direction again for other binaries before suggesting a value.
   Retest after any video optimization; a constant offset does not correct jitter.
