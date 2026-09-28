@@ -130,6 +130,32 @@ A rightward run at `20260928T172434198552Z` occurred after the chart ended. Its
 unlocked clip rectangle makes it **invalid as Field evidence**. The default
 locked-cursor guard was added after identifying this transition.
 
+## Current relative-path spot check
+
+On 2026-09-29, the Release Host at `31bbfc0` was checked again in the normal
+Be There / MIN 3 chart after the game-managed sensitivity change. The client
+remained `1280 x 720` at DPI 120. These probes use local TCP and real SendInput,
+not phone touches or a dry-run sink. Each run begins a fresh Field gesture.
+
+| Sequence | Approximate visible Field position |
+| --- | --- |
+| Fresh chart | X 512, centered |
+| Relative `+0.05` | X 532 |
+| Fresh gesture, relative `-0.05` | X 512 |
+| Fresh gesture, `0`, then five `+0.01` events | X 532 |
+
+The single displacement and its smaller increments reached similar positions,
+and an equal reversal returned to the center. Positions are visual estimates
+from the 1026-pixel-wide captures, not precision measurements. The zero event
+and subsequent small steps share one observation, so this does not separately
+prove physical lift/re-touch behavior. Fast swipes and phone hand feel remain open.
+
+The three artifacts are `field-relative-20260928T182258559361Z.json`,
+`field-relative-20260928T182320140281Z.json` and
+`field-relative-20260928T182356710648Z.json` in `build/game-input-test/`.
+All eight movement events received Field-owner ACK `4`; foreground and cursor
+lock checks held throughout. The chart subsequently ended at its results screen.
+
 ## Required next evidence
 
 Physical relative-input acceptance must compare slow/fast swipes, small movements,

@@ -13,8 +13,8 @@ device = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(device)
 
 
-def main(window, system_refresh, skip_install):
-    output = ROOT / "build" / ("game-video-system-refresh-test" if system_refresh else "game-video-test")
+def main(window, system_refresh, skip_install, output):
+    output = output or ROOT / "build" / ("game-video-system-refresh-test" if system_refresh else "game-video-test")
     serial = device.adb("get-serialno").strip()
     if not serial or serial == "unknown":
         raise RuntimeError("Connect exactly one authorized USB phone")
@@ -50,7 +50,9 @@ def main(window, system_refresh, skip_install):
             trace = (output / "input-trace.txt").read_text(encoding="utf-8")
             for lane in range(1, 7):
                 assert trace.count(f"DOWN {lane}\n") == trace.count(f"UP {lane}\n") == 1, f"Aligned lane {lane} hold/release mismatch"
-            assert "ABS 640 360" in trace, "Aligned Field did not reach the dry-run Host"
+            movements = [int(line.split()[1]) for line in trace.splitlines() if line.startswith("REL ")]
+            assert len(movements) == 1 and abs(movements[0] - 320) <= 1, "Aligned relative Field movement mismatch"
+            assert "ABS " not in trace, "Relative Field unexpectedly used absolute input"
             print("PASS: centered game video, aligned seven-pointer transport and local feedback capture")
     finally:
         try:
@@ -73,5 +75,6 @@ if __name__ == "__main__":
     parser.add_argument("--window", type=lambda value: int(value, 0), required=True)
     parser.add_argument("--system-refresh", action="store_true")
     parser.add_argument("--skip-install", action="store_true")
+    parser.add_argument("--output", type=pathlib.Path)
     args = parser.parse_args()
-    main(args.window, args.system_refresh, args.skip_install)
+    main(args.window, args.system_refresh, args.skip_install, args.output)

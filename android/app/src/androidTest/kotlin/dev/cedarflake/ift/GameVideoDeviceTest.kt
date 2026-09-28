@@ -17,6 +17,8 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 
 import dev.cedarflake.ift.video.VideoSnapshot
+import dev.cedarflake.ift.settings.FieldMode
+import dev.cedarflake.ift.settings.JudgmentLayout
 import dev.cedarflake.ift.settings.LayoutMode
 import dev.cedarflake.ift.settings.VideoScale
 
@@ -40,7 +42,8 @@ class GameVideoDeviceTest {
     val instrumentation = InstrumentationRegistry.getInstrumentation()
     val highRefresh = InstrumentationRegistry.getArguments().getString("highRefresh") != "false"
     DeviceSettings { it.copy(controlsMask = 127, showStatistics = false, autoConnect = false, autoHideControls = true,
-      highRefreshDisplay = highRefresh, layoutMode = LayoutMode.ALIGNED, laneHeight = 0.4f, videoScale = VideoScale.FIT) }.use {
+      highRefreshDisplay = highRefresh, layoutMode = LayoutMode.ALIGNED, laneHeight = 0.4f, videoScale = VideoScale.FIT,
+      fieldMode = FieldMode.RELATIVE, judgment = JudgmentLayout()) }.use {
       DeviceActivity.launch().use { scenario ->
         scenario.onActivity { it.toggleConnection() }
         val first = waitForSample(scenario) { it.presentedFrames >= 100 }
@@ -104,6 +107,7 @@ class GameVideoDeviceTest {
             val view = activity.window.decorView
             for (count in 1..7) dispatch(view, bounds, count, if (count == 1) MotionEvent.ACTION_DOWN else
               MotionEvent.ACTION_POINTER_DOWN or ((count - 1) shl MotionEvent.ACTION_POINTER_INDEX_SHIFT), started)
+            dispatch(view, bounds, 7, MotionEvent.ACTION_MOVE, started, 0.715f)
           }
           instrumentation.waitForIdleSync()
           SystemClock.sleep(250)
@@ -133,9 +137,9 @@ class GameVideoDeviceTest {
     }
   }
 
-  private fun dispatch(view: View, picture: Rect, count: Int, action: Int, started: Long) {
+  private fun dispatch(view: View, picture: Rect, count: Int, action: Int, started: Long, fieldX: Float = 0.5f) {
     // Observed hit positions in the 16:9 tutorial, independent of the layout implementation.
-    val points = arrayOf(0.5f to 0.4f, 0.13f to 0.64f, 0.28f to 0.64f, 0.43f to 0.64f,
+    val points = arrayOf(fieldX to 0.4f, 0.13f to 0.64f, 0.28f to 0.64f, 0.43f to 0.64f,
       0.57f to 0.64f, 0.72f to 0.64f, 0.87f to 0.64f)
     val origin = IntArray(2)
     view.getLocationOnScreen(origin)

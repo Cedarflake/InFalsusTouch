@@ -18,8 +18,10 @@ Experimental absolute Field alignment remains unresolved.
 The 2026-09-29 UI update consolidates USB logs, centers partial key selections,
 adds automatic settings saving and appearance preferences, and keeps the connection
 action on the status row. The Controls page combines cooperative play and key/IME
-guidance in one top card. Validation includes Flutter analysis/tests, Kotlin tests,
-lint and APK installation; the latest device UI flow has not been rerun.
+guidance in one top card. Immediate action and validation messages now use localized
+Android system Toasts, including calibration without video and failed settings saves.
+The full 12-test device suite passed, followed by two focused Toast/entry tests after
+checking that page changes do not prematurely cancel error feedback.
 
 The Field update uses a fixed 1280-unit horizontal reference, retains fractional
 movement and removes Host gain, acceleration, smoothing and speed limiting.
@@ -37,23 +39,25 @@ InFalsusTouchTool, Moonlight and Sunshine.
 | Android APK compilation | Passed, Gradle 8.11.1 / AGP 8.9.2 / Kotlin 2.1.20 / JDK 21 |
 | C++ input protocol / input state / mapping / video / profile / cooperative suites | 6/6 passed |
 | Kotlin settings / touch / input+video protocol / queue / socket / native-host tests | 37/37 passed, no skips; includes relative retouch, native-host deltas and 186 partial-selection/layout combinations |
-| Flutter analysis and UI tests | No analysis issues; 18/18 tests passed |
+| Flutter analysis and UI tests | No analysis issues; 19/19 tests passed |
 | Native profile persistence and CLI precedence integration | Passed, including legacy tuning migration, retired flags, invalid/missing profile and unchanged-file failure checks |
 | TCP disconnect / malformed / reconnect integration | 8/8 checks passed, including coalesced full-width relative movement |
 | Android lint | Passed, 0 errors; 5 advisory warnings for pinned test dependencies and KTX suggestions |
 | Cooperative TCP input and live key sync | Seven simulated clients, seven scenarios passed; physical multi-phone run pending |
 | Shared hardware video broadcast | Six healthy simulated viewers plus one stalled viewer passed; one shared encoding verified |
-| Android 14 device MotionEvent / USB / settings persistence and migration | 7/7 selected tests passed on 2026-09-29; actual USB trace contains REL 1280 / REL -320 and six key releases; current full UI flow not rerun |
+| Android 14 device MotionEvent / USB / settings persistence and migration | 12/12 full-suite tests passed on 2026-09-29; includes current settings UI and Chinese/English native Toast; 2/2 focused Toast/entry checks also passed after the final lifecycle adjustment |
 | Android Activity launch and landscape screen inspection | Passed at 2400 x 1080 |
 | Physical finger tracking and full In Falsus chart gameplay | Not tested |
 | Actual In Falsus USB SendInput | Shift+Space starts the 1.0.4b tutorial; full chart input remains open |
 | Actual-chart absolute Field mapping | Failed: repeated midpoint can retain different game positions; investigation and reproducible probes in [FIELD-MAPPING.md](FIELD-MAPPING.md) |
+| Actual-chart relative Field spot check | Small right/left reversal returned to center; one displacement and five increments reached similar positions; physical swipes and hand feel remain open |
 | Aligned game video / enlarged seven-pointer transport / feedback screenshots | 1/1 passed with real game capture and dry-run input |
 | OS native scan codes, Field mapping, EOF/watchdog/focus release | Passed against project-owned Win32 target; game cursor mapping is separate |
-| Phone display and centered Fit | Panel/app 120 Hz; complete 1920 x 1080 frame at (240, 0) on 2400 x 1080 |
+| Phone display and centered Fit | Panel/app mode 120 Hz; complete image displayed in a 1920 x 1080 rectangle at (240, 0) on 2400 x 1080 |
 | WGC / GPU conversion / hardware H.264 / TCP | Passed, including Baseline SPS and >=58 FPS gate |
-| Android hardware decode / output colors / seven-pointer input / settings and calibration isolation / reconnect | 1/1 device integration test passed |
-| 720p60 short-run throughput | PC 60.15 FPS; latest USB phone steady receive 59.99 FPS, present callbacks 58.85 FPS |
+| Android hardware decode / output colors / seven-pointer input / settings and calibration isolation / reconnect | Passed at both 720p and 1080p with relative Field movement and restored device settings |
+| 720p60 short-run throughput | Latest USB phone steady receive and present callbacks both 59.96 FPS |
+| 1080p60 short-run throughput | PC 60.13 FPS; USB phone steady receive 60.04 FPS, present callbacks 59.86 FPS; native source and received dimensions verified |
 | Measured latency tuning | Bounded queues, WGC pacing, low-latency codec selection and local statistics implemented |
 | Settings / calibration UX | Implemented; phone persistence/dialog/calibration and PC profile/mapping checks passed; physical PC cursor wizard use remains manual |
 
@@ -68,7 +72,9 @@ uv run --python 3.13 tests\profile-integration.py
 .\scripts\test-device.ps1 -SkipBuild
 .\scripts\test-device.ps1 -SkipBuild -InputOnly
 uv run --python 3.13 tests\video-integration.py --seconds 8 --min-fps 58
+uv run --python 3.13 tests\video-integration.py --resolution 1080p --seconds 10 --min-fps 58
 uv run --python 3.13 tests\video-device.py
+uv run --python 3.13 tests\video-device.py --resolution 1080p --skip-install
 uv run --python 3.13 tests\multiplayer-video.py
 ```
 
@@ -80,8 +86,9 @@ briefly display a project-owned Direct3D pattern window and never call SendInput
 Device used: model 22021211RC, Android 14 / API 34, physical display 1080 x 2400.
 The tests inject synthetic native MotionEvents, including seven pointers with
 reordered indices, on the device. They do not prove physical digitizer behavior.
-The actual USB/TCP test produced DOWN 1..6, ABS 640 360 and UP 1..6 in the Windows
-trace. It exercises the real socket transport but uses a dry-run input sink.
+The input suite's USB/TCP test produced DOWN 1..6, ABS 640 360, REL 1280,
+REL -320 and UP 1..6. Current video runs use Relative and verify REL 320 / REL -160
+alongside all six key holds/releases. These socket tests use a dry-run input sink.
 
 Local artifacts and evidence (ignored by Git):
 
@@ -91,6 +98,7 @@ Local artifacts and evidence (ignored by Git):
 - `android/app/build/reports/lint-results-debug.html` — lint report.
 - `android/transport/build/interop/` — native-host integration logs and traces.
 - `build/device-test/instrumentation.txt` and `input-trace.txt` — physical USB run.
+- `build/device-test/toast-instrumentation.txt` — final bilingual Toast and double-tap entry checks.
 - `build/device-test/phase1-screen.png` — actual device screenshot, inspected.
 - `build/device-test/flutter-settings-*.png` — settings screenshots from the prior UI build.
 - `build/video-test/metrics.json`, `host.log`, `pattern.log`, `sample.h264` — PC hardware stream test.
@@ -100,6 +108,36 @@ Local artifacts and evidence (ignored by Git):
 - `build/video-device-test/calibration-screen.png` — full-screen Field calibration with video still playing, inspected.
 
 ## Video measurements
+
+### Current Flutter build, 2026-09-29
+
+Both resolutions use a project-owned moving Direct3D pattern at the corresponding
+native client size. The 1080p PC run delivered 602 frames in 10.012 seconds
+(60.13 FPS), with 21 IDRs. A separate ffprobe inspection confirmed 1920 x 1080
+Constrained Baseline H.264 and no B frames; throughput is measured from packet
+arrival times, not raw-bitstream frame-rate estimates. PC available-to-encode
+mean was 5.32 ms. Concurrent local input RTT median/max was 0.156/0.908 ms.
+
+| USB format | Steady interval | Receive FPS | Present callbacks/s | Final queue depth | Session drops |
+| --- | --- | --- | --- | --- | --- |
+| 1280 x 720 | 10.006 s | 59.96 | 59.96 | 0 | 29 |
+| 1920 x 1080 | 11.010 s | 60.04 | 59.86 | 1 | 30 |
+
+Dimensions are checked against the received headers on the phone, as well as the
+PC wire stream and source window. Six decoded color bands, relative Field motion
+while six keys remain held, settings/calibration input isolation and reconnection
+passed at both sizes. Reconnected sessions presented 85 and 115 frames respectively.
+The last local receive-to-present samples were 25.35/25.96 ms; these are individual
+stage samples, not percentiles or physical touch-to-photon measurements. Drops
+include startup recovery. These short pattern runs do not establish thermal or
+busy-chart performance.
+
+Artifacts: `build/video-test/1080p-20260928T184417231858Z/`,
+`build/video-device-test/720p-20260928T184645008997Z/` and
+`build/video-device-test/1080p-20260928T184558664839Z/`.
+New pattern runs retain their evidence in resolution/time-named subdirectories.
+
+### Earlier baselines
 
 Cooperative broadcast test (0.5): six healthy receivers sustained 60.12–60.23 FPS
 while a seventh receiver stopped consuming. The test matched 332 capture/encode
@@ -146,6 +184,10 @@ color pattern. These short runs are not measurements of In Falsus under load.
   edits for retry. Defaults is at the top right and preserves language and theme.
   The sidebar is Connection, Touch, Controls, Picture, Other. Other contains
   English/Chinese and Light/Dark/System appearance, with Dark as the initial preference.
+- Transient calibration, validation and persistence feedback uses Android system
+  Toasts in the selected app language. Settings error banners were removed. Page
+  navigation does not cancel an error Toast; background-generated messages wait
+  for resume. Both language resources remain packaged for offline switching.
 - USB status/action alignment stays fixed while a compact inset log retains the
   latest outcome through retries. Content height transitions are animated unless
   reduced motion is requested; empty metrics no longer reserve space. Defaults
@@ -188,7 +230,7 @@ color pattern. These short runs are not measurements of In Falsus under load.
 
 Complete six-key chart acceptance by In Falsus, physical seven-finger capacity, actual
 cable-unplug detection time, multi-monitor/DPI behavior and user-perceived input
-latency still need gameplay testing. Long thermal/stability runs, 1080p60,
+latency still need gameplay testing. Long thermal/stability and busy-chart 1080p60 runs,
 multi-monitor capture, window resize/device-loss recovery and physical
 glass-to-glass latency remain unverified. Normal-chart probes on 2026-09-29
 confirmed that the former default absolute mapping can leave the game's Field marker at
@@ -205,15 +247,24 @@ See `tests/manual-acceptance.md` for the remaining physical checks.
 - Official Steam instructions and the installed tutorial distinguish keyboard
   lower notes from mouse upper Field. Central lanes are ASDF; outer lanes are
   Shift/Space with slanted judgment lines. The preset follows this observed 16:9 layout.
-- Latest real-game video interval: 10.021 s, receive 59.98 FPS, present callbacks
+- Earlier tutorial-window video interval: 10.021 s, receive 59.98 FPS, present callbacks
   57.28 FPS, queue depth 0, 29 session drops including startup. Last local samples:
   PC available-to-encode 3.08 ms, decoder 6.44 ms, receive-to-present 35.16 ms.
-- Panel/app mode was 120 Hz, requested 120 Hz, Choreographer callbacks 119.65 Hz.
+- In that earlier run, panel/app mode was 120 Hz, requested 120 Hz, Choreographer callbacks 119.65 Hz.
   Earlier system-selected mode was also 120 Hz; the preference is not claimed to
   improve this device's already-selected rate. Source video remains 60 FPS.
 - `build/game-video-test/` contains metrics, full-frame and pressed screenshots,
   and exactly one DOWN/UP pair for each of six enlarged keys plus Field transport.
   Windows input is dry-run for this capture/feedback test.
+- The current build was also checked against the game's animated results screen:
+  10.014 s, receive 60.02 FPS, present callbacks 57.42 FPS, queue depth 0 and 29
+  session drops including startup. Panel/app mode remained 120 Hz; Choreographer
+  callbacks averaged 110.91 Hz, so this is not a claim of sustained 120 callbacks/s.
+  Fit displayed the complete 720p stream at `(240, 0, 1920, 1080)` on the phone.
+  The trace verified six key holds/releases and one relative Field movement.
+  `build/game-video-relative-20260929/` contains this run's metrics and inspected
+  pressed-feedback screenshot. All Windows input was dry-run, and the results
+  page does not establish gameplay alignment or busy-chart performance.
 - `build/game-input-test/lane-1-6.txt`: phone USB Shift+Space passed; visual inspection
   confirmed the actual game entered its tutorial. No full-song performance is claimed.
 - `build/native-input-test/metrics-focus.json`: physical client coordinates match

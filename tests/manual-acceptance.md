@@ -1,7 +1,7 @@
 # Physical-device and game acceptance
 
 Status: physical gameplay checklist not executed. Android 14 device instrumentation
-and real USB transport to a dry-run Windows host passed on 2026-09-28; see
+and real USB transport to a dry-run Windows host passed on 2026-09-29; see
 `docs/STATUS.md`. These automated checks do not replace physical gameplay tests.
 
 ## Setup
@@ -73,6 +73,10 @@ and real USB transport to a dry-run Windows host passed on 2026-09-28; see
   and confirming must retain language and theme while resetting controls/calibration.
 - During repeated failed USB retries, the last result remains readable in the log.
   The status/action row stays in place; actual content changes resize smoothly.
+- Try judgment calibration without video and invalid calibration points. Immediate
+  feedback must be a native Android Toast in the selected language, without changing
+  connection details or adding a page banner. A failed settings save retains edits
+  for retry and its Toast remains visible across page changes.
 - Connect two or more physical phones with setup-adb.ps1 -AllDevices. Each can
   select any subset of the six keys and Field, including no controls. Saving on one
   phone must not alter another phone's choices, and relaunch must preserve choices.
@@ -116,7 +120,8 @@ does not substitute for the following checks with In Falsus:
   the reverse mapping is gone. No held input may be replayed.
 - Background/resume, rotate and recreate the phone Surface repeatedly. Confirm
   codec resources and socket counts stay bounded.
-- Test 1080p60 and bitrate/FPS alternatives on devices supporting those formats.
+- Test 1080p60 and bitrate/FPS alternatives during actual charts. Short 720p60 and
+  1080p60 pattern runs passed on the connected Android 14 phone on 2026-09-29.
 - Test unsupported codecs and GPU/device-loss failures: video errors should be
   explicit and must not block input cleanup.
 - Use high-speed external recording for physical touch-to-photon latency. Do not

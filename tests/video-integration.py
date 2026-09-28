@@ -1,6 +1,7 @@
 """Real WGC/GPU/H.264 smoke test against a project-owned window, with dry-run input."""
 
 import argparse
+from datetime import datetime, timezone
 import json
 import pathlib
 import re
@@ -50,13 +51,19 @@ def main():
     parser.add_argument("--pattern", type=pathlib.Path, default=pathlib.Path("build/windows/tests/Release/ift_video_pattern.exe"))
     parser.add_argument("--seconds", type=float, default=10)
     parser.add_argument("--min-fps", type=float, default=0)
+    parser.add_argument("--resolution", choices=("720p", "1080p"), default="720p")
+    parser.add_argument("--output", type=pathlib.Path)
     args = parser.parse_args()
-    output = pathlib.Path("build/video-test")
+    if not 2 <= args.seconds <= 300:
+        parser.error("--seconds must be within [2, 300]")
+    dimensions = (1920, 1080) if args.resolution == "1080p" else (1280, 720)
+    run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+    output = args.output or pathlib.Path("build/video-test") / f"{args.resolution}-{run_id}"
     output.mkdir(parents=True, exist_ok=True)
     control_port, video_port = unused_port(), unused_port()
     while video_port == control_port:
         video_port = unused_port()
-    pattern = subprocess.Popen([str(args.pattern.resolve())], stdout=subprocess.PIPE, text=True,
+    pattern = subprocess.Popen([str(args.pattern.resolve()), args.resolution], stdout=subprocess.PIPE, text=True,
                                creationflags=subprocess.CREATE_NO_WINDOW)
     host = None
     try:
@@ -65,6 +72,7 @@ def main():
             raise RuntimeError("Test window did not provide its handle")
         with (output / "host.log").open("w", encoding="utf-8") as log:
             host = subprocess.Popen([str(args.host.resolve()), "--dry-run", "--video", "--window", window,
+                                     "--no-profile", "--resolution", args.resolution,
                                      "--port", str(control_port), "--video-port", str(video_port),
                                      "--trace", str((output / "input-trace.txt").resolve())],
                                     stdout=log, stderr=log, creationflags=subprocess.CREATE_NO_WINDOW)
@@ -120,7 +128,7 @@ def main():
                         payload = read_exact(video, size)
                         if kind == 3:
                             raise RuntimeError(payload.decode("utf-8"))
-                        assert (width, height, fps) == (1280, 720, 60)
+                        assert (width, height, fps) == (*dimensions, 60)
                         bitstream.write(payload)
                         if kind == 1:
                             assert seq == 0 and count == 0
@@ -146,6 +154,7 @@ def main():
                     send_input(6)
                 elapsed = time.monotonic() - started
                 result = {
+                    "width": dimensions[0], "height": dimensions[1], "targetFps": 60,
                     "frames": count, "seconds": elapsed, "fps": count / elapsed,
                     "megabitsPerSecond": total_bytes * 8 / elapsed / 1e6,
                     "keyframes": keyframes,
@@ -163,6 +172,7 @@ def main():
             for lane in range(1, 7):
                 assert trace.count(f"DOWN {lane}\n") == trace.count(f"UP {lane}\n") == 1
             print("PASS: WGC -> GPU NV12 -> hardware H.264 -> TCP with concurrent six-key input")
+            print(f"Evidence: {output.resolve()}")
     finally:
         for process in (host, pattern):
             if process is not None and process.poll() is None:

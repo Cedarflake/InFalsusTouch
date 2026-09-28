@@ -5,6 +5,7 @@
 
 #include <chrono>
 #include <iostream>
+#include <string_view>
 
 namespace {
 
@@ -19,10 +20,10 @@ LRESULT CALLBACK windowProcedure(HWND window, UINT message, WPARAM parameter, LP
   return DefWindowProcW(window, message, parameter, data);
 }
 
-void render(HWND window) {
+void render(HWND window, LONG width, LONG height) {
   DXGI_SWAP_CHAIN_DESC swap{};
-  swap.BufferDesc.Width = 1280;
-  swap.BufferDesc.Height = 720;
+  swap.BufferDesc.Width = width;
+  swap.BufferDesc.Height = height;
   swap.BufferDesc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
   swap.SampleDesc.Count = 1;
   swap.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
@@ -57,12 +58,12 @@ void render(HWND window) {
       DispatchMessageW(&message);
     }
     for (LONG lane = 0; lane < 6; ++lane) {
-      const D3D11_RECT rectangle{lane * 1280 / 6, 0, (lane + 1) * 1280 / 6, 720};
+      const D3D11_RECT rectangle{lane * width / 6, 0, (lane + 1) * width / 6, height};
       context1->ClearView(target.get(), colors[lane], &rectangle, 1);
     }
     const auto elapsed = std::chrono::duration<double>(std::chrono::steady_clock::now() - started).count();
-    const LONG x = static_cast<LONG>(elapsed * 400) % 1280;
-    const D3D11_RECT cursor{x, 100, x + 12, 640};
+    const LONG x = static_cast<LONG>(elapsed * 400) % width;
+    const D3D11_RECT cursor{x, height * 100 / 720, x + 12, height * 640 / 720};
     context1->ClearView(target.get(), white, &cursor, 1);
     const auto result = chain->Present(1, 0);
     winrt::check_hresult(result);
@@ -73,8 +74,15 @@ void render(HWND window) {
 
 }
 
-int main() {
+int main(int argc, char** argv) {
   try {
+    const std::string_view resolution = argc == 2 ? argv[1] : "720p";
+    if (argc > 2 || (resolution != "720p" && resolution != "1080p")) {
+      std::cerr << "Usage: ift_video_pattern.exe [720p|1080p]\n";
+      return 1;
+    }
+    const LONG width = resolution == "1080p" ? 1920 : 1280;
+    const LONG height = resolution == "1080p" ? 1080 : 720;
     SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
     const auto instance = GetModuleHandleW(nullptr);
     WNDCLASSW windowClass{};
@@ -83,14 +91,17 @@ int main() {
     windowClass.lpszClassName = L"InFalsusTouchVideoTest";
     if (!RegisterClassW(&windowClass)) return 1;
     constexpr DWORD style = WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX;
-    RECT rect{0, 0, 1280, 720};
+    RECT rect{0, 0, width, height};
     AdjustWindowRect(&rect, style, FALSE);
     const auto window = CreateWindowExW(0, windowClass.lpszClassName, L"InFalsusTouch Direct3D video test",
       style, 30, 30, rect.right - rect.left, rect.bottom - rect.top, nullptr, nullptr, instance, nullptr);
     if (!window) return 1;
     ShowWindow(window, SW_SHOWNOACTIVATE);
+    RECT client{};
+    if (!GetClientRect(window, &client) || client.right != width || client.bottom != height) return 1;
     std::cout << "0x" << std::hex << reinterpret_cast<std::uintptr_t>(window) << std::dec << std::endl;
-    render(window);
+    std::cout << "Pattern client: " << client.right << 'x' << client.bottom << std::endl;
+    render(window, width, height);
     return 0;
   } catch (const winrt::hresult_error& error) {
     std::cerr << winrt::to_string(error.message()) << '\n';
