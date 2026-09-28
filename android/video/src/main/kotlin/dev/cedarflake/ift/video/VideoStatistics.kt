@@ -10,6 +10,7 @@ data class FrameTiming(
   val submitTimestamp: Long,
   var decodeTimestamp: Long = 0,
   var presentTimestamp: Long = 0,
+  var releaseTimestamp: Long = 0,
 )
 
 data class VideoSnapshot(

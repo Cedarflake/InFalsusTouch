@@ -125,16 +125,19 @@ internal class SurfaceDecoder(
       if (index >= 0) {
         val timing = pending.remove(outputInfo.presentationTimeUs)
         val now = System.nanoTime()
-        val render = timing != null && now - timing.receiveTimestamp <= 120_000_000
         if (timing != null) {
           timing.decodeTimestamp = now
           statistics.decoded(timing)
-          if (render) {
-            rendering.add(outputInfo.presentationTimeUs, timing)
-          } else dropped++
         }
-        // PC timestamps identify frames; Android display deadlines must use its local clock.
-        if (render) codec.releaseOutputBuffer(index, System.nanoTime()) else codec.releaseOutputBuffer(index, false)
+        if (timing != null && now - timing.receiveTimestamp <= 120_000_000) {
+          // Preserve the exact local deadline for correlation with SurfaceFlinger frame history.
+          timing.releaseTimestamp = System.nanoTime()
+          rendering.add(outputInfo.presentationTimeUs, timing)
+          codec.releaseOutputBuffer(index, timing.releaseTimestamp)
+        } else {
+          if (timing != null) dropped++
+          codec.releaseOutputBuffer(index, false)
+        }
         progressed = true
       }
     }

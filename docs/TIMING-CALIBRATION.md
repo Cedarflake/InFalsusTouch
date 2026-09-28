@@ -82,3 +82,9 @@ chart, and predates the callback-accounting correction. The later corrected
 720p60 pattern run measured 31.94 ms mean / 37.77 ms P95. Neither includes the
 complete capture/transport path, physical screen scanout or finger-to-game input
 delay. Physical Late-judgment acceptance remains open.
+
+The later [Surface presentation probe](STATUS.md#surface-frame-rate-hints-and-compositor-timestamps-2026-09-29)
+matched ten individual frames by their exact release timestamps. Codec-reported
+presentation was 5.35–5.72 ms later than SurfaceFlinger's actual-present timestamp
+for those frames. This distinguishes two software timing sources; it does not
+establish a fixed correction, a physical speedup or a value to enter in IF.

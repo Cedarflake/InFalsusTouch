@@ -1,4 +1,4 @@
-"""Compare phone overlay visibility in one USB video session with dry-run input."""
+"""Compare phone presentation policies in one USB video session with dry-run input."""
 
 import argparse
 from datetime import datetime, timezone
@@ -19,9 +19,23 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--host", type=pathlib.Path, default=ROOT / "dist/InFalsusTouchHost.exe")
     parser.add_argument("--skip-install", action="store_true")
+    parser.add_argument("--probe", choices=("overlays", "surface-hints"), default="overlays")
+    parser.add_argument("--fps", type=int, choices=(60, 90, 120), default=60)
     args = parser.parse_args()
+    if args.probe == "overlays" and args.fps != 60:
+        parser.error("The overlay comparison uses the 60 FPS baseline")
+    if args.probe == "overlays":
+        probe = "composition"
+        phases = ("normal-before", "native-controls", "video-only", "normal-after")
+        argument = "videoComposition"
+        method = "isolatesVisibleOverlaysWithinOneVideoSession"
+    else:
+        probe = "surface-hints"
+        phases = ("fixed-before", "unrestricted", "fixed-middle", "unspecified", "fixed-after")
+        argument = "videoSurfaceHints"
+        method = "comparesSurfaceFrameRateHintsWithinOneVideoSession"
     run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
-    output = ROOT / "build/video-composition-test" / run_id
+    output = ROOT / f"build/video-{probe}-test" / f"{args.fps}fps-{run_id}"
     serial = device.adb("get-serialno").strip()
     if not serial or serial == "unknown":
         raise RuntimeError("Connect exactly one authorized USB phone")
@@ -38,7 +52,7 @@ def main():
         assert re.fullmatch(r"0x[0-9a-f]+", window), "Test window did not start"
         with (output / "host.log").open("w", encoding="utf-8") as log:
             host = subprocess.Popen([str(args.host.resolve()), "--dry-run", "--video", "--window", window,
-                                     "--no-profile", "--resolution", "720p", "--fps", "60",
+                                     "--no-profile", "--resolution", "720p", "--fps", str(args.fps),
                                      "--port", assigned["tcp:27184"].split(":")[1],
                                      "--video-port", assigned["tcp:27183"].split(":")[1]],
                                     stdout=log, stderr=log, creationflags=subprocess.CREATE_NO_WINDOW)
@@ -49,25 +63,26 @@ def main():
                 print(device.adb("install", "-r", str(ROOT / "dist/InFalsusTouch.apk")), flush=True)
                 print(device.adb("install", "-r", "-t", str(ROOT / "android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk")), flush=True)
             assert host.poll() is None, "Native video host exited"
-            result = device.adb("shell", "am", "instrument", "-w", "-r", "-e", "videoComposition", "true",
-                                "-e", "class", "dev.cedarflake.ift.VideoCompositionDeviceTest",
+            result = device.adb("shell", "am", "instrument", "-w", "-r", "-e", argument, "true",
+                                "-e", "videoFps", str(args.fps),
+                                "-e", "class", f"dev.cedarflake.ift.VideoCompositionDeviceTest#{method}",
                                 f"{device.APP}.test/androidx.test.runner.AndroidJUnitRunner")
             (output / "instrumentation.txt").write_text(result, encoding="utf-8")
             print(result, flush=True)
-            phases = ("normal-before", "native-controls", "video-only", "normal-after")
-            for name in ("video-composition.json", *(f"composition-{phase}.png" for phase in phases)):
+            for name in (f"video-{probe}.json", *(f"{probe}-{phase}.png" for phase in phases)):
                 try:
                     contents = device.adb("exec-out", "run-as", device.APP, "cat", f"files/{name}", binary=True)
                 except subprocess.CalledProcessError:
                     continue
                 (output / name).write_bytes(contents)
-            metrics_path = output / "video-composition.json"
+            metrics_path = output / f"video-{probe}.json"
             if metrics_path.exists():
                 print(metrics_path.read_text(encoding="utf-8"), flush=True)
-            assert "OK (1 test)" in result and "FAILURES!!!" not in result, f"Composition probe failed; inspect {output}"
+            assert "OK (1 test)" in result and "FAILURES!!!" not in result, f"Presentation probe failed; inspect {output}"
             metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
             assert tuple(sample["name"] for sample in metrics["phases"]) == phases
-            print(f"PASS: overlay visibility comparison; evidence: {output}")
+            assert metrics["streamFps"] == args.fps
+            print(f"PASS: {args.probe} comparison; evidence: {output}")
     finally:
         try:
             device.adb("shell", "am", "force-stop", device.APP)

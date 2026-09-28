@@ -95,6 +95,8 @@ uv run --python 3.13 tests\video-device.py --resolution 1080p --skip-install
 uv run --python 3.13 tests\video-integration.py --fps 120 --seconds 10 --min-fps 116
 uv run --python 3.13 tests\video-device.py --fps 120 --seconds 20 --skip-install
 uv run --python 3.13 tests\video-composition.py
+uv run --python 3.13 tests\video-composition.py --probe surface-hints --fps 60
+uv run --python 3.13 tests\video-composition.py --probe surface-hints --fps 120 --skip-install
 uv run --python 3.13 tests\multiplayer-video.py
 ```
 
@@ -283,6 +285,71 @@ physical video, and neither establishes that Late judgments are resolved.
 Evidence: `build/video-device-test/720p120-20260928T215323572836Z/` and
 `build/video-device-test/720p60-20260928T215607231097Z/`. User preferences and ADB
 mappings were restored exactly; the updated APK resumed the normal 720p60 Host.
+
+### Surface frame-rate hints and compositor timestamps, 2026-09-29
+
+The presentation probe now also compares `FIXED_SOURCE`, `DEFAULT` compatibility,
+and clearing the Surface frame-rate hint. Fixed-source control phases bracket
+the alternatives. All gameplay/UI layers remain visible, and each phase settles
+for at least five seconds before an eight-second measurement. The settling period
+excludes immediate transitions and recovery after the previous screenshot/dump;
+it does not establish equivalent runtime or power conditions between phases.
+
+The rebuilt APK passed all 48 Kotlin tests and Android lint. On the same 120 Hz
+phone, the 60 FPS presentation gate passed and the 120 FPS gate still failed:
+
+| Stream | Phase | Receive / decode FPS | Present callbacks/s | Software drops | Receive to callback timestamp mean / P95 |
+| --- | --- | --- | --- | --- | --- |
+| 60 | Fixed, before | 60.08 / 59.95 | 59.45 | 0 | 29.17 / 35.81 ms |
+| 60 | Default compatibility | 60.01 / 60.13 | 59.26 | 0 | 31.43 / 37.37 ms |
+| 60 | Fixed, middle | 60.05 / 60.05 | 59.18 | 0 | 31.15 / 36.87 ms |
+| 60 | No hint | 60.05 / 59.92 | 58.80 | 0 | 30.73 / 36.72 ms |
+| 60 | Fixed, after | 59.94 / 60.19 | 59.19 | 0 | 32.50 / 43.12 ms |
+| 120 | Fixed, before | 119.98 / 119.86 | 98.38 | 0 | 27.56 / 34.79 ms |
+| 120 | Default compatibility | 119.94 / 98.49 | 73.81 | 171 | 30.68 / 36.35 ms |
+| 120 | Fixed, middle | 120.00 / 59.87 | 43.28 | 483 | 30.92 / 38.12 ms |
+| 120 | No hint | 120.02 / 110.16 | 81.72 | 79 | 30.62 / 37.48 ms |
+| 120 | Fixed, after | 119.97 / 97.00 | 70.78 | 184 | 30.17 / 35.42 ms |
+
+Rates and drop counts cover each measurement interval. Latency summarizes only
+the final 240 matched callbacks, excluding dropped frames. All phases had zero
+unmatched callbacks. The fixed-source controls also changed over time, so the
+ordered run does not isolate a causal effect of a particular hint. There is no
+evidence here to change the production hint or enable 120 FPS by default.
+
+The decoder now retains the exact local timestamp passed to `releaseOutputBuffer`.
+At each phase end, the test saves SurfaceFlinger's raw frame history and matches
+that timestamp exactly to its desired-present column. All ten sampled frames
+matched uniquely. Their codec callback timestamps were 5.35–5.72 ms later than
+the corresponding compositor actual-present timestamps. These are ten individual
+frames, not latency percentiles, physical scanout measurements or a demonstrated
+speedup. No constant is subtracted from production statistics. The compositor's
+ready column equaled the requested release timestamp in these samples, so it
+does not independently measure hardware decode completion.
+
+The 120 FPS compositor histories also contained only 23.47–94.16 unique presents/s
+over their final 1.34–5.37-second tails. Those tails differ from the eight-second
+callback intervals and must not be compared as if they cover identical frames.
+They nevertheless provide separate evidence of irregular high-rate presentation.
+Software queue recovery and decoder scheduling remain investigation targets;
+120 Hz panel support is not evidence that the full stream sustains 120 FPS.
+
+Column meanings follow [AOSP FrameTracker](https://android.googlesource.com/platform/frameworks/native/+/cdb6b16dec3a541b455be99d075004cb2f0a0cd7/services/surfaceflinger/FrameTracker.cpp).
+The [codec callback API](https://developer.android.com/reference/android/media/MediaCodec.OnFrameRenderedListener)
+distinguishes the reported render timestamp from delayed/batched callback delivery.
+The probe uses that reported timestamp, not the time its handler executes.
+
+Evidence: `build/video-surface-hints-test/60fps-20260928T224653485105Z/` and
+`build/video-surface-hints-test/120fps-20260928T224912380724Z/`. Both runs retained
+all five phases before applying the unchanged throughput gates. Preferences and
+ADB mappings were restored, and normal 720p60 playback resumed. No improvement in
+physical Late judgments is claimed.
+
+The original overlay probe also passed with the new settling/correlation logic:
+59.17–59.41 presentation callbacks/s across all four phases, with 23.26–24.38 ms
+mean decode-to-callback timestamp delay. All four compositor samples matched;
+the inspected video-only screenshot confirms both control layers were hidden.
+Evidence: `build/video-composition-test/60fps-20260928T225217138490Z/`.
 
 ### PC window recovery, 2026-09-29
 
