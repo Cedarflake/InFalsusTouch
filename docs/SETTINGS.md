@@ -11,9 +11,12 @@ The return control stays at the top left; **Defaults** is at the top right.
 Settings apply and save automatically, with no Save/Cancel footer. Slider changes
 are coalesced while dragging and flushed on release, exit or backgrounding.
 Writes are serialized so incoming status updates cannot overwrite newer edits.
-A failed write is reported and pending edits remain available for retry;
+A failed write uses an Android system Toast and pending edits remain available for retry;
 session settings remain usable. Invalid stored values fall back to defaults
-with a visible notification. Defaults asks for confirmation before resetting phone
+with a localized system Toast. Immediate feedback for unavailable video, invalid
+settings, invalid calibration and failed actions also uses the same native Toast
+path. These messages do not add banners or alter the connection log. A message
+generated while backgrounded waits until the Activity resumes. Defaults asks for confirmation before resetting phone
 controls and calibration while retaining the chosen language and theme. Canceling
 or dismissing the dialog leaves settings unchanged.
 The sidebar order is **Connection, Touch, Controls, Picture, Other**.

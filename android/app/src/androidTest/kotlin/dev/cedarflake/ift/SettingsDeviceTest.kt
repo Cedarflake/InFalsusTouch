@@ -216,6 +216,35 @@ class SettingsDeviceTest {
     }
   }
 
+  @Test fun judgmentCalibrationWithoutVideoUsesLocalizedSystemToast() {
+    val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
+    for ((language, message) in listOf("zh" to "请先连接 USB，等待游戏画面显示后再校准。",
+      "en" to "Connect USB and wait for the game picture before calibrating.")) {
+      DeviceSettings { it.copy(language = language, autoConnect = false) }.use {
+        DeviceActivity.launch().use { scenario ->
+          scenario.onActivity { it.setPanel("settings") }
+          val toast = CountDownLatch(1)
+          automation.setOnAccessibilityEventListener { event ->
+            if (event.eventType == AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED &&
+              event.className == "android.widget.Toast" && event.text.any { it.toString() == message }) toast.countDown()
+          }
+          try {
+            scenario.onActivity { activity ->
+              val keys = setOf("panel", "connection", "detail", "notice")
+              val before = activity.uiSnapshot().filterKeys { it in keys }
+              assertEquals(null, activity.videoSnapshot)
+              activity.setPanel("calibrateJudgment")
+              assertEquals("A calibration hint must not change connection or panel state", before,
+                activity.uiSnapshot().filterKeys { it in keys })
+              activity.setPanel("compact")
+            }
+            assertTrue("Calibration must show the $language Android system Toast", toast.await(3, TimeUnit.SECONDS))
+          } finally { automation.setOnAccessibilityEventListener(null) }
+        }
+      }
+    }
+  }
+
   private fun openSettings(language: String = "en") {
     val label = if (language == "zh") "设置" else "Settings"
     click(label)

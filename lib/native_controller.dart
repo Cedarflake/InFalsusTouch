@@ -47,7 +47,6 @@ class ControllerState {
   bool get ready => values["targetReady"] == true;
   bool get hasVideo => values["hasVideo"] == true;
   String get language => values["language"] == "zh" ? "zh" : "en";
-  String? get notice => values["notice"] as String?;
   String get detail => values["detail"] as String? ?? "";
   double get density => (values["density"] as num?)?.toDouble() ?? 1;
   double get rtt => (values["rtt"] as num?)?.toDouble() ?? 0;
@@ -136,18 +135,32 @@ class NativeController extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<bool> command(String method, [Object? arguments]) async {
+    final String code;
     try {
       final result = await _channel.invokeMethod<Object?>(method, arguments);
       error = null;
       if (result != null) _receive(result);
       return true;
     } on PlatformException catch (failure) {
-      error = failure.code;
+      code = failure.code;
     } on MissingPluginException {
-      error = "bridge_unavailable";
+      code = "bridge_unavailable";
     }
+    error = code;
+    await feedback(code);
     if (!_isDisposed) notifyListeners();
     return false;
+  }
+
+  Future<void> feedback(String code) async {
+    if (_isDisposed) return;
+    try {
+      await _channel.invokeMethod<void>("feedback", code);
+    } on PlatformException catch (failure) {
+      debugPrint("Native feedback unavailable: ${failure.code}");
+    } on MissingPluginException {
+      debugPrint("Native feedback channel unavailable");
+    }
   }
 
   void updateSetting(String key, Object value, {bool defer = false}) {

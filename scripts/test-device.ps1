@@ -32,7 +32,7 @@ try {
   & $AdbPath -d install -r -t (Join-Path $repoRoot 'android\app\build\outputs\apk\androidTest\debug\app-debug-androidTest.apk')
   if ($LASTEXITCODE -ne 0) { throw 'Instrumentation installation failed' }
   $testClasses = 'dev.cedarflake.ift.MotionEventDeviceTest,dev.cedarflake.ift.UsbTransportDeviceTest,dev.cedarflake.ift.SettingsDeviceTest'
-  $expectedTests = 11
+  $expectedTests = 12
   if ($InputOnly) {
     $testClasses = 'dev.cedarflake.ift.MotionEventDeviceTest,dev.cedarflake.ift.UsbTransportDeviceTest,dev.cedarflake.ift.SettingsDeviceTest#settingsPersistAcrossStoreInstancesAndRecoverFromCorruption,dev.cedarflake.ift.SettingsDeviceTest#legacyFieldModeMigratesWithoutResettingOtherPreferences'
     $expectedTests = 7

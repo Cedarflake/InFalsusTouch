@@ -74,7 +74,9 @@ class UiHost {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {
           calls.add(call);
-          if (call.method == "uiRegions" || call.method == "settingsHint") {
+          if (call.method == "uiRegions" ||
+              call.method == "settingsHint" ||
+              call.method == "feedback") {
             return null;
           }
           if (call.method == "connect") await connectionCommand?.future;
@@ -85,7 +87,6 @@ class UiHost {
           if (call.method == "save") {
             await saveCommand?.future;
             if (saveFails) {
-              state["notice"] = "settings_save_failed";
               throw PlatformException(code: "settings_save_failed");
             }
             state["settings"] = {
@@ -93,7 +94,6 @@ class UiHost {
               ...objectMap(call.arguments),
             };
             state["language"] = objectMap(state["settings"])["language"];
-            state["notice"] = null;
           }
           if (call.method == "defaults") {
             final previous = objectMap(state["settings"]);
@@ -643,6 +643,11 @@ void main() {
       host.controller.updateSetting("laneHeight", 0.31);
       await tester.pumpAndSettle();
       expect(host.controller.error, "settings_save_failed");
+      expect(
+        host.calls.where((call) => call.method == "feedback").single.arguments,
+        "settings_save_failed",
+      );
+      expect(find.textContaining("Settings could not be saved"), findsNothing);
       expect(objectMap(host.state["settings"])["laneHeight"], 0.4);
       await host.controller.command("state");
       await tester.pumpAndSettle();
@@ -654,7 +659,6 @@ void main() {
       expect(objectMap(host.state["settings"])["laneHeight"], 0.31);
       expect(host.calls.where((call) => call.method == "save").length, 2);
       expect(host.controller.error, isNull);
-      expect(host.controller.state?.notice, isNull);
       expect(tester.takeException(), isNull);
     },
   );
@@ -690,6 +694,32 @@ void main() {
       );
       expect(saved["layoutMode"], "ALIGNED");
       expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    "invalid calibration requests native feedback without an error banner",
+    (tester) async {
+      final host = UiHost(panel: "calibrateField");
+      await host.mount(tester);
+      await tester.tapAt(const Offset(600, 170));
+      await tester.tapAt(const Offset(200, 170));
+      await tester.pumpAndSettle();
+      expect(
+        host.calls.where((call) => call.method == "feedback").single.arguments,
+        "invalid_calibration",
+      );
+      expect(find.textContaining("Edges are reversed"), findsNothing);
+      expect(
+        tester
+            .widget<FilledButton>(find.widgetWithText(FilledButton, "Save"))
+            .onPressed,
+        isNull,
+      );
+      await tester.tap(find.byTooltip("Undo point"));
+      await tester.pumpAndSettle();
+      expect(find.text("2 / 2"), findsOneWidget);
+      expect(host.calls.where((call) => call.method == "feedback").length, 1);
     },
   );
 

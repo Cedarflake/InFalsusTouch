@@ -73,7 +73,6 @@ class _SettingsPageState extends State<SettingsPage> {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final message = widget.controller.error ?? widget.state.notice;
     final screen = MediaQuery.sizeOf(context);
     EdgeInsets edgeInsets(double top, double bottom) {
       double left = 0;
@@ -198,36 +197,6 @@ class _SettingsPageState extends State<SettingsPage> {
                       16,
                     ),
                     children: [
-                      if (message != null)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: Material(
-                            color: colors.errorContainer,
-                            borderRadius: BorderRadius.circular(32),
-                            child: Padding(
-                              padding: const EdgeInsets.all(12),
-                              child: Row(
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      s.message(message),
-                                      style: TextStyle(
-                                        color: colors.onErrorContainer,
-                                      ),
-                                    ),
-                                  ),
-                                  if (widget.state.notice != null)
-                                    IconButton(
-                                      tooltip: s.close,
-                                      onPressed: () => widget.controller
-                                          .command("dismissNotice"),
-                                      icon: const Icon(Icons.close_rounded),
-                                    ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
                       ...switch (category) {
                         0 => connectionSections(),
                         1 => touchSections(),

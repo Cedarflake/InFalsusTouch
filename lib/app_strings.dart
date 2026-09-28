@@ -143,9 +143,6 @@ class AppStrings {
   String get undo => zh ? "撤销一点" : "Undo point";
   String get calibrated =>
       zh ? "位置已记录，保存后应用。" : "Positions recorded. Save to apply.";
-  String get invalidCalibration => zh
-      ? "边界顺序不正确或判定线重叠，请撤销后重试。"
-      : "Edges are reversed or judgment lines overlap. Undo and try again.";
   List<String> get judgmentSteps => zh
       ? const [
           "点击天空判定线的左端",
@@ -169,26 +166,4 @@ class AppStrings {
           "Tap the left edge of your comfortable Field range",
           "Tap its right edge",
         ];
-  String message(String code) => switch (code) {
-    "video_required" =>
-      zh
-          ? "请连接视频，并让游戏判定线出现在画面中。"
-          : "Connect video and show the gameplay judgment lines first.",
-    "settings_recovered" =>
-      zh
-          ? "保存的设置无效，已使用默认值。"
-          : "Saved settings were invalid. Defaults are in use.",
-    "settings_save_failed" =>
-      zh
-          ? "设置未能保存，本次会话仍可使用。"
-          : "Settings could not be saved. They remain active for this session.",
-    "invalid_settings" =>
-      zh
-          ? "请检查触区边界与校准点，左边界必须小于右边界。"
-          : "Check the touch range and calibration points. Left must be smaller than right.",
-    _ =>
-      zh
-          ? "界面暂未连接到控制器，请重新打开应用。"
-          : "The UI is not connected to the controller. Reopen the app.",
-  };
 }

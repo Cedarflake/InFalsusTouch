@@ -1,0 +1,11 @@
+<resources>
+  <string name="field_label">FIELD · 水平滑动</string>
+  <string name="input_accessibility">六个音游按键和水平滑动的 Field 触控区</string>
+  <string name="video_required">请先连接 USB，等待游戏画面显示后再校准。</string>
+  <string name="settings_recovered">保存的设置无效，已使用默认值。</string>
+  <string name="settings_save_failed">设置未能保存，当前修改已保留，可重试。</string>
+  <string name="invalid_settings">请检查触区边界与校准点，左边界必须小于右边界。</string>
+  <string name="invalid_calibration">边界顺序不正确或判定线重叠，请撤销后重试。</string>
+  <string name="bridge_unavailable">控制器暂时不可用，请重新打开应用。</string>
+  <string name="action_failed">操作未能完成，请重试。</string>
+</resources>

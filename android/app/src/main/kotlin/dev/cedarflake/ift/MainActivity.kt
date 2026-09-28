@@ -1,5 +1,6 @@
 package dev.cedarflake.ift
 
+import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -34,6 +35,7 @@ import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
 import java.util.concurrent.Executor
+import java.util.Locale
 
 class MainActivity : FlutterActivity(), SurfaceHolder.Callback {
   private lateinit var root: ControllerRoot
@@ -59,12 +61,13 @@ class MainActivity : FlutterActivity(), SurfaceHolder.Callback {
   private var inputRtt = 0.0
   private var detail = ""
   private var videoDetail = ""
-  private var notice: String? = null
+  private var pendingFeedback: Int? = null
   private var peers = 0
   private var bindingStatus = 1
   private var keyLabels = ControllerConfiguration.defaultLabels
   private var fieldStatus = 0
   private var settingsHint: Toast? = null
+  private var feedbackToast: Toast? = null
   private val isConfiguring get() = panel in setOf("settings", "calibrateField", "calibrateJudgment")
   @Volatile var videoSnapshot: VideoSnapshot? = null
     private set
@@ -90,10 +93,15 @@ class MainActivity : FlutterActivity(), SurfaceHolder.Callback {
           "settingsHint" -> {
             val message = requireNotNull(call.arguments as? String)
             require(message.isNotBlank() && message.length <= 120)
-            settingsHint?.cancel()
             if (panel == "compact" && isResumed) {
+              feedbackToast?.cancel()
+              settingsHint?.cancel()
               settingsHint = Toast.makeText(this, message, Toast.LENGTH_SHORT).also { it.show() }
             }
+            result.success(null)
+          }
+          "feedback" -> {
+            showFeedback(requireNotNull(call.arguments as? String))
             result.success(null)
           }
           "uiRegions" -> {
@@ -120,7 +128,6 @@ class MainActivity : FlutterActivity(), SurfaceHolder.Callback {
           "defaults" -> saveSettings(ControlSettings(language = settings.language, theme = settings.theme)) { success ->
             if (success) result.success(uiSnapshot()) else result.error("settings_save_failed", "Settings could not be saved", null)
           }
-          "dismissNotice" -> { notice = null; result.success(uiSnapshot()) }
           else -> result.notImplemented()
         }
       } catch (_: IllegalArgumentException) {
@@ -140,7 +147,7 @@ class MainActivity : FlutterActivity(), SurfaceHolder.Callback {
     settingsStore = SettingsStore(this)
     val loaded = settingsStore.load()
     settings = loaded.value
-    if (loaded.recovered) notice = "settings_recovered"
+    if (loaded.recovered) pendingFeedback = R.string.settings_recovered
     client = ControlClient(object : ControlListener {
       override fun onState(state: ConnectionState, detail: String) {
         if (isDestroyed) return
@@ -248,14 +255,40 @@ class MainActivity : FlutterActivity(), SurfaceHolder.Callback {
     settingsHint?.cancel()
     settingsHint = null
     if (value == "calibrateJudgment" && (videoSnapshot?.presentedFrames ?: 0L) == 0L) {
-      notice = "video_required"
-      publishState()
+      showFeedback("video_required")
       return
     }
     panel = if (value == "toolbar") "compact" else value
     root.isConfiguring = isConfiguring
     updateInputAllowed()
     publishState()
+  }
+
+  private fun showFeedback(code: String) {
+    val message = when (code) {
+      "video_required" -> R.string.video_required
+      "settings_recovered" -> R.string.settings_recovered
+      "settings_save_failed" -> R.string.settings_save_failed
+      "invalid_settings" -> R.string.invalid_settings
+      "invalid_calibration" -> R.string.invalid_calibration
+      "bridge_unavailable" -> R.string.bridge_unavailable
+      else -> R.string.action_failed
+    }
+    showFeedback(message)
+  }
+
+  private fun showFeedback(message: Int) {
+    if (!isResumed) {
+      pendingFeedback = message
+      return
+    }
+    val localized = if (settings.language == "system") this else createConfigurationContext(
+      Configuration(resources.configuration).apply { setLocale(Locale.forLanguageTag(settings.language)) },
+    )
+    settingsHint?.cancel()
+    settingsHint = null
+    feedbackToast?.cancel()
+    feedbackToast = Toast.makeText(this, localized.getText(message), Toast.LENGTH_SHORT).also { it.show() }
   }
 
   private fun setTargetReady(value: Boolean) {
@@ -282,7 +315,6 @@ class MainActivity : FlutterActivity(), SurfaceHolder.Callback {
     applySettings(value)
     settingsStore.save(value) { success ->
       if (!isDestroyed) {
-        if (!success) notice = "settings_save_failed" else if (notice == "settings_save_failed") notice = null
         publishState()
         completed(success)
       }
@@ -310,7 +342,6 @@ class MainActivity : FlutterActivity(), SurfaceHolder.Callback {
       } else emptyList<List<Int>>(),
       "displayHz" to if (::root.isInitialized) (root.display?.mode?.refreshRate ?: 0f).toDouble() else 0.0,
       "hasVideo" to ((videoSnapshot?.presentedFrames ?: 0) > 0), "detail" to detail, "videoDetail" to videoDetail,
-      "notice" to notice,
       "peers" to peers, "bindingStatus" to bindingStatus, "keyLabels" to keyLabels, "fieldStatus" to fieldStatus,
       "picture" to if (::viewport.isInitialized) viewport.placement?.let { mapOf(
         "left" to it.left, "top" to it.top, "width" to it.width, "height" to it.height, "clipHeight" to it.clipHeight,
@@ -373,6 +404,10 @@ class MainActivity : FlutterActivity(), SurfaceHolder.Callback {
   override fun onResume() {
     super.onResume()
     isResumed = true
+    pendingFeedback?.let {
+      pendingFeedback = null
+      showFeedback(it)
+    }
     updateInputAllowed()
     if (settings.autoConnect) {
       wantsConnection = true
@@ -384,6 +419,8 @@ class MainActivity : FlutterActivity(), SurfaceHolder.Callback {
   override fun onPause() {
     settingsHint?.cancel()
     settingsHint = null
+    feedbackToast?.cancel()
+    feedbackToast = null
     isResumed = false
     wantsConnection = false
     retryScheduled = false

@@ -132,6 +132,9 @@ class _CalibrationPageState extends State<CalibrationPage> {
                         ),
                       ),
                     );
+                    if (points.length == total && result == null) {
+                      widget.controller.feedback("invalid_calibration");
+                    }
                   },
                   child: CustomPaint(
                     painter: _CalibrationPainter(
@@ -170,7 +173,9 @@ class _CalibrationPageState extends State<CalibrationPage> {
                               Text(
                                 done
                                     ? (calibrated == null
-                                          ? s.invalidCalibration
+                                          ? (isJudgment
+                                                ? s.align
+                                                : s.calibrateField)
                                           : s.calibrated)
                                     : prompts[points.length],
                                 style: Theme.of(context).textTheme.titleSmall,

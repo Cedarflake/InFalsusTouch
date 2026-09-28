@@ -1,5 +1,12 @@
 <resources>
-  <string name="app_name">InFalsusTouch</string>
+  <string name="app_name" translatable="false">InFalsusTouch</string>
   <string name="field_label">FIELD · slide horizontally</string>
   <string name="input_accessibility">Six rhythm lanes and a horizontal Field touch controller</string>
+  <string name="video_required">Connect USB and wait for the game picture before calibrating.</string>
+  <string name="settings_recovered">Saved settings were invalid. Defaults are in use.</string>
+  <string name="settings_save_failed">Settings could not be saved. Your changes are kept for retry.</string>
+  <string name="invalid_settings">Check the touch area and calibration points. Left must be less than right.</string>
+  <string name="invalid_calibration">Edges are reversed or judgment lines overlap. Undo and try again.</string>
+  <string name="bridge_unavailable">Controller unavailable. Reopen the app.</string>
+  <string name="action_failed">Could not complete this action. Please try again.</string>
 </resources>
