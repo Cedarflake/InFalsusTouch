@@ -8,6 +8,7 @@ import android.view.SurfaceView
 import android.widget.FrameLayout
 
 import dev.cedarflake.ift.settings.ControlSettings
+import dev.cedarflake.ift.settings.VideoPlacement
 import dev.cedarflake.ift.settings.placeVideo
 
 @SuppressLint("ViewConstructor")
@@ -17,6 +18,9 @@ class VideoViewport(context: Context) : FrameLayout(context) {
   private var videoHeight = 720
   private var settings = ControlSettings()
   private val visibleBounds = Rect()
+  var onPlacement: ((VideoPlacement) -> Unit)? = null
+  var placement: VideoPlacement? = null
+    private set
 
   init {
     setBackgroundColor(Color.BLACK)
@@ -41,8 +45,10 @@ class VideoViewport(context: Context) : FrameLayout(context) {
     val availableHeight = bottom - top
     if (availableWidth <= 0 || availableHeight <= 0) return
     val placement = placeVideo(availableWidth, availableHeight, videoWidth, videoHeight, settings)
+    this.placement = placement
     visibleBounds.set(0, 0, availableWidth, placement.clipHeight)
     clipBounds = visibleBounds
     surface.layout(placement.left, placement.top, placement.left + placement.width, placement.top + placement.height)
+    onPlacement?.invoke(placement)
   }
 }

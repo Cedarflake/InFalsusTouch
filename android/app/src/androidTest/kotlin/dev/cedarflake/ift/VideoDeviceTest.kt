@@ -18,6 +18,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 
 import dev.cedarflake.ift.video.VideoSnapshot
+import dev.cedarflake.ift.settings.LayoutMode
 
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
@@ -35,6 +36,10 @@ import java.util.concurrent.atomic.AtomicReference
 class VideoDeviceTest {
   @Test fun usbVideoRendersColorsWhileSevenPointersHoldAndReconnects() {
     assumeTrue(InstrumentationRegistry.getArguments().getString("usbVideo") == "true")
+    DeviceSettings { it.copy(layoutMode = LayoutMode.OVERLAY, autoConnect = false, autoHideControls = true) }.use { verifyVideo() }
+  }
+
+  private fun verifyVideo() {
     val instrumentation = InstrumentationRegistry.getInstrumentation()
     DeviceActivity.launch().use { scenario ->
       scenario.onActivity { it.findViewById<android.view.ViewGroup>(android.R.id.content).findViewWithTag<Button>("connect").performClick() }

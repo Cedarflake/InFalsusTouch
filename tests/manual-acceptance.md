@@ -9,6 +9,9 @@ and real USB transport to a dry-run Windows host passed on 2026-09-28; see
 - Build both artifacts, connect an authorized USB phone and run setup-adb.ps1.
 - Select the running In Falsus window, open the app and focus the game.
 - Use the game's configured keys: Left Shift, A, S, D, F, Space.
+- Select the plain US English keyboard layout for the game. Merely toggling an
+  IME to English typing mode is insufficient when Shift itself is a lane key.
+  Record the layout reported by Host before testing; restore the previous layout afterward.
 
 ## Touch and input
 
@@ -23,6 +26,13 @@ and real USB transport to a dry-run Windows host passed on 2026-09-28; see
 - Confirm left/center/right Field mapping at different window positions, DPI
   scales and negative-origin monitors, including after moving the game window.
 - Test Relative mode and the sensitivity/acceleration/smoothing/speed options.
+- In Aligned mode, verify four central keys and two side keys at both the enlarged
+  upper button area and the judgment line. Fit bars must not trigger input.
+- Adjust button height without moving the picture or judgment references. Field
+  starts above the buttons; its Y coordinate does not move the PC pointer vertically.
+- Verify immediate pressed fills, last-finger release and a distinct local Field marker.
+- Use six-point judgment calibration with actual gameplay visible; verify rescaling
+  keeps the touch geometry attached to the same chart positions.
 
 ## Lifecycle and failure
 
@@ -42,10 +52,10 @@ and real USB transport to a dry-run Windows host passed on 2026-09-28; see
 | Item | Evidence |
 | --- | --- |
 | Phone / simultaneous pointer capacity | Not tested |
-| Android / Windows / In Falsus version | Android 14/API 34; game version not tested |
+| Android / Windows / In Falsus version | Android 14/API 34; In Falsus 1.0.4b |
 | Six-key + Field simultaneous operation | Not tested |
 | USB disconnect release timing | Not tested |
-| Real SendInput accepted by game | Not tested |
+| Real SendInput accepted by game | USB Shift+Space starts tutorial; full six-key gameplay remains open |
 | Measured control RTT (method/sample count) | Not tested |
 
 ## Video and sustained gameplay

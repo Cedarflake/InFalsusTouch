@@ -16,6 +16,7 @@ class TouchController(private val sink: TouchSink, private var geometry: TouchGe
   private var previousFieldX = 0f
   var fieldPointerId = -1
     private set
+  val fieldNormalizedX: Float get() = previousFieldX
 
   fun laneCount(lane: Int): Int = laneCounts[lane]
 

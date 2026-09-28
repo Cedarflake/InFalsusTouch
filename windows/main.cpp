@@ -56,6 +56,7 @@ int wmain(int argc, wchar_t** argv) {
       return 0;
     }
     const auto window = options.dryRun && !options.video.enabled ? nullptr : ift::chooseWindow(options);
+    if (window && !options.dryRun) ift::printTargetKeyboard(window);
     ift::GameWindow target(options.dryRun ? nullptr : window);
     std::unique_ptr<ift::InputSink> sink;
     if (options.dryRun) {

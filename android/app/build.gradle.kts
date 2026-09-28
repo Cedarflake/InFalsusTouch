@@ -11,8 +11,8 @@ android {
     applicationId = "dev.cedarflake.infalsustouch"
     minSdk = 26
     targetSdk = 35
-    versionCode = 3
-    versionName = "0.3.0-prototype"
+    versionCode = 4
+    versionName = "0.4.0-prototype"
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
   compileOptions {

@@ -26,7 +26,7 @@ flowchart LR
 | `android/app` | Activity lifecycle, native custom touch View, connection UI |
 | `android/touch` | Pure Kotlin pointer ownership, hit testing and lane counts |
 | `android/transport` | Pure JVM protocol codec, bounded queue, TCP connection |
-| `android/settings` | Layout and Field configuration, later persistence UI |
+| `android/settings` | Validated layout, video placement and Field configuration |
 | `android/video` | MediaCodec hardware decoding, Surface lifecycle and local statistics |
 | `windows/input` | Portable input state machine, mapping, Win32 input sink |
 | `windows/transport` | Loopback listener, framing, deadlines and replies |
@@ -94,13 +94,24 @@ hardware, D3D11-aware async H.264 MFT on the capture GPU. It requests Baseline
 (no B slices), low latency, CBR and a short GOP. Unsupported optional codec controls
 are reported. Encoder absence is explicit; there is no automatic software fallback.
 Android selects a hardware decoder, prefers reported low-latency support, and
-decodes directly to a Surface. Default Fit and Overlay preserve the game aspect.
-The phone exposes Fill, Crop and Reserved together with persistent touch/display
+decodes directly to a Surface. Default Fit and Aligned preserve the game aspect.
+VideoViewport publishes its actual placement to native touch geometry. The Field
+line, four central Floor lanes and two side lines use normalized picture coordinates.
+Buttons extend upward to a configurable height independently of their judgment
+lines. Field movement uses the region above those buttons. Local pressed fills
+and highlights share the same geometry and do not wait for a PC acknowledgement.
+Physical screen insets are symmetric; black bars and clipped pixels reject touches.
+The window requests 120 Hz independently of the video's source frame-rate hint.
+The phone exposes Stretch, Crop, Overlay and Reserved with persistent touch/display
 settings. Calibration overlays share the controller's exact dimensions and
 insets. Settings and calibration release/disable game input while video remains
 active. A foreground retry policy discovers the fixed USB endpoint when enabled.
 Windows profiles persist Field mapping and video quality; explicit CLI values
 override them. See [SETTINGS.md](docs/SETTINGS.md) for validation and storage rules.
+
+Mapping a normalized Field coordinate to an OS cursor position is not proof that
+the game's internal cursor matches it. In Falsus 1.0.4b locks/recenters the cursor;
+absolute Field gameplay mapping still needs a verified game-specific solution.
 
 Capture/encode/send times use a PC monotonic clock. Receive/decode/present times
 use an Android monotonic clock. Cross-device timestamp subtraction is invalid

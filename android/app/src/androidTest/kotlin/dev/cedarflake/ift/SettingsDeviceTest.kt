@@ -18,6 +18,8 @@ import dev.cedarflake.ift.settings.ControlSettings
 import dev.cedarflake.ift.settings.FieldMode
 import dev.cedarflake.ift.settings.LayoutMode
 import dev.cedarflake.ift.settings.VideoScale
+import dev.cedarflake.ift.settings.JudgmentLayout
+import dev.cedarflake.ift.settings.VideoPlacement
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -40,7 +42,8 @@ class SettingsDeviceTest {
     val value = ControlSettings(fieldMode = FieldMode.RELATIVE, layoutMode = LayoutMode.RESERVED,
       videoScale = VideoScale.CROP, laneHeight = 0.35f, fieldHeight = 0.5f, fieldLeft = 0.1f, fieldRight = 0.9f,
       laneOpacity = 0.6f, laneGapDp = 5f, brightness = 0.7f, showLabels = false,
-      showStatistics = true, showFieldGuide = true, autoConnect = true, autoHideControls = false)
+      showStatistics = true, showFieldGuide = true, autoConnect = true, autoHideControls = false, highRefreshDisplay = false,
+      judgment = JudgmentLayout(fieldLeft = 0.08f, fieldRight = 0.92f, floorY = 0.88f, sideY = 0.74f))
     try {
       SettingsStore(context, name).use { store ->
         val saved = CountDownLatch(1)
@@ -63,7 +66,7 @@ class SettingsDeviceTest {
       val closed = AtomicBoolean()
       val shown = AtomicReference<AlertDialog>()
       scenario.onActivity { activity ->
-        shown.set(SettingsDialog(activity, ControlSettings(), { saved.set(it) }, {}, { closed.set(true) }).show())
+        shown.set(SettingsDialog(activity, ControlSettings(), { saved.set(it) }, {}, {}, { closed.set(true) }).show())
       }
       val instrumentation = InstrumentationRegistry.getInstrumentation()
       instrumentation.waitForIdleSync()
@@ -88,6 +91,7 @@ class SettingsDeviceTest {
             findViewWithTag<CheckBox>("setting-labels").isChecked = false
             findViewWithTag<CheckBox>("setting-auto-connect").isChecked = true
             findViewWithTag<CheckBox>("setting-auto-hide").isChecked = false
+            findViewWithTag<CheckBox>("setting-high-refresh").isChecked = false
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
             assertEquals(null, saved.get())
             assertTrue(dialog.isShowing)
@@ -96,7 +100,7 @@ class SettingsDeviceTest {
           dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
           assertEquals(ControlSettings(fieldMode = FieldMode.RELATIVE, layoutMode = LayoutMode.RESERVED,
             videoScale = VideoScale.CROP, laneHeight = 0.35f, fieldHeight = 0.5f, fieldLeft = 0.1f, fieldRight = 0.9f,
-            showStatistics = true, showLabels = false, autoConnect = true, autoHideControls = false), saved.get())
+            showStatistics = true, showLabels = false, autoConnect = true, autoHideControls = false, highRefreshDisplay = false), saved.get())
         } finally { dialog.dismiss() }
       }
       InstrumentationRegistry.getInstrumentation().waitForIdleSync()
@@ -130,6 +134,38 @@ class SettingsDeviceTest {
       save.performClick()
       assertEquals(0.123f, left, 0.000001f)
       assertEquals(0.876f, right, 0.000001f)
+    }
+  }
+
+  @Test fun judgmentCalibrationUsesVideoCoordinatesAndIgnoresSideBars() {
+    InstrumentationRegistry.getInstrumentation().runOnMainSync {
+      val context = InstrumentationRegistry.getInstrumentation().targetContext
+      val video = VideoPlacement(100, 50, 1600, 900, 1000)
+      val expected = JudgmentLayout()
+      var saved: JudgmentLayout? = null
+      val calibration = JudgmentCalibrationView(context, { video }, expected, { saved = it }, {})
+      calibration.measure(View.MeasureSpec.makeMeasureSpec(1800, View.MeasureSpec.EXACTLY),
+        View.MeasureSpec.makeMeasureSpec(1000, View.MeasureSpec.EXACTLY))
+      calibration.layout(0, 0, 1800, 1000)
+      val canvas = calibration.getChildAt(0)
+      fun tap(x: Float, y: Float) {
+        val now = SystemClock.uptimeMillis()
+        val event = MotionEvent.obtain(now, now, MotionEvent.ACTION_UP, x, y, 0)
+        try { canvas.dispatchTouchEvent(event) } finally { event.recycle() }
+      }
+      tap(50f, 600f)
+      for ((x, y) in listOf(expected.fieldLeft to expected.fieldY, expected.fieldRight to expected.fieldY,
+        expected.floorLeft to expected.floorY, expected.floorRight to expected.floorY,
+        expected.sideLeft to expected.sideY, expected.sideRight to expected.sideY)) {
+        tap(video.left + video.width * x, video.top + video.height * y)
+      }
+      val save = calibration.findViewWithTag<Button>("judgment-save")
+      assertTrue(save.isEnabled)
+      save.performClick()
+      val result = requireNotNull(saved)
+      assertEquals(expected.fieldLeft, result.fieldLeft, 0.00001f)
+      assertEquals(expected.floorRight, result.floorRight, 0.00001f)
+      assertEquals(expected.sideY, result.sideY, 0.00001f)
     }
   }
 }

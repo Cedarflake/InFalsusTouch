@@ -1,5 +1,8 @@
 # Platform references
 
+- [Official In Falsus Steam description](https://store.steampowered.com/app/3971950/In_Falsus/?l=schinese): keyboard lower notes and mouse upper Field; local 1.0.4b tutorial confirms the central ASDF and side Shift/Space layout.
+- [Official In Falsus site](https://infalsus.lowiro.com/en-us/): aerial Field and rhythm gameplay.
+
 - [Android multi-touch](https://developer.android.com/develop/ui/views/touch-and-input/gestures/multi): pointer IDs are stable, event indices can change.
 - [MotionEvent](https://developer.android.com/reference/android/view/MotionEvent): action indices and native pointer coordinates.
 - [SendInput](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-sendinput): injection results and privilege isolation.
@@ -14,3 +17,5 @@
 - [H.264 encoder](https://learn.microsoft.com/en-us/windows/win32/medfound/h-264-video-encoder): media types and codec controls.
 - [MediaCodec](https://developer.android.com/reference/android/media/MediaCodec): codec-specific data, Surface decoding, flush and presentation callbacks.
 - [Android low-latency decoding](https://developer.android.com/about/versions/11/features): feature detection and codec configuration.
+- [Android frame rate](https://developer.android.com/media/optimize/performance/frame-rate): separate window/video Surface hints, actual display modes and system policy.
+- [ImmGetVirtualKey](https://learn.microsoft.com/en-us/windows/win32/api/imm/nf-imm-immgetvirtualkey): IMEs can replace key messages with VK_PROCESSKEY; a physical scan-code test must account for the active keyboard layout.

@@ -1,6 +1,8 @@
 package dev.cedarflake.ift
 
 import android.os.SystemClock
+import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.view.InputDevice
 import android.view.MotionEvent
 import android.widget.FrameLayout
@@ -8,6 +10,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import dev.cedarflake.ift.touch.TouchSink
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -86,5 +89,26 @@ class MotionEventDeviceTest {
     dispatch(view, MotionEvent.ACTION_DOWN, listOf(Finger(1, 550f, 350f)))
     view.layout(0, 0, 800, 400)
     assertEquals(listOf("D2", "CLEAR", "D6", "CLEAR"), sink.events)
+  }
+
+  @Test fun localFeedbackStaysLitUntilTheLastFingerLifts() = withView { view, _ ->
+    val bitmap = Bitmap.createBitmap(600, 400, Bitmap.Config.ARGB_8888)
+    fun pixel(): Int {
+      view.draw(Canvas(bitmap))
+      return bitmap.getPixel(250, 315)
+    }
+    try {
+      val resting = pixel()
+      val first = Finger(1, 250f, 350f)
+      val second = Finger(2, 260f, 350f)
+      dispatch(view, MotionEvent.ACTION_DOWN, listOf(first))
+      val pressed = pixel()
+      assertNotEquals("Local pressed feedback must be visible without a Host", resting, pressed)
+      dispatch(view, MotionEvent.ACTION_POINTER_DOWN or (1 shl MotionEvent.ACTION_POINTER_INDEX_SHIFT), listOf(first, second))
+      dispatch(view, MotionEvent.ACTION_POINTER_UP, listOf(first, second))
+      assertEquals(pressed, pixel())
+      dispatch(view, MotionEvent.ACTION_UP, listOf(second))
+      assertEquals(resting, pixel())
+    } finally { bitmap.recycle() }
   }
 }

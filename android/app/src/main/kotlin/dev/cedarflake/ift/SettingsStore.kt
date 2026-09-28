@@ -8,6 +8,7 @@ import android.os.Looper
 import dev.cedarflake.ift.settings.ControlSettings
 import dev.cedarflake.ift.settings.FieldMode
 import dev.cedarflake.ift.settings.LayoutMode
+import dev.cedarflake.ift.settings.JudgmentLayout
 import dev.cedarflake.ift.settings.VideoScale
 
 import java.io.Closeable
@@ -39,6 +40,19 @@ class SettingsStore(context: Context, name: String = "controller-settings") : Cl
         showFieldGuide = preferences.getBoolean("showFieldGuide", defaults.showFieldGuide),
         autoConnect = preferences.getBoolean("autoConnect", defaults.autoConnect),
         autoHideControls = preferences.getBoolean("autoHideControls", defaults.autoHideControls),
+        highRefreshDisplay = preferences.getBoolean("highRefreshDisplay", defaults.highRefreshDisplay),
+        judgment = JudgmentLayout(
+          fieldLeft = preferences.getFloat("judgment.fieldLeft", defaults.judgment.fieldLeft),
+          fieldRight = preferences.getFloat("judgment.fieldRight", defaults.judgment.fieldRight),
+          fieldY = preferences.getFloat("judgment.fieldY", defaults.judgment.fieldY),
+          floorLeft = preferences.getFloat("judgment.floorLeft", defaults.judgment.floorLeft),
+          floorRight = preferences.getFloat("judgment.floorRight", defaults.judgment.floorRight),
+          floorY = preferences.getFloat("judgment.floorY", defaults.judgment.floorY),
+          sideLeft = preferences.getFloat("judgment.sideLeft", defaults.judgment.sideLeft),
+          sideRight = preferences.getFloat("judgment.sideRight", defaults.judgment.sideRight),
+          sideY = preferences.getFloat("judgment.sideY", defaults.judgment.sideY),
+          hitPadding = preferences.getFloat("judgment.hitPadding", defaults.judgment.hitPadding),
+        ),
       ), false)
     } catch (_: IllegalArgumentException) {
       LoadedSettings(defaults, true)
@@ -67,6 +81,17 @@ class SettingsStore(context: Context, name: String = "controller-settings") : Cl
         .putBoolean("showFieldGuide", value.showFieldGuide)
         .putBoolean("autoConnect", value.autoConnect)
         .putBoolean("autoHideControls", value.autoHideControls)
+        .putBoolean("highRefreshDisplay", value.highRefreshDisplay)
+        .putFloat("judgment.fieldLeft", value.judgment.fieldLeft)
+        .putFloat("judgment.fieldRight", value.judgment.fieldRight)
+        .putFloat("judgment.fieldY", value.judgment.fieldY)
+        .putFloat("judgment.floorLeft", value.judgment.floorLeft)
+        .putFloat("judgment.floorRight", value.judgment.floorRight)
+        .putFloat("judgment.floorY", value.judgment.floorY)
+        .putFloat("judgment.sideLeft", value.judgment.sideLeft)
+        .putFloat("judgment.sideRight", value.judgment.sideRight)
+        .putFloat("judgment.sideY", value.judgment.sideY)
+        .putFloat("judgment.hitPadding", value.judgment.hitPadding)
         .commit() } catch (_: RuntimeException) { false }
       callbacks.post { completed(success) }
     }

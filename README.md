@@ -5,7 +5,8 @@ Windows 使用 C++20 / Win32，Android 使用 Kotlin / 原生 `MotionEvent`。
 
 **当前里程碑：带设置与校准的 USB 控制器原型。** 已实现 6K、多指 Hold、Field 绝对/相对控制、
 独立输入通道，以及 WGC → GPU NV12 → 硬件 H.264 → Android MediaCodec / SurfaceView。
-真机验证覆盖了视频像素、同时输入和断开重连；In Falsus 实际游玩仍待验收。
+真机验证覆盖了游戏视频、同时输入、按下反馈和断开重连；USB Shift＋Space 已启动实际游戏教程。
+Field 的游戏内绝对位置对齐、物理手指游玩仍待验收。
 完整状态和性能测量边界见 [STATUS](docs/STATUS.md)。
 
 最终交付为 `InFalsusTouchHost.exe` 和 `InFalsusTouch.apk`。输入优先级高于视频；
@@ -21,6 +22,8 @@ Windows 使用 C++20 / Win32，Android 使用 Kotlin / 原生 `MotionEvent`。
 - USB 数据线、USB Debugging、已授权的 ADB，经 USB 承载 localhost TCP。
 - Android 硬件 H.264 解码器需支持所选分辨率和帧率；不静默切换到软件编解码。
 - In Falsus 的六轨键位为 Left Shift / A / S / D / F / Space。
+- 为游戏窗口选择 **英语（美国）键盘**。中文输入法的英文输入模式仍可能被 Shift 轨道切回中文；
+  Host 启动时显示游戏线程的键盘布局，并对中日韩输入法布局提示。
 - Host 与游戏应以相同权限等级运行；Windows 的输入隔离可能阻止低权限进程向高权限游戏注入。
 
 构建端：
@@ -85,7 +88,12 @@ Host 默认监听两个 loopback 端口。设备重新插拔或 ADB 重启后重
 Android 固定连接 `127.0.0.1`，不提供 Wi-Fi Host 地址设置。
 
 视频默认 720p60 / 8 Mbps / H.264 Baseline / 半秒 GOP。只捕获所选窗口客户区，
-按原比例缩放并补黑边；手机默认 Fit 与半透明 Overlay。
+按原比例缩放并补黑边；手机默认 Fit 与 Aligned Field + Floor。Fit 将完整画面居中显示，
+左右对称避让挖孔，保留读谱区域。2400 × 1080 手机显示 16:9 游戏时左右各留 240 像素；
+强行等比铺满会裁去上下画面，因此裁切只作为可选项。
+
+默认启用 **Prefer 120 Hz display**，请求手机高刷新率；系统和省电设置决定实际结果。
+这与 60 FPS 视频独立，统计分别显示屏幕 Hz 和视频 FPS。关闭后交回系统选择，不强制锁定 60 Hz。
 
 ```powershell
 .\dist\InFalsusTouchHost.exe --video-diagnostics
@@ -101,9 +109,15 @@ Host 显示实际 WGC / GPU / 编码器诊断。支持 `MinUpdateInterval` 的 W
 
 ## Settings and saved profiles
 
-手机 Settings 支持 Absolute / Relative、Overlay / Reserved、Fit / Fill / Crop，以及轨道高度、
+手机 Settings 支持 Absolute / Relative、Aligned / Overlay / Reserved、Fit / Stretch / Crop，以及按键高度、
 透明度、间距、亮度、编号、Field 范围和调试统计。配置在本机保存，重启后恢复。
 连接后工具栏默认自动隐藏，保留 Menu 按钮；统计默认关闭，视频错误仍会显示。
+
+Aligned 布局以真实画面定位上方 Field、中央 A/S/D/F 和两侧 Shift/Space，
+触区随视频缩放移动，黑边不接受游戏触摸。**Button touch height** 默认 40%，可调 10–50%；
+向上增大按钮不会移动游戏判定线。Field 在按钮上方只处理水平移动。
+按下时本地立即填色并点亮对应判定线，多指同键保持到最后一指抬起。
+**Align game judgment lines** 提供六点校准，适配不同的游戏画面位置。
 
 PC 视频质量与 Field 参数可以保存为默认配置：
 
@@ -128,11 +142,13 @@ PC 视频质量与 Field 参数可以保存为默认配置：
 
 `--window` 的句柄必须使用本次 `--list` 的实际值。Field 坐标相对于所选窗口客户区；
 Host 负责 DPI 与多显示器坐标转换。`max-speed` 单位为像素/秒，`smoothing` 范围为 `[0,1)`。
-Relative 最终还会受 Windows 相对鼠标输入处理影响，默认推荐 Absolute。
+Relative 最终还会受游戏灵敏度及 Windows 相对输入处理影响。Absolute 保留为默认目标，
+但当前游戏教程实测会锁定系统光标，默认坐标范围不能覆盖整个 Field；暂不能声称触点与游戏光标一一对应。
 
 PC 校准时，让游戏窗口与 Host 控制台同时可见、保持控制台焦点，把鼠标移到游戏 Field 的
 左端、右端和固定高度，各按一次 Enter；输入 `q` 取消。校准完成后保存并退出，重新启动 Host 生效。
-手机的 **Calibrate phone Field area** 单独设置手指可舒适滑动的左右边界，不能代替 PC 游戏区域校准。
+手机的 **Calibrate phone Field area** 用于固定布局；Aligned 使用六点判定线校准。
+判定线校准只调整手机触区，不能替代游戏内 Field 光标行程验证。
 设置和校准期间会释放触点，视频继续播放；关闭后需重新按下才能控制游戏。
 
 Host 仅在目标窗口处于前台时接受游戏输入。切换到其他窗口会释放所有按键；
@@ -160,8 +176,8 @@ flowchart TD
 
 ## Validation boundaries
 
-自动化测试使用 dry-run sink，验证输入决策和网络行为，不向桌面注入实际按键。
-真机测试中的 MotionEvent 是合成事件；物理触点数量、游戏对 SendInput 的接受情况仍需游玩验收。
+常规自动化测试使用 dry-run sink；单独的 native-input/game-input/game-field 验收工具会向指定前台窗口注入实际输入。
+真机测试中的 MotionEvent 是合成事件；物理触点数量、完整谱面输入准确性仍需游玩验收。
 手机显示的 RTT 是控制协议往返测量，不是玻璃到玻璃延迟。
 视频统计分别显示接收/解码/呈现 FPS、码率、丢帧、队列，以及 PC 和手机的局部阶段耗时。
 两端时钟未经同步，不能把它们直接相减。呈现回调也不能证明物理屏幕的发光时刻。

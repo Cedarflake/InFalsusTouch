@@ -91,6 +91,18 @@ GameWindow::GameWindow(HWND handle) : handle_(handle) {
   }
 }
 
+void printTargetKeyboard(HWND window) {
+  const auto thread = GetWindowThreadProcessId(window, nullptr);
+  const auto layout = reinterpret_cast<std::uintptr_t>(GetKeyboardLayout(thread));
+  std::wcout << L"Game keyboard layout: 0x" << std::hex << layout << std::dec << L'\n';
+  const auto language = PRIMARYLANGID(LOWORD(layout));
+  if (language == LANG_CHINESE || language == LANG_JAPANESE || language == LANG_KOREAN) {
+    std::wcout << L"Input-method warning: select a plain US English keyboard layout for the game.\n"
+      L"An IME can consume lane keys; its English typing mode can switch back when the Shift lane is tapped.\n";
+  }
+  std::wcout << std::flush;
+}
+
 bool GameWindow::activeClient(Rect& client) const {
   DWORD currentProcess = 0;
   GetWindowThreadProcessId(handle_, &currentProcess);

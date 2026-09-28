@@ -17,6 +17,7 @@ struct WindowInfo {
 std::vector<WindowInfo> listWindows();
 void printWindows(const std::vector<WindowInfo>& windows);
 HWND chooseWindow(const HostOptions& options);
+void printTargetKeyboard(HWND window);
 
 class GameWindow {
 public:

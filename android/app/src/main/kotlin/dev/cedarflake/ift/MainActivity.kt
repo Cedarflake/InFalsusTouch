@@ -20,6 +20,7 @@ import android.widget.TextView
 import android.widget.Toast
 
 import dev.cedarflake.ift.settings.ControlSettings
+import dev.cedarflake.ift.settings.LayoutMode
 import dev.cedarflake.ift.touch.TouchSink
 import dev.cedarflake.ift.transport.ConnectionState
 import dev.cedarflake.ift.transport.ControlClient
@@ -45,7 +46,7 @@ class MainActivity : Activity(), SurfaceHolder.Callback {
   private lateinit var videoStatus: TextView
   private lateinit var settingsStore: SettingsStore
   private val ui = Handler(Looper.getMainLooper())
-  private var calibration: FieldCalibrationView? = null
+  private var calibration: FrameLayout? = null
   private var settingsDialog: AlertDialog? = null
   private var isConfiguring = false
   private var isResumed = false
@@ -71,6 +72,11 @@ class MainActivity : Activity(), SurfaceHolder.Callback {
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
     window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+    if (Build.VERSION.SDK_INT >= 28) {
+      window.attributes = window.attributes.apply {
+        layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+      }
+    }
     settingsStore = SettingsStore(this)
     val loaded = settingsStore.load()
     settings = loaded.value
@@ -114,8 +120,8 @@ class MainActivity : Activity(), SurfaceHolder.Callback {
         videoSnapshot = snapshot
         controllerView.setVideoVisible(snapshot.presentedFrames > 0)
         videoStatus.text = String.format(Locale.US,
-          "USB %.0f fps · Decode %.0f · Present %.0f · %.1f Mbps · Queue %d · Drop %d\nPC capture→encode %.1f ms · Phone receive→present %.1f ms",
-          snapshot.receiveFps, snapshot.decodeFps, snapshot.presentFps, snapshot.megabitsPerSecond,
+          "Display %.0f Hz · USB %.0f fps · Decode %.0f · Present %.0f · %.1f Mbps · Queue %d · Drop %d\nPC capture→encode %.1f ms · Phone receive→present %.1f ms",
+          root.display?.mode?.refreshRate ?: 0f, snapshot.receiveFps, snapshot.decodeFps, snapshot.presentFps, snapshot.megabitsPerSecond,
           snapshot.queueDepth, snapshot.droppedFrames, snapshot.captureToEncodeMs, snapshot.receiveToPresentMs)
       }
     }, Executor { runOnUiThread(it) })
@@ -161,7 +167,10 @@ class MainActivity : Activity(), SurfaceHolder.Callback {
     }
     menuButton = Button(this).apply {
       tag = "menu"
-      setText(R.string.menu)
+      setText(R.string.menu_icon)
+      contentDescription = getString(R.string.menu)
+      textSize = 20f
+      setPadding(0, 0, 0, 0)
       visibility = View.GONE
       setOnClickListener { showToolbar() }
     }
@@ -174,6 +183,7 @@ class MainActivity : Activity(), SurfaceHolder.Callback {
     })
     controllerView.tag = "controller"
     viewport = VideoViewport(this)
+    viewport.onPlacement = controllerView::setVideoPlacement
     viewport.surface.holder.addCallback(this)
     videoStatus = TextView(this).apply {
       text = getString(R.string.video_idle)
@@ -191,11 +201,18 @@ class MainActivity : Activity(), SurfaceHolder.Callback {
     toolbar.addView(settingsButton)
     toolbar.addView(connectButton)
     root.addView(toolbar, FrameLayout.LayoutParams(-1, toolbarHeight))
-    root.addView(menuButton, FrameLayout.LayoutParams(-2, toolbarHeight, Gravity.TOP or Gravity.END))
+    root.addView(menuButton, FrameLayout.LayoutParams(toolbarHeight, toolbarHeight, Gravity.TOP or Gravity.END))
     root.setOnApplyWindowInsetsListener { view, insets ->
       if (Build.VERSION.SDK_INT >= 30) {
         val safe = insets.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout())
-        view.setPadding(safe.left, safe.top, safe.right, safe.bottom)
+        val horizontal = maxOf(safe.left, safe.right)
+        val vertical = maxOf(safe.top, safe.bottom)
+        view.setPadding(horizontal, vertical, horizontal, vertical)
+      } else if (Build.VERSION.SDK_INT >= 28) {
+        val cutout = insets.displayCutout
+        val horizontal = maxOf(cutout?.safeInsetLeft ?: 0, cutout?.safeInsetRight ?: 0)
+        val vertical = maxOf(cutout?.safeInsetTop ?: 0, cutout?.safeInsetBottom ?: 0)
+        view.setPadding(horizontal, vertical, horizontal, vertical)
       }
       insets
     }
@@ -226,6 +243,7 @@ class MainActivity : Activity(), SurfaceHolder.Callback {
     settings = value
     controllerView.setSettings(value)
     viewport.setSettings(value)
+    window.attributes = window.attributes.apply { preferredRefreshRate = if (value.highRefreshDisplay) 120f else 0f }
     videoStatus.visibility = if (value.showStatistics) View.VISIBLE else View.GONE
     showToolbar()
   }
@@ -248,7 +266,7 @@ class MainActivity : Activity(), SurfaceHolder.Callback {
     isConfiguring = true
     updateInputAllowed()
     showToolbar()
-    settingsDialog = SettingsDialog(this, settings, ::saveSettings, ::startCalibration) {
+    settingsDialog = SettingsDialog(this, settings, ::saveSettings, ::startCalibration, ::startJudgmentCalibration) {
       settingsDialog = null
       isConfiguring = calibration != null
       updateInputAllowed()
@@ -264,6 +282,22 @@ class MainActivity : Activity(), SurfaceHolder.Callback {
     menuButton.visibility = View.GONE
     calibration = FieldCalibrationView(this, settings, { left, right ->
       saveSettings(settings.copy(fieldLeft = left, fieldRight = right))
+      finishCalibration()
+    }, ::finishCalibration).also { root.addView(it, FrameLayout.LayoutParams(-1, -1)) }
+  }
+
+  private fun startJudgmentCalibration() {
+    if (videoSnapshot?.presentedFrames == null || viewport.placement == null) {
+      Toast.makeText(this, R.string.judgment_needs_video, Toast.LENGTH_LONG).show()
+      return
+    }
+    isConfiguring = true
+    updateInputAllowed()
+    ui.removeCallbacks(hideToolbar)
+    toolbar.visibility = View.GONE
+    menuButton.visibility = View.GONE
+    calibration = JudgmentCalibrationView(this, { viewport.placement }, settings.judgment, { value ->
+      saveSettings(settings.copy(layoutMode = LayoutMode.ALIGNED, judgment = value))
       finishCalibration()
     }, ::finishCalibration).also { root.addView(it, FrameLayout.LayoutParams(-1, -1)) }
   }
@@ -303,13 +337,15 @@ class MainActivity : Activity(), SurfaceHolder.Callback {
   @Suppress("DEPRECATION")
   private fun enterImmersiveMode() {
     if (Build.VERSION.SDK_INT >= 30) {
+      window.setDecorFitsSystemWindows(false)
       window.insetsController?.apply {
         hide(WindowInsets.Type.systemBars())
         systemBarsBehavior = WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
       }
     } else {
       window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_FULLSCREEN or
-        View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+        View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or
+        View.SYSTEM_UI_FLAG_LAYOUT_STABLE or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
     }
   }
 

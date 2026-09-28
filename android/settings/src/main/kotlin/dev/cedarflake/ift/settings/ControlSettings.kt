@@ -1,14 +1,14 @@
 package dev.cedarflake.ift.settings
 
 enum class FieldMode { ABSOLUTE, RELATIVE }
-enum class LayoutMode { OVERLAY, RESERVED }
+enum class LayoutMode { OVERLAY, RESERVED, ALIGNED }
 enum class VideoScale { FIT, FILL, CROP }
 
 data class ControlSettings(
   val fieldMode: FieldMode = FieldMode.ABSOLUTE,
-  val layoutMode: LayoutMode = LayoutMode.OVERLAY,
+  val layoutMode: LayoutMode = LayoutMode.ALIGNED,
   val videoScale: VideoScale = VideoScale.FIT,
-  val laneHeight: Float = 0.28f,
+  val laneHeight: Float = 0.4f,
   val fieldHeight: Float = 0.65f,
   val fieldLeft: Float = 0f,
   val fieldRight: Float = 1f,
@@ -20,6 +20,8 @@ data class ControlSettings(
   val showFieldGuide: Boolean = false,
   val autoConnect: Boolean = false,
   val autoHideControls: Boolean = true,
+  val highRefreshDisplay: Boolean = true,
+  val judgment: JudgmentLayout = JudgmentLayout(),
 ) {
   init {
     require(laneHeight in 0.1f..0.5f)

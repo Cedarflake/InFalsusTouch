@@ -5,9 +5,11 @@ import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.Path
 import android.view.MotionEvent
 import android.view.View
 import dev.cedarflake.ift.settings.ControlSettings
+import dev.cedarflake.ift.settings.VideoPlacement
 import dev.cedarflake.ift.touch.TouchController
 import dev.cedarflake.ift.touch.TouchGeometry
 import dev.cedarflake.ift.touch.TouchSink
@@ -19,6 +21,8 @@ class ControllerView(context: Context, private val sink: TouchSink) : View(conte
   private var geometry = TouchGeometry(1f, 1f, settings)
   private val controller = TouchController(sink, geometry)
   private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+  private val lanePaths = Array(6) { Path() }
+  private var videoPlacement: VideoPlacement? = null
   private val labels = arrayOf("1  Shift", "2  A", "3  S", "4  D", "5  F", "6  Space")
   private val density = resources.displayMetrics.density
   private val fieldLabel = context.getString(R.string.field_label)
@@ -46,7 +50,13 @@ class ControllerView(context: Context, private val sink: TouchSink) : View(conte
   fun setVideoVisible(visible: Boolean) {
     if (isVideoVisible == visible) return
     isVideoVisible = visible
-    invalidate()
+    updateGeometry()
+  }
+
+  fun setVideoPlacement(value: VideoPlacement) {
+    if (videoPlacement == value) return
+    videoPlacement = value
+    updateGeometry()
   }
 
   fun releaseTouches() {
@@ -60,8 +70,19 @@ class ControllerView(context: Context, private val sink: TouchSink) : View(conte
 
   private fun updateGeometry() {
     if (width <= 0 || height <= 0) return
-    geometry = TouchGeometry(width.toFloat(), height.toFloat(), settings)
+    geometry = TouchGeometry(width.toFloat(), height.toFloat(), settings, videoPlacement.takeIf { isVideoVisible })
     controller.resize(geometry)
+    val gap = settings.laneGapDp * density / 2
+    geometry.laneRegions.forEachIndexed { index, region ->
+      lanePaths[index].apply {
+        rewind()
+        moveTo(region.left + gap, region.topLeft)
+        lineTo(region.right - gap, region.topRight)
+        lineTo(region.right - gap, region.bottom)
+        lineTo(region.left + gap, region.bottom)
+        close()
+      }
+    }
     invalidate()
   }
 
@@ -108,25 +129,44 @@ class ControllerView(context: Context, private val sink: TouchSink) : View(conte
     if (!isVideoVisible) canvas.drawText(phaseLabel, width / 2f, 80f * density, paint)
     paint.color = Color.rgb(97, 211, 197)
     if (!isVideoVisible && settings.showLabels) canvas.drawText(fieldLabel, width / 2f, (geometry.fieldTop + geometry.laneTop) / 2, paint)
+    canvas.save()
+    canvas.clipRect(geometry.clipLeft, geometry.clipTop, geometry.clipRight, geometry.clipBottom)
     if (settings.showFieldGuide) {
       paint.style = Paint.Style.STROKE
       paint.strokeWidth = density
-      canvas.drawRect(geometry.fieldLeft, geometry.fieldTop, geometry.fieldRight, geometry.laneTop, paint)
+      canvas.drawRect(geometry.fieldLeft, geometry.fieldTop, geometry.fieldRight, geometry.fieldBottom, paint)
       paint.style = Paint.Style.FILL
     }
-    val laneWidth = width / 6f
-    val gap = settings.laneGapDp * density / 2
+    if (controller.fieldPointerId >= 0) {
+      paint.color = Color.rgb(97, 211, 197)
+      paint.strokeWidth = 2f * density
+      canvas.drawLine(geometry.fieldLeft, geometry.fieldLineY, geometry.fieldRight, geometry.fieldLineY, paint)
+      val fieldX = geometry.fieldLeft + controller.fieldNormalizedX * (geometry.fieldRight - geometry.fieldLeft)
+      canvas.drawCircle(fieldX, geometry.fieldLineY, 7f * density, paint)
+    }
     for (lane in 0..5) {
+      val region = geometry.laneRegions[lane]
       val pressed = controller.laneCount(lane) > 0
       val brightness = settings.brightness
-      paint.color = if (pressed) Color.rgb((97 * brightness).toInt(), (211 * brightness).toInt(), (197 * brightness).toInt())
+      paint.color = if (pressed) Color.argb(115, (97 * brightness).toInt(), (211 * brightness).toInt(), (197 * brightness).toInt())
         else Color.argb((255 * settings.laneOpacity).toInt(), (65 * brightness).toInt(), (83 * brightness).toInt(), (108 * brightness).toInt())
-      canvas.drawRect(lane * laneWidth + gap, geometry.laneTop, (lane + 1) * laneWidth - gap, height.toFloat(), paint)
+      canvas.drawPath(lanePaths[lane], paint)
+      if (pressed) {
+        paint.color = Color.rgb((97 * brightness).toInt(), (211 * brightness).toInt(), (197 * brightness).toInt())
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = 2f * density
+        canvas.drawPath(lanePaths[lane], paint)
+        paint.strokeWidth = 4f * density
+        canvas.drawLine(region.left, region.judgmentLeft, region.right, region.judgmentRight, paint)
+        paint.style = Paint.Style.FILL
+      }
       if (settings.showLabels) {
-        paint.color = if (pressed) Color.BLACK else Color.WHITE
+        paint.color = Color.WHITE
         paint.textSize = 16f * density
-        canvas.drawText(labels[lane], (lane + 0.5f) * laneWidth, geometry.laneTop + (height - geometry.laneTop) / 2, paint)
+        val top = maxOf(region.judgmentLeft, region.judgmentRight)
+        canvas.drawText(labels[lane], (region.left + region.right) / 2, top + (region.bottom - top) / 2, paint)
       }
     }
+    canvas.restore()
   }
 }
