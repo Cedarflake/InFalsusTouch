@@ -26,7 +26,7 @@ try {
 $env:JAVA_TOOL_OPTIONS = "$env:JAVA_TOOL_OPTIONS `"-Djdk.net.unixdomain.tmpdir=$javaSocketDir`"".Trim()
 $gradle = Join-Path $repoRoot '.tools\gradle-8.11.1\bin\gradle.bat'
 if (-not (Test-Path -LiteralPath $gradle)) { $gradle = Join-Path $repoRoot 'android\gradlew.bat' }
-$tasks = @(':settings:test', ':touch:test', ':transport:test', ':app:assembleDebug')
+$tasks = @(':settings:test', ':touch:test', ':transport:test', ':video:testDebugUnitTest', ':app:assembleDebug')
 $hostExecutable = Join-Path $repoRoot 'build\windows\windows\Release\InFalsusTouchHost.exe'
 if (Test-Path -LiteralPath $hostExecutable) { $env:IFT_HOST_EXE = $hostExecutable }
 if (-not $SkipLint) { $tasks += ':app:lintDebug' }

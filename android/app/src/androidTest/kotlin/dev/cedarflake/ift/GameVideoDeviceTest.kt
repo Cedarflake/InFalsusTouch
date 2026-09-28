@@ -132,6 +132,17 @@ class GameVideoDeviceTest {
           .put("receiveToPresentMs", last.receiveToPresentMs).put("inputInjection", false)
           .put("syntheticPointers", 7)
           .put("display", display).put("layout", layout)
+        val latency = requireNotNull(last.latency)
+        metrics.put("latencyFrames", latency.samples)
+          .put("receiveToSubmitMeanMs", latency.receiveToSubmit.meanMs)
+          .put("decodeMeanMs", latency.decode.meanMs)
+          .put("decodeToPresentMeanMs", latency.decodeToPresent.meanMs)
+          .put("receiveToPresentMeanMs", latency.receiveToPresent.meanMs)
+          .put("receiveToPresentP95Ms", latency.receiveToPresent.p95Ms)
+        scenario.onActivity { activity ->
+          val state = activity.uiSnapshot()
+          metrics.put("inputRttMs", state["rtt"]).put("decoder", state["videoDetail"])
+        }
         File(instrumentation.targetContext.filesDir, "game-metrics.json").writeText(metrics.toString(2))
       }
     }

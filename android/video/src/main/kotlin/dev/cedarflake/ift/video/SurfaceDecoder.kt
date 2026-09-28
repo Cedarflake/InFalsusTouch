@@ -46,12 +46,10 @@ internal class SurfaceDecoder(
     format.setInteger(MediaFormat.KEY_FRAME_RATE, config.header.fps)
     val decoder = selectDecoder(config)
     val capabilities = decoder.getCapabilitiesForType(MediaFormat.MIMETYPE_VIDEO_AVC)
-    val lowLatency = Build.VERSION.SDK_INT >= 30 && capabilities.isFeatureSupported(MediaCodecInfo.CodecCapabilities.FEATURE_LowLatency)
-    if (lowLatency) format.setInteger(MediaFormat.KEY_LOW_LATENCY, 1)
     val candidate = MediaCodec.createByCodecName(decoder.name)
     try {
       callbackThread.start()
-      candidate.configure(format, surface, null, 0)
+      val latencyMode = DecoderLatency.configure(candidate, capabilities, format, surface)
       if (Build.VERSION.SDK_INT >= 30) surface.setFrameRate(config.header.fps.toFloat(), Surface.FRAME_RATE_COMPATIBILITY_FIXED_SOURCE)
       candidate.setOnFrameRenderedListener({ _, presentationUs, nanoTime ->
         rendering.remove(presentationUs)?.let { timing ->
@@ -61,8 +59,8 @@ internal class SurfaceDecoder(
       }, Handler(callbackThread.looper))
       candidate.start()
       codec = candidate
-      android.util.Log.i("InFalsusTouchVideo", "Decoder ${decoder.name}, lowLatency=$lowLatency")
-      describe("${decoder.name}; low latency ${if (lowLatency) "on" else "unavailable"}")
+      android.util.Log.i("InFalsusTouchVideo", "Decoder ${decoder.name}, low latency $latencyMode")
+      describe("${decoder.name}; low latency $latencyMode")
     } catch (error: Exception) {
       candidate.release()
       callbackThread.quitSafely()
@@ -139,7 +137,8 @@ internal class SurfaceDecoder(
             rendering[outputInfo.presentationTimeUs] = timing
           } else dropped++
         }
-        codec.releaseOutputBuffer(index, render)
+        // PC timestamps identify frames; Android display deadlines must use its local clock.
+        if (render) codec.releaseOutputBuffer(index, System.nanoTime()) else codec.releaseOutputBuffer(index, false)
         progressed = true
       }
     }

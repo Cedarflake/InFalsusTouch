@@ -14,4 +14,7 @@ android {
   kotlinOptions.jvmTarget = "17"
 }
 
-dependencies { implementation(project(":transport")) }
+dependencies {
+  implementation(project(":transport"))
+  testImplementation(kotlin("test-junit"))
+}

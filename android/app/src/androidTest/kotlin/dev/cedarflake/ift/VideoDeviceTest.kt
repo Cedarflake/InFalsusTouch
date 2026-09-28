@@ -75,8 +75,10 @@ class VideoDeviceTest {
       File(instrumentation.targetContext.filesDir, "video-surface.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
       bitmap.recycle()
       val started = SystemClock.uptimeMillis()
+      var touchWidth = 0
       scenario.onActivity { activity ->
         val view = activity.findViewById<android.view.ViewGroup>(android.R.id.content).findViewWithTag<ControllerView>("controller")
+        touchWidth = view.width
         for (count in 1..7) dispatch(view, count, if (count == 1) MotionEvent.ACTION_DOWN else
           MotionEvent.ACTION_POINTER_DOWN or ((count - 1) shl MotionEvent.ACTION_POINTER_INDEX_SHIFT), started)
         dispatch(view, 7, MotionEvent.ACTION_MOVE, started, 0.75f)
@@ -124,12 +126,24 @@ class VideoDeviceTest {
       assertTrue(timing.presentTimestamp >= timing.decodeTimestamp)
       val metrics = JSONObject().put("receiveFps", held.receiveFps).put("decodeFps", held.decodeFps)
         .put("width", held.width).put("height", held.height)
-        .put("touchWidth", instrumentation.targetContext.resources.displayMetrics.widthPixels)
+        .put("touchWidth", touchWidth)
         .put("steadySeconds", steadySeconds).put("steadyReceiveFps", steadyReceiveFps).put("steadyPresentFps", steadyPresentFps)
         .put("presentFps", held.presentFps).put("presentedFrames", held.presentedFrames)
         .put("droppedFrames", held.droppedFrames).put("queueDepth", held.queueDepth)
         .put("captureAvailableToEncodeMs", held.captureToEncodeMs).put("decodeMs", held.decoderMs)
         .put("receiveToPresentMs", held.receiveToPresentMs)
+      val latency = requireNotNull(held.latency)
+      assertEquals("Steady latency window", 240, latency.samples)
+      metrics.put("latencyFrames", latency.samples)
+        .put("receiveToSubmitMeanMs", latency.receiveToSubmit.meanMs)
+        .put("decodeMeanMs", latency.decode.meanMs)
+        .put("decodeToPresentMeanMs", latency.decodeToPresent.meanMs)
+        .put("receiveToPresentMeanMs", latency.receiveToPresent.meanMs)
+        .put("receiveToPresentP95Ms", latency.receiveToPresent.p95Ms)
+      scenario.onActivity { activity ->
+        val state = activity.uiSnapshot()
+        metrics.put("inputRttMs", state["rtt"]).put("decoder", state["videoDetail"]).put("displayHz", state["displayHz"])
+      }
       scenario.onActivity { it.toggleConnection() }
       SystemClock.sleep(500)
       scenario.onActivity { assertEquals(null, it.videoSnapshot) }

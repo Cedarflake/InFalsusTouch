@@ -52,7 +52,7 @@ and button shapes are unchanged.
 | Windows host compilation | Passed, MSVC 19.44 / CMake 3.31.6 / Windows SDK 10.0.26100.0 |
 | Android APK compilation | Passed, Gradle 8.11.1 / AGP 8.9.2 / Kotlin 2.1.20 / JDK 21 |
 | C++ input protocol / input state / mapping / video / profile / cooperative suites | 6/6 passed |
-| Kotlin settings / touch / input+video protocol / queue / socket / native-host tests | 42/42 passed, no skips; includes gap-free Field/button boundaries, pixel-preserving relative movement, large swipes, native-host deltas, haptic-setting codecs and 186 partial-selection/layout combinations |
+| Kotlin settings / touch / input+video protocol / queue / socket / native-host / video timing tests | 44/44 passed, no skips; includes gap-free Field/button boundaries, pixel-preserving relative movement, large swipes, native-host deltas, haptic-setting codecs, 186 partial-selection/layout combinations and bounded local-clock latency statistics |
 | Flutter analysis and UI tests | No analysis issues; 20/20 tests passed, including bilingual vibration toggle and immediate saving |
 | Native profile persistence and CLI precedence integration | Passed, including legacy tuning migration, retired flags, invalid/missing profile and unchanged-file failure checks |
 | TCP disconnect / malformed / reconnect integration | 8/8 checks passed, including coalesced full-width relative movement |
@@ -71,8 +71,8 @@ and button shapes are unchanged.
 | WGC / GPU conversion / hardware H.264 / TCP | Passed, including Baseline SPS and >=58 FPS gate |
 | PC source resize / aspect changes / minimize and restore | 720p decoded color, centered bars, animation and independent input passed; minimize triggered a stream restart which the test receiver recovered |
 | Android hardware decode / output colors / seven-pointer input / settings and calibration isolation / reconnect | Passed at both 720p and 1080p with relative Field movement and restored device settings |
-| 720p60 short-run throughput | Latest USB phone steady receive and present callbacks both 59.96 FPS |
-| 1080p60 short-run throughput | PC 60.13 FPS; USB phone steady receive 60.04 FPS, present callbacks 59.86 FPS; native source and received dimensions verified |
+| 720p60 short-run throughput | Latest USB phone steady receive 60.00 FPS, present callbacks 59.62 FPS; 21.02-second steady interval |
+| 1080p60 short-run throughput | Earlier PC 60.13 FPS; latest USB phone steady receive 60.00 FPS, present callbacks 59.52 FPS; native source and received dimensions verified |
 | Measured latency tuning | Bounded queues, WGC pacing, low-latency codec selection and local statistics implemented |
 | Settings / calibration UX | Implemented; phone persistence/dialog/calibration and PC profile/mapping checks passed; physical PC cursor wizard use remains manual |
 
@@ -104,9 +104,12 @@ The tests inject synthetic native MotionEvents, including seven pointers with
 reordered indices, on the device. They do not prove physical digitizer behavior.
 The input suite's USB/TCP test produced DOWN 1..6, ABS 640 360, REL 1280,
 REL -320 and UP 1..6. It also verifies a 2400-pixel swipe as REL 1280 + REL 1120
-and its full reversal. The video probes now expect View-pixel displacement;
-the earlier 720p/1080p evidence below predates that conversion. These socket
-tests use a dry-run input sink.
+and its full reversal. The latest 720p/1080p video probes also passed with actual
+View-pixel displacement: +600/-300 on the 2400-pixel controller. The first rerun
+incorrectly used the resource display width (2320 pixels after cutout accounting)
+for its expected value; instrumentation now records the actual touched View width.
+The failed run is retained at `build/video-device-test/720p-20260928T204340679677Z/`.
+These socket tests use a dry-run input sink.
 
 Local artifacts and evidence (ignored by Git):
 
@@ -127,6 +130,58 @@ Local artifacts and evidence (ignored by Git):
 
 ## Video measurements
 
+### Late-judgment investigation, 2026-09-29
+
+The user reports frequent Late judgments while playing muted and reading the phone
+display; normal audio output is the PC. Saved IF audio offset was read as zero and
+was not changed. No sign or value for game timing compensation has been verified.
+
+The phone's Qualcomm OMX AVC decoder does not advertise Android's standard
+low-latency capability or the vendor option through parameter discovery. The
+known Qualcomm low-latency extension was accepted when requested explicitly.
+Surface rendering now uses Android-local time rather than treating a PC frame
+identifier as a display deadline. These changes are compatible with both tested
+resolutions, but the measured difference does **not** establish a latency reduction.
+
+The following means and P95s cover the last 240 presented frames of each pattern
+run, not the entire session. Each steady throughput interval lasted approximately
+21 seconds; the display stayed at 120 Hz and source video at 60 FPS.
+
+| Configuration | Receive to submit mean | Decode mean | Decode to present mean | Receive to present mean / P95 |
+| --- | --- | --- | --- | --- |
+| 720p baseline | 1.49 ms | 5.35 ms | 23.80 ms | 30.64 / 37.19 ms |
+| 720p local presentation clock; no vendor option | 2.10 ms | 5.83 ms | 23.99 ms | 31.93 / 38.65 ms |
+| 720p Qualcomm extension | 1.54 ms | 4.93 ms | 23.95 ms | 30.42 / 36.33 ms |
+| 1080p Qualcomm extension | 2.03 ms | 6.74 ms | 24.20 ms | 32.97 / 38.19 ms |
+
+The largest measured phone stage remains presentation after decoded output.
+Read-only SurfaceFlinger samples separately showed an 8.33 ms display period and
+roughly 14–23 ms from a ready buffer to presentation. They are separate observations,
+not a synchronized trace of the same frames. End-of-run USB input RTT samples were
+6.50, 3.19, 3.53 and 2.84 ms respectively; these are round trips for software-created
+input, not physical finger-to-game latency or a one-way estimate.
+
+All four complete runs passed decoded colors, six held keys plus moving Field,
+settings/calibration isolation, balanced releases and reconnection. User preferences
+were compared before/after and restored exactly, as were the ADB mappings.
+The evidence directories under `build/video-device-test/` are respectively:
+`720p-20260928T205139413436Z/`, `720p-20260928T205619379661Z/`,
+`720p-20260928T210026078297Z/` and `1080p-20260928T210351331063Z/`.
+
+A subsequent capture of IF's current song-selection screen passed centered Fit,
+seven-pointer transport and local feedback checks. Over 10.00 seconds it received
+60.07 FPS and reported 59.37 presentation callbacks/s. The final 240-frame window
+averaged 26.74 ms receive-to-present (P95 31.08 ms), including 0.85 ms waiting to
+submit, 2.86 ms decoding and 23.03 ms afterward. Input RTT's last sample was 4.69 ms.
+The inspected screenshot and metrics are retained in
+`build/game-video-latency-20260928T210530Z/`. Windows input stayed in dry-run mode;
+the song-selection scene does not establish busy-chart or physical timing behavior.
+
+The remaining diagnosis requires comparing the same phone controls while watching
+the PC versus the phone, plus real chart timing results. These tests do not prove
+that the reported Late judgments are resolved. No total touch-to-photon latency
+is inferred from independent PC and phone clocks.
+
 ### PC window recovery, 2026-09-29
 
 `tests/video-recovery.py` controls only its own background D3D test window and
@@ -145,7 +200,7 @@ Evidence: `build/video-recovery-test/720p-20260928T191058477482Z/`.
 This run used a PC software decoder for pixel inspection. Android recovery,
 actual-game resizing, 1080p recovery and GPU device loss remain separate checks.
 
-### Current Flutter build, 2026-09-29
+### Earlier Flutter throughput baseline, 2026-09-29
 
 Both resolutions use a project-owned moving Direct3D pattern at the corresponding
 native client size. The 1080p PC run delivered 602 frames in 10.012 seconds
@@ -292,7 +347,7 @@ See `tests/manual-acceptance.md` for the remaining physical checks.
 - `build/game-video-test/` contains metrics, full-frame and pressed screenshots,
   and exactly one DOWN/UP pair for each of six enlarged keys plus Field transport.
   Windows input is dry-run for this capture/feedback test.
-- The current build was also checked against the game's animated results screen:
+- An earlier build was also checked against the game's animated results screen:
   10.014 s, receive 60.02 FPS, present callbacks 57.42 FPS, queue depth 0 and 29
   session drops including startup. Panel/app mode remained 120 Hz; Choreographer
   callbacks averaged 110.91 Hz, so this is not a claim of sustained 120 callbacks/s.

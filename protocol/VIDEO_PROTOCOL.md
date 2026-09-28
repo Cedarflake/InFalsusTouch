@@ -58,6 +58,12 @@ Never subtract a PC timestamp from an Android timestamp. The UI reports local
 stage intervals, not glass-to-glass latency; callback presentation is not a
 measurement of physical display light.
 
+`presentationUs` is used to match codec output to its original packet. Rendering
+supplies a separate Android-local monotonic timestamp to the Surface; the PC clock
+must not schedule the phone's display. The Android diagnostic snapshot also carries
+mean and P95 stage intervals over the last 240 presented frames. No PC-to-phone
+subtraction or one-way network-latency inference is made from that window.
+
 ## Bounds and recovery
 
 - WGC has two surfaces and a latest-frame slot. Replaced captures are closed.

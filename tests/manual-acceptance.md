@@ -112,7 +112,7 @@ and real USB transport to a dry-run Windows host passed on 2026-09-29; see
 | USB disconnect release timing | Not tested |
 | Real SendInput accepted by game | USB Shift+Space starts tutorial; full six-key gameplay remains open |
 | Absolute Field touch-to-marker alignment | Replacement passed game-state repeated targets and 120-event/s sweep; physical phone/video alignment remains open; see [investigation](../docs/FIELD-MAPPING.md) |
-| Measured control RTT (method/sample count) | Not tested |
+| Measured control RTT (method/sample count) | Four end-of-run USB software-input samples during video: 6.50/3.19/3.53/2.84 ms; physical finger-to-game latency remains unmeasured |
 
 ## Video and sustained gameplay
 
@@ -135,3 +135,9 @@ does not substitute for the following checks with In Falsus:
   explicit and must not block input cleanup.
 - Use high-speed external recording for physical touch-to-photon latency. Do not
   infer it by adding timestamps from unsynchronized PC and phone clocks.
+- For Late-heavy play, compare the same chart segment using phone controls while
+  watching the PC and then the phone. Keep game offsets and sound setup unchanged
+  during comparison; separately record muted visual play and PC-audio play.
+- Distinguish measured pipeline delay from in-game calibration. Confirm what IF's
+  offset setting changes and its direction before suggesting a compensation value.
+  Retest after any video optimization; a constant offset does not correct jitter.
