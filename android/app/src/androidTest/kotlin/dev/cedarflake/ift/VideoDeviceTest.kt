@@ -134,6 +134,7 @@ class VideoDeviceTest {
         .put("steadySeconds", steadySeconds).put("steadyReceiveFps", steadyReceiveFps).put("steadyPresentFps", steadyPresentFps)
         .put("steadyDecodeFps", steadyDecodeFps)
         .put("presentFps", held.presentFps).put("presentedFrames", held.presentedFrames)
+        .put("untrackedPresentedFrames", held.untrackedPresentedFrames)
         .put("droppedFrames", held.droppedFrames).put("queueDepth", held.queueDepth)
         .put("captureAvailableToEncodeMs", held.captureToEncodeMs).put("decodeMs", held.decoderMs)
         .put("receiveToPresentMs", held.receiveToPresentMs)

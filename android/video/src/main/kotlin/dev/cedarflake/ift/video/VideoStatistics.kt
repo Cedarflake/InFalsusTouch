@@ -31,18 +31,20 @@ data class VideoSnapshot(
   val height: Int,
   val latency: VideoLatencySnapshot?,
   val targetFps: Int,
+  val untrackedPresentedFrames: Long,
 )
 
-internal class VideoStatistics {
+internal class VideoStatistics(private val nanoTime: () -> Long = System::nanoTime) {
   private var received = 0L
   private var decoded = 0L
   private var presented = 0L
+  private var untrackedPresented = 0L
   private var bytes = 0L
   private var previousReceived = 0L
   private var previousDecoded = 0L
   private var previousPresented = 0L
   private var previousBytes = 0L
-  private var lastReport = System.nanoTime()
+  private var lastReport = nanoTime()
   private var encodeMs = 0.0
   private var decodeMs = 0.0
   private var presentMs = 0.0
@@ -69,8 +71,12 @@ internal class VideoStatistics {
   }
 
   @Synchronized
-  fun presented(timing: FrameTiming) {
+  fun presented(timing: FrameTiming?) {
     presented++
+    if (timing == null) {
+      untrackedPresented++
+      return
+    }
     presentMs = (timing.presentTimestamp - timing.receiveTimestamp) / 1e6
     lastTiming = timing.copy()
     latency.record(timing)
@@ -78,13 +84,14 @@ internal class VideoStatistics {
 
   @Synchronized
   fun snapshot(dropped: Long, queued: Int): VideoSnapshot? {
-    val now = System.nanoTime()
+    val now = nanoTime()
     val seconds = (now - lastReport) / 1e9
     if (seconds < 1.0) return null
     val snapshot = VideoSnapshot(
       (received - previousReceived) / seconds, (decoded - previousDecoded) / seconds,
       (presented - previousPresented) / seconds, (bytes - previousBytes) * 8 / seconds / 1e6,
       dropped, queued, received, decoded, presented, encodeMs, decodeMs, presentMs, lastTiming, now, width, height, latency.snapshot(), targetFps,
+      untrackedPresented,
     )
     previousReceived = received
     previousDecoded = decoded

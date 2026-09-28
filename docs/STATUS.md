@@ -52,7 +52,7 @@ and button shapes are unchanged.
 | Windows host compilation | Passed, MSVC 19.44 / CMake 3.31.6 / Windows SDK 10.0.26100.0 |
 | Android APK compilation | Passed, Gradle 8.11.1 / AGP 8.9.2 / Kotlin 2.1.20 / JDK 21 |
 | C++ input protocol / input state / mapping / video / profile / cooperative suites | 6/6 passed |
-| Kotlin settings / touch / input+video protocol / queue / socket / native-host / video timing tests | 45/45 passed, no skips; includes gap-free Field/button boundaries, pixel-preserving relative movement, large swipes, native-host deltas, haptic-setting codecs, 186 partial-selection/layout combinations, bounded local-clock latency statistics and high-frame-rate protocol bounds |
+| Kotlin settings / touch / input+video protocol / queue / socket / native-host / video timing tests | 48/48 passed, no skips; includes gap-free Field/button boundaries, pixel-preserving relative movement, large swipes, native-host deltas, haptic-setting codecs, 186 partial-selection/layout combinations, bounded local-clock latency statistics, high-frame-rate protocol bounds and callback accounting after timing eviction |
 | Flutter analysis and UI tests | No analysis issues; 20/20 tests passed, including bilingual vibration toggle and immediate saving |
 | Native profile persistence and CLI precedence integration | Passed, including legacy tuning migration, retired flags, invalid/missing profile and unchanged-file failure checks |
 | TCP disconnect / malformed / reconnect integration | 8/8 checks passed, including coalesced full-width relative movement |
@@ -71,8 +71,8 @@ and button shapes are unchanged.
 | WGC / GPU conversion / hardware H.264 / TCP | Passed, including Baseline SPS and >=58 FPS gate |
 | PC source resize / aspect changes / minimize and restore | 720p decoded color, centered bars, animation and independent input passed; minimize triggered a stream restart which the test receiver recovered |
 | Android hardware decode / output colors / seven-pointer input / settings and calibration isolation / reconnect | Passed at both 720p and 1080p with relative Field movement and restored device settings |
-| 720p60 short-run throughput | Latest USB phone steady receive 59.99 FPS, decode 59.95 FPS, present callbacks 59.33 FPS; 21.02-second steady interval |
-| Experimental 720p120 throughput | PC 120.13 FPS passed; phone receive 120.03 FPS, decode 113.68 FPS, present callbacks 87.66 FPS failed the unchanged proportional presentation gate; default remains 60 FPS |
+| 720p60 short-run throughput | Latest USB phone steady receive/decode 59.99 FPS, present callbacks 59.57 FPS; 21.02-second steady interval; no unmatched presentation callbacks |
+| Experimental 720p120 throughput | PC 120.13 FPS passed; after callback-accounting correction, phone receive 120.00 FPS, decode 118.88 FPS, present callbacks 93.27 FPS still failed the unchanged proportional presentation gate; default remains 60 FPS |
 | 1080p60 short-run throughput | Earlier PC 60.13 FPS; latest USB phone steady receive 60.00 FPS, present callbacks 59.52 FPS; native source and received dimensions verified |
 | Measured latency tuning | Bounded queues, WGC pacing, low-latency codec selection and local statistics implemented |
 | Settings / calibration UX | Implemented; phone persistence/dialog/calibration and PC profile/mapping checks passed; physical PC cursor wizard use remains manual |
@@ -94,6 +94,7 @@ uv run --python 3.13 tests\video-device.py
 uv run --python 3.13 tests\video-device.py --resolution 1080p --skip-install
 uv run --python 3.13 tests\video-integration.py --fps 120 --seconds 10 --min-fps 116
 uv run --python 3.13 tests\video-device.py --fps 120 --seconds 20 --skip-install
+uv run --python 3.13 tests\video-composition.py
 uv run --python 3.13 tests\multiplayer-video.py
 ```
 
@@ -223,6 +224,58 @@ Evidence under `build/video-device-test/`: `720p120-20260928T212411027376Z/`
 `720p60-20260928T213154961149Z/` (passing regression). High-rate operation remains
 experimental; it is not enabled in the user's normal connection. No new real-game
 120 FPS or physical Late-judgment acceptance is claimed.
+
+### Overlay isolation and callback accounting, 2026-09-29
+
+`tests/video-composition.py` compares normal controls, Flutter hidden, all control
+overlays hidden, and normal controls restored within one continuous 720p60 stream.
+Each phase lasts approximately eight seconds, uses the same decoder and 120 Hz
+display, and samples its last 240 matched presentation callbacks. The test checks
+view visibility and captures screenshots; the inspected normal/video-only images
+confirm the intended layers were hidden. No input is injected into Windows.
+
+| Phase | Present callbacks/s | Decode mean | Decode to present mean | Receive to present mean / P95 |
+| --- | --- | --- | --- | --- |
+| Normal, before | 59.96 | 2.67 ms | 22.82 ms | 26.29 / 29.79 ms |
+| Native controls only | 59.67 | 5.13 ms | 23.68 ms | 30.57 / 35.71 ms |
+| Video only | 59.55 | 5.26 ms | 23.62 ms | 30.67 / 35.75 ms |
+| Normal, restored | 59.66 | 5.43 ms | 24.24 ms | 31.51 / 38.20 ms |
+
+Hiding the visible overlays did not remove the roughly 23–24 ms post-decode stage.
+The first normal phase also decoded faster than the final normal phase, so this
+single ordered probe cannot establish a causal cost for Flutter visibility or
+rule out runtime/power-state effects. It provides no basis for removing the
+requested Flutter UI. Phone preferences and USB mappings were restored exactly.
+Evidence: `build/video-composition-test/20260928T214640915271Z/`.
+
+Source inspection identified a separate measurement defect: once 64 unmatched
+render records accumulated, the old code cleared the entire map, including
+recent frames still awaiting callbacks. It also counted a rendered callback only
+when a timing record existed. The replacement retires only the oldest record,
+counts every callback and reports unmatched callbacks separately. Latency still
+uses only matched records. Unit tests cover overflow, out-of-order callbacks,
+flush and counting a callback whose timing has expired. This is a measurement
+correction, not a change to physical rendering speed. Earlier values above are
+retained as measurements from the earlier implementation.
+
+The corrected implementation was rebuilt and installed. The 120 FPS retest still
+failed its >=110 presentation-callbacks/s gate, while the 60 FPS regression passed
+colors, seven-pointer input, settings/calibration isolation and reconnect:
+
+| Stream after correction | Steady interval | Receive FPS | Decode FPS | Present callbacks/s | Receive to present mean / P95 |
+| --- | --- | --- | --- | --- | --- |
+| 720p120 | 26.04 s | 120.00 | 118.88 | 93.27 | 28.53 / 35.00 ms |
+| 720p60 | 21.02 s | 59.99 | 59.99 | 59.57 | 31.94 / 37.77 ms |
+
+Both runs reported zero unmatched presentation callbacks. At 120 FPS the final
+240 matched frames averaged 1.67 ms receive-to-submit, 4.52 ms decode and 22.35 ms
+decode-to-present. At 60 FPS these were 2.20, 5.58 and 24.16 ms. The missing
+presentation rate is therefore not solely an artifact of discarded timing
+records. These new runs are not evidence that the accounting fix accelerated
+physical video, and neither establishes that Late judgments are resolved.
+Evidence: `build/video-device-test/720p120-20260928T215323572836Z/` and
+`build/video-device-test/720p60-20260928T215607231097Z/`. User preferences and ADB
+mappings were restored exactly; the updated APK resumed the normal 720p60 Host.
 
 ### PC window recovery, 2026-09-29
 

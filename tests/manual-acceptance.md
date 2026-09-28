@@ -131,8 +131,9 @@ does not substitute for the following checks with In Falsus:
   codec resources and socket counts stay bounded.
 - Test 1080p60 and bitrate/FPS alternatives during actual charts. Short 720p60 and
   1080p60 pattern runs passed on the connected Android 14 phone on 2026-09-29.
-- Host accepts experimental rates up to 120 FPS, but this phone's 720p120 pattern
-  probe reported only 87.66 presentation callbacks/s and failed its throughput
+- Host accepts experimental rates up to 120 FPS, but this phone's latest 720p120
+  probe reported only 93.27 presentation callbacks/s after fixing timing-record
+  eviction/accounting, and failed its throughput
   gate. Keep the 60 FPS baseline until both presentation and latency improve;
   display refresh rate and decoder format support are not throughput results.
 - Test unsupported codecs and GPU/device-loss failures: video errors should be

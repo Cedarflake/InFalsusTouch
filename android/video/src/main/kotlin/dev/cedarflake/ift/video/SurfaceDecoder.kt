@@ -16,7 +16,6 @@ import dev.cedarflake.ift.transport.VideoProtocol
 
 import java.io.Closeable
 import java.nio.ByteBuffer
-import java.util.concurrent.ConcurrentHashMap
 
 internal class SurfaceDecoder(
   config: VideoPacket,
@@ -26,7 +25,7 @@ internal class SurfaceDecoder(
 ) : Closeable {
   private val callbackThread = HandlerThread("ift-video-present")
   private val pending = HashMap<Long, FrameTiming>()
-  private val rendering = ConcurrentHashMap<Long, FrameTiming>()
+  private val rendering = RenderTimings()
   private val outputInfo = MediaCodec.BufferInfo()
   private val codec: MediaCodec
   private val parameters = config.bytes
@@ -52,10 +51,8 @@ internal class SurfaceDecoder(
       val latencyMode = DecoderLatency.configure(candidate, capabilities, format, surface)
       if (Build.VERSION.SDK_INT >= 30) surface.setFrameRate(config.header.fps.toFloat(), Surface.FRAME_RATE_COMPATIBILITY_FIXED_SOURCE)
       candidate.setOnFrameRenderedListener({ _, presentationUs, nanoTime ->
-        rendering.remove(presentationUs)?.let { timing ->
-          timing.presentTimestamp = nanoTime
-          statistics.presented(timing)
-        }
+        val timing = rendering.take(presentationUs)?.apply { presentTimestamp = nanoTime }
+        statistics.presented(timing)
       }, Handler(callbackThread.looper))
       candidate.start()
       codec = candidate
@@ -133,8 +130,7 @@ internal class SurfaceDecoder(
           timing.decodeTimestamp = now
           statistics.decoded(timing)
           if (render) {
-            if (rendering.size >= 64) rendering.clear()
-            rendering[outputInfo.presentationTimeUs] = timing
+            rendering.add(outputInfo.presentationTimeUs, timing)
           } else dropped++
         }
         // PC timestamps identify frames; Android display deadlines must use its local clock.

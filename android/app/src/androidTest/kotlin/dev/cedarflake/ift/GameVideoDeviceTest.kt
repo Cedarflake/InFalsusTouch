@@ -131,6 +131,7 @@ class GameVideoDeviceTest {
         val metrics = JSONObject().put("steadySeconds", elapsed).put("receiveFps", received).put("presentFps", presented)
           .put("targetFps", last.targetFps)
           .put("presentedFrames", last.presentedFrames).put("droppedFrames", last.droppedFrames)
+          .put("untrackedPresentedFrames", last.untrackedPresentedFrames)
           .put("queueDepth", last.queueDepth).put("megabitsPerSecond", last.megabitsPerSecond)
           .put("captureAvailableToEncodeMs", last.captureToEncodeMs).put("decoderMs", last.decoderMs)
           .put("receiveToPresentMs", last.receiveToPresentMs).put("inputInjection", false)

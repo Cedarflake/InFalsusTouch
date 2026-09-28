@@ -23,10 +23,19 @@ decode-to-present time, with mean and nearest-rank P95 values. These intervals s
 at the codec presentation callback and do not measure physical screen latency.
 No video lock, callback or queue is shared with touch/control processing.
 
+Presentation counts include every codec callback, even when its timing metadata
+has expired. `RenderTimings` retains at most 64 records, retiring only the oldest
+record on overflow. Missing timing records are counted separately and excluded
+from latency distributions. This avoids discarding current in-flight records or
+underreporting callback FPS when earlier output was dropped or callbacks arrived
+late. Android may batch these notifications; before Android 14 it may omit some
+rendered-frame callbacks entirely.
+
 The receiver accepts 24–120 FPS, provided a hardware decoder advertises support
 for the requested size and rate. Host defaults to 60 FPS. Accepting a format or
 using a 120 Hz display does not establish sustained 120 FPS presentation.
 
 References: [Android Surface presentation timestamps](https://developer.android.com/reference/android/media/MediaCodec#releaseOutputBuffer(int,%20long)),
+[rendered-frame callbacks](https://developer.android.com/reference/android/media/MediaCodec.OnFrameRenderedListener),
 [vendor parameter discovery](https://developer.android.com/reference/android/media/MediaCodec#getSupportedVendorParameters()),
 and [Moonlight's decoder compatibility controls](https://github.com/moonlight-stream/moonlight-android/blob/master/app/src/main/java/com/limelight/binding/video/MediaCodecHelper.java).
