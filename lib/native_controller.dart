@@ -126,7 +126,12 @@ class NativeController extends ChangeNotifier with WidgetsBindingObserver {
 
   void _receive(Object? data) {
     if (_isDisposed) return;
-    state = ControllerState(objectMap(data));
+    final values = objectMap(data);
+    if (values["connection"] == "CONNECTING") {
+      // Retry progress belongs in the status row; retain the last outcome here.
+      values["detail"] = state?.detail ?? "";
+    }
+    state = ControllerState(values);
     notifyListeners();
   }
 

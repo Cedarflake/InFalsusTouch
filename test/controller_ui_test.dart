@@ -320,7 +320,8 @@ void main() {
         host.state.addAll(values);
         await host.controller.command("state");
         await tester.pump(const Duration(milliseconds: 250));
-        expect(tester.getRect(panel), panelBounds);
+        expect(tester.getRect(panel).topLeft, panelBounds.topLeft);
+        expect(tester.getRect(panel).width, panelBounds.width);
         expect(tester.getRect(action), actionBounds);
         expect(tester.getCenter(status).dy, actionBounds.center.dy);
       }
@@ -333,6 +334,65 @@ void main() {
       expect(find.text("正在连接…"), findsOneWidget);
       expect(tester.getRect(action), actionBounds);
       expect(tester.getCenter(status).dy, actionBounds.center.dy);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    "automatic retries retain the last error and resize only for a new outcome",
+    (tester) async {
+      final host = UiHost(connected: false);
+      const detail =
+          "Connection refused: the USB Host could not be reached. "
+          "Check that the PC Host is running and USB port forwarding is configured. "
+          "Reconnect the cable if the device no longer appears in ADB.";
+      host.state.addAll({"detail": detail, "connectionFailed": true});
+      await host.mount(tester);
+      final panel = find.byKey(const ValueKey("connection-panel"));
+      final action = find.byKey(const ValueKey("connection-action"));
+      host.state["searching"] = true;
+      await host.controller.command("state");
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      final bounds = tester.getRect(panel);
+      final actionBounds = tester.getRect(action);
+      for (var attempt = 0; attempt < 3; attempt++) {
+        for (final connection in ["CONNECTING", "DISCONNECTED"]) {
+          host.state.addAll({
+            "connection": connection,
+            "searching": true,
+            "detail": connection == "CONNECTING"
+                ? "Connecting over USB…"
+                : detail,
+          });
+          await host.controller.command("state");
+          await tester.pump(const Duration(milliseconds: 300));
+          expect(find.text(detail), findsOneWidget);
+          expect(find.text("Connecting over USB…"), findsNothing);
+          expect(tester.getRect(panel), bounds);
+          expect(tester.getRect(action), actionBounds);
+        }
+      }
+      host.state.addAll({
+        "connection": "CONNECTED",
+        "searching": false,
+        "connectionFailed": false,
+        "detail": "USB connected",
+        "bindingStatus": 0,
+        "peers": 1,
+      });
+      await host.controller.command("state");
+      await tester.pump();
+      final startHeight = tester.getSize(panel).height;
+      await tester.pump(const Duration(milliseconds: 90));
+      final intermediateHeight = tester.getSize(panel).height;
+      await tester.pumpAndSettle();
+      final endHeight = tester.getSize(panel).height;
+      expect(startHeight, isNot(endHeight));
+      expect(intermediateHeight, greaterThan(endHeight));
+      expect(intermediateHeight, lessThan(startHeight));
+      expect(tester.getRect(action), actionBounds);
+      expect(find.text("USB connected"), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );
@@ -468,6 +528,39 @@ void main() {
   );
 
   testWidgets(
+    "canceling the defaults dialog or pressing Back leaves settings intact",
+    (tester) async {
+      final host = UiHost();
+      await host.mount(tester);
+      host.controller.updateSetting("controlsMask", 64);
+      await tester.pumpAndSettle();
+      for (final language in ["en", "zh"]) {
+        host.controller.updateSetting("language", language);
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const ValueKey("restore-defaults")));
+        await tester.pumpAndSettle();
+        expect(find.byType(AlertDialog), findsOneWidget);
+        expect(
+          find.text(language == "en" ? "Restore default settings?" : "恢复默认设置？"),
+          findsOneWidget,
+        );
+        expect(host.calls.where((call) => call.method == "defaults"), isEmpty);
+        if (language == "en") {
+          await tester.tap(find.text("Cancel"));
+        } else {
+          await tester.binding.handlePopRoute();
+        }
+        await tester.pumpAndSettle();
+        expect(find.byType(AlertDialog), findsNothing);
+        expect(objectMap(host.state["settings"])["controlsMask"], 64);
+        expect(host.state["panel"], "settings");
+        expect(host.calls.where((call) => call.method == "defaults"), isEmpty);
+      }
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
     "theme follows the chosen mode and defaults preserve language and appearance",
     (tester) async {
       final host = UiHost();
@@ -501,6 +594,9 @@ void main() {
       await tester.pumpAndSettle();
       host.controller.updateSetting("laneHeight", 0.31, defer: true);
       await tester.tap(find.byKey(const ValueKey("restore-defaults")));
+      await tester.pumpAndSettle();
+      expect(host.calls.where((call) => call.method == "defaults"), isEmpty);
+      await tester.tap(find.byKey(const ValueKey("confirm-defaults")));
       await tester.pumpAndSettle();
       final saved = objectMap(host.state["settings"]);
       expect(saved["controlsMask"], 127);

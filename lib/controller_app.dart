@@ -53,6 +53,11 @@ class ControllerApp extends StatelessWidget {
           borderRadius: BorderRadius.all(Radius.circular(32)),
         ),
       ),
+      dialogTheme: const DialogThemeData(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(32)),
+        ),
+      ),
       filledButtonTheme: const FilledButtonThemeData(style: _buttonStyle),
       outlinedButtonTheme: const OutlinedButtonThemeData(style: _buttonStyle),
       textButtonTheme: const TextButtonThemeData(style: _buttonStyle),

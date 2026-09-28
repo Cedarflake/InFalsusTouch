@@ -59,9 +59,13 @@ and real USB transport to a dry-run Windows host passed on 2026-09-28; see
   margins, avoiding the actual cutout. First tap shows an Android system Toast without
   opening settings; the second within two seconds opens it. A late second tap
   must start a new confirmation. USB controls belong only in the Connection page.
-- Rapidly tap the entry two or three times. Settings must stay open; the opening
-  tap burst must not activate the return control on the opposite side.
-  A later intentional return tap must still work.
+- Check that the return control stays at the top left. The confirmed opening tap
+  must not activate it; an intentional return tap must close settings.
+- Change settings and leave without a Save action: changes must persist. Defaults
+  must first show a confirmation; Cancel or system Back must preserve all values,
+  and confirming must retain language and theme while resetting controls/calibration.
+- During repeated failed USB retries, the last result remains readable in the log.
+  The status/action row stays in place; actual content changes resize smoothly.
 - Connect two or more physical phones with setup-adb.ps1 -AllDevices. Each can
   select any subset of the six keys and Field, including no controls. Saving on one
   phone must not alter another phone's choices, and relaunch must preserve choices.

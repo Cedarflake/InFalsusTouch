@@ -28,7 +28,7 @@ lint and APK installation; the latest device UI flow has not been rerun.
 | Android APK compilation | Passed, Gradle 8.11.1 / AGP 8.9.2 / Kotlin 2.1.20 / JDK 21 |
 | C++ input protocol / input state / mapping / video / profile / cooperative suites | 6/6 passed |
 | Kotlin settings / touch / input+video protocol / queue / socket / native-host tests | 35/35 passed, no skips; includes 186 partial-selection/layout combinations |
-| Flutter analysis and UI tests | No analysis issues; 16/16 tests passed |
+| Flutter analysis and UI tests | No analysis issues; 18/18 tests passed |
 | Native profile persistence and CLI precedence integration | Passed, including invalid/missing profile and unchanged-file failure checks |
 | TCP disconnect / malformed / reconnect integration | 8/8 checks passed |
 | Android lint | Passed, 0 errors; 5 advisory warnings for pinned test dependencies and KTX suggestions |
@@ -135,6 +135,10 @@ color pattern. These short runs are not measurements of In Falsus under load.
   edits for retry. Defaults is at the top right and preserves language and theme.
   The sidebar is Connection, Touch, Controls, Picture, Other. Other contains
   English/Chinese and Light/Dark/System appearance, with Dark as the initial preference.
+- USB status/action alignment stays fixed while a compact inset log retains the
+  latest outcome through retries. Content height transitions are animated unless
+  reduced motion is requested; empty metrics no longer reserve space. Defaults
+  requires an explicit dialog confirmation; Cancel and system Back preserve settings.
 - USB logs are integrated into the USB status/action card; automatic discovery is
   separate. Partial key selections pack in lane order at the center without resizing
   their shapes. Hit testing uses the translated regions and original lane IDs.

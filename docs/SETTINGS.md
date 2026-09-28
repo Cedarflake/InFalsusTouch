@@ -13,15 +13,21 @@ are coalesced while dragging and flushed on release, exit or backgrounding.
 Writes are serialized so incoming status updates cannot overwrite newer edits.
 A failed write is reported and pending edits remain available for retry;
 session settings remain usable. Invalid stored values fall back to defaults
-with a visible notification. Defaults resets phone controls while retaining the chosen language and theme.
+with a visible notification. Defaults asks for confirmation before resetting phone
+controls and calibration while retaining the chosen language and theme. Canceling
+or dismissing the dialog leaves settings unchanged.
 The sidebar order is **Connection, Touch, Controls, Picture, Other**.
 **Other** holds English/Chinese and Light/Dark/System appearance; changes take effect immediately.
 The app fills the physical screen. Settings transitions keep a fixed Flutter surface;
 only controls and text avoid the camera cutout. USB actions and connection details
 live in **Connection**, which opens first when disconnected. The latest transport
-log is inside the USB card; automatic discovery remains in a separate section. Its action stays on
-the same row as the connection status, fixed in size with centered text, immediate progress feedback and cancelable automatic
-retries. Gameplay shows only a 48 dp settings entry with equal 8 dp edge margins;
+log is inside the USB card; automatic discovery remains in a separate section. The
+status and action share a row, with connected devices in a small header badge.
+The action keeps fixed bounds and centered text. The inset log retains the latest
+connection outcome during retries; progress appears in the status row. Real content
+changes resize the card smoothly, honoring reduced-motion settings. Empty metrics
+have no reserved height; RTT remains in performance statistics. Gameplay shows only
+a 48 dp settings entry with equal 8 dp edge margins;
 it switches corners only if the actual cutout overlaps. UI buttons/chips use full
 pill shapes, the settings entry is circular, and cards have larger 32 dp corners.
 Gameplay lane shapes are unchanged. A partial key selection packs in original lane

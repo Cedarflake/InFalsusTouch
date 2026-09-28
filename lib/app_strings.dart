@@ -28,6 +28,7 @@ class AppStrings {
   String peers(int count) => zh ? "$count 台设备已连接" : "$count devices connected";
   String get picture => zh ? "画面" : "Picture";
   String get connection => zh ? "连接" : "Connection";
+  String get connectionLog => zh ? "连接日志" : "Connection log";
   String get other => zh ? "其他" : "Other";
   String get theme => zh ? "主题" : "Theme";
   String get systemTheme => zh ? "跟随系统" : "System";
@@ -56,6 +57,12 @@ class AppStrings {
   String get save => zh ? "保存" : "Save";
   String get cancel => zh ? "取消" : "Cancel";
   String get defaults => zh ? "恢复默认" : "Defaults";
+  String get confirmDefaultsTitle =>
+      zh ? "恢复默认设置？" : "Restore default settings?";
+  String get confirmDefaultsBody => zh
+      ? "触控、判定线校准、按键显示、画面和连接设置将恢复默认。语言与主题会保留。"
+      : "Reset touch, calibration, visible controls, picture and connection settings. Your language and theme will be kept.";
+  String get confirmDefaults => zh ? "恢复默认" : "Restore defaults";
   String get back => zh ? "返回游戏" : "Back to game";
   String get menu => zh ? "打开菜单" : "Open menu";
   String get close => zh ? "关闭" : "Close";

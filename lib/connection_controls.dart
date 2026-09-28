@@ -14,132 +14,230 @@ class ConnectionControls extends StatelessWidget {
   final ControllerState state;
   final AppStrings strings;
 
+  String statusLabel(bool busy) {
+    if (!state.connected) {
+      return busy ? strings.connecting : strings.disconnected;
+    }
+    if (state.bindingStatus == 2) return strings.invalidKeys;
+    if (!state.ready) return strings.focusGame;
+    return state.settings.controlsMask == 0 ? strings.viewOnly : strings.ready;
+  }
+
+  String? connectionHint(bool busy) {
+    if (state.connected) {
+      return state.bindingStatus == 1 ? strings.defaultKeys : null;
+    }
+    if (state.connectionFailed) {
+      return busy ? strings.retryHint : strings.failedHint;
+    }
+    return busy ? strings.connectingHint : strings.connectHint;
+  }
+
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
     final busy = state.searching || controller.isConnectionCommandPending;
-    final status = state.connected
-        ? state.bindingStatus == 2
-              ? strings.invalidKeys
-              : state.ready
-              ? state.settings.controlsMask == 0
-                    ? strings.viewOnly
-                    : strings.ready
-              : strings.focusGame
-        : busy
-        ? strings.connecting
-        : strings.disconnected;
-    final hint = state.connected
-        ? state.bindingStatus == 0
-              ? strings.syncedKeys
-              : strings.defaultKeys
-        : state.connectionFailed
-        ? state.searching
-              ? strings.retryHint
-              : strings.failedHint
-        : busy
-        ? strings.connectingHint
-        : strings.connectHint;
+    final hint = connectionHint(busy);
+    final hasError =
+        state.connectionFailed || (state.connected && state.bindingStatus == 2);
+    final statusColor = hasError && !busy
+        ? colors.error
+        : state.connected || busy
+        ? colors.primary
+        : colors.outline;
     return Card(
       key: const ValueKey("connection-panel"),
+      child: AnimatedSize(
+        alignment: Alignment.topCenter,
+        duration: MediaQuery.disableAnimationsOf(context)
+            ? Duration.zero
+            : const Duration(milliseconds: 180),
+        curve: Curves.easeOutCubic,
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                height: 32,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        strings.usbConnection,
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          color: colors.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                    if (state.connected)
+                      DecoratedBox(
+                        decoration: ShapeDecoration(
+                          color: colors.surfaceContainerHighest,
+                          shape: const StadiumBorder(),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.devices_rounded,
+                                size: 16,
+                                color: colors.onSurfaceVariant,
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                strings.peers(state.peers),
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  color: colors.onSurfaceVariant,
+                                  fontFeatures: [
+                                    const FontFeature.tabularFigures(),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  SizedBox.square(
+                    dimension: 16,
+                    child: busy
+                        ? CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: statusColor,
+                          )
+                        : Center(
+                            child: Container(
+                              width: 8,
+                              height: 8,
+                              decoration: BoxDecoration(
+                                color: statusColor,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                          ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      statusLabel(busy),
+                      key: const ValueKey("connection-status"),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  SizedBox(
+                    key: const ValueKey("connection-action"),
+                    width: 152,
+                    height: 48,
+                    child: FilledButton.tonal(
+                      onPressed: controller.isConnectionCommandPending
+                          ? null
+                          : controller.toggleConnection,
+                      child: Text(
+                        state.connected
+                            ? strings.disconnect
+                            : busy
+                            ? strings.cancelConnection
+                            : strings.connect,
+                        textAlign: TextAlign.center,
+                        maxLines: 1,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              if (hint != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  hint,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: colors.onSurfaceVariant,
+                  ),
+                ),
+              ],
+              if (state.detail.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                _ConnectionLog(
+                  detail: state.detail,
+                  isError: state.connectionFailed,
+                  strings: strings,
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ConnectionLog extends StatelessWidget {
+  const _ConnectionLog({
+    required this.detail,
+    required this.isError,
+    required this.strings,
+  });
+  final String detail;
+  final bool isError;
+  final AppStrings strings;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colors.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(32),
+      ),
       child: Padding(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
-                SizedBox.square(
-                  dimension: 22,
-                  child: busy
-                      ? const Padding(
-                          padding: EdgeInsets.all(2),
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : Icon(
-                          Icons.usb_rounded,
-                          color: colors.primary,
-                          size: 22,
-                        ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    strings.usbConnection,
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    status,
-                    key: const ValueKey("connection-status"),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.titleSmall,
-                  ),
+                Icon(
+                  isError
+                      ? Icons.error_outline_rounded
+                      : Icons.receipt_long_rounded,
+                  size: 16,
+                  color: isError ? colors.error : colors.onSurfaceVariant,
                 ),
                 const SizedBox(width: 8),
-                SizedBox(
-                  key: const ValueKey("connection-action"),
-                  width: 152,
-                  height: 48,
-                  child: FilledButton.tonal(
-                    onPressed: controller.isConnectionCommandPending
-                        ? null
-                        : controller.toggleConnection,
-                    child: Text(
-                      state.connected
-                          ? strings.disconnect
-                          : busy
-                          ? strings.cancelConnection
-                          : strings.connect,
-                      textAlign: TextAlign.center,
-                      maxLines: 1,
-                    ),
+                Text(
+                  strings.connectionLog,
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    color: colors.onSurfaceVariant,
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 8),
-            SizedBox(
-              height: 40,
-              child: Text(
-                hint,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(color: colors.onSurfaceVariant),
+            SelectableText(
+              detail,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: colors.onSurfaceVariant,
+                fontFamily: "monospace",
+                height: 1.4,
               ),
             ),
-            SizedBox(
-              height: 36,
-              child: Text(
-                state.connected
-                    ? "${strings.peers(state.peers)}\nRTT ${state.rtt.toStringAsFixed(1)} ms"
-                    : "",
-                maxLines: 2,
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  fontFeatures: [const FontFeature.tabularFigures()],
-                ),
-              ),
-            ),
-            if (state.detail.isNotEmpty) ...[
-              const Divider(height: 28),
-              SelectableText(
-                state.detail,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: state.connectionFailed
-                      ? colors.error
-                      : colors.onSurfaceVariant,
-                ),
-              ),
-            ],
           ],
         ),
       ),

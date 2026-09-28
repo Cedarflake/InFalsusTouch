@@ -25,6 +25,7 @@ class SettingsPage extends StatefulWidget {
 class _SettingsPageState extends State<SettingsPage> {
   ControllerSettings get draft => widget.controller.settings;
   late int category = widget.state.connected ? 1 : 0;
+  bool isConfirmingDefaults = false;
   AppStrings get s => widget.strings;
 
   void change(String key, Object value, {bool defer = false}) {
@@ -37,6 +38,36 @@ class _SettingsPageState extends State<SettingsPage> {
       value = value.clamp(math.min(1.0, draft.number("fieldLeft") + 0.01), 1.0);
     }
     widget.controller.updateSetting(key, value, defer: defer);
+  }
+
+  Future<void> confirmDefaults() async {
+    if (isConfirmingDefaults || widget.controller.isResettingDefaults) return;
+    setState(() => isConfirmingDefaults = true);
+    try {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: Text(s.confirmDefaultsTitle),
+          content: Text(s.confirmDefaultsBody),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: Text(s.cancel),
+            ),
+            FilledButton(
+              key: const ValueKey("confirm-defaults"),
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: Text(s.confirmDefaults),
+            ),
+          ],
+        ),
+      );
+      if (confirmed == true && mounted) {
+        await widget.controller.restoreDefaults();
+      }
+    } finally {
+      if (mounted) setState(() => isConfirmingDefaults = false);
+    }
   }
 
   @override
@@ -82,9 +113,11 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
                 TextButton(
                   key: const ValueKey("restore-defaults"),
-                  onPressed: widget.controller.isResettingDefaults
+                  onPressed:
+                      isConfirmingDefaults ||
+                          widget.controller.isResettingDefaults
                       ? null
-                      : widget.controller.restoreDefaults,
+                      : confirmDefaults,
                   child: Text(s.defaults),
                 ),
               ],
