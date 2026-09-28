@@ -25,6 +25,8 @@ class SettingsStore(context: Context, name: String = "controller-settings") : Cl
     val defaults = ControlSettings()
     return try {
       LoadedSettings(ControlSettings(
+        language = preferences.getString("language", defaults.language) ?: defaults.language,
+        controlsMask = preferences.getInt("controlsMask", defaults.controlsMask),
         fieldMode = FieldMode.valueOf(preferences.getString("fieldMode", defaults.fieldMode.name) ?: defaults.fieldMode.name),
         layoutMode = LayoutMode.valueOf(preferences.getString("layoutMode", defaults.layoutMode.name) ?: defaults.layoutMode.name),
         videoScale = VideoScale.valueOf(preferences.getString("videoScale", defaults.videoScale.name) ?: defaults.videoScale.name),
@@ -66,6 +68,8 @@ class SettingsStore(context: Context, name: String = "controller-settings") : Cl
   fun save(value: ControlSettings, completed: (Boolean) -> Unit) {
     writer.execute {
       val success = try { preferences.edit()
+        .putString("language", value.language)
+        .putInt("controlsMask", value.controlsMask)
         .putString("fieldMode", value.fieldMode.name)
         .putString("layoutMode", value.layoutMode.name)
         .putString("videoScale", value.videoScale.name)

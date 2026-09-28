@@ -1,7 +1,9 @@
 # Video protocol v1
 
 The host listens on **127.0.0.1:27183**. ADB reverse carries it over the authorized
-USB device. This socket never carries input. It serves one viewer at a time.
+USB devices. This socket never carries input. Up to seven viewers share one capture
+and encoder; each has an independent configuration, sequence and send queue. New
+viewers wait for the next IDR without restarting existing streams.
 
 Each packet is a fixed 64-byte, big-endian header followed by exactly the declared
 payload. No native structs are serialized. Validate the complete header before
@@ -61,8 +63,10 @@ measurement of physical display light.
 - WGC has two surfaces and a latest-frame slot. Replaced captures are closed.
 - At most three samples are in the encoder. NV12 textures stay referenced by their
   own MF samples; no surface is overwritten while the encoder owns it.
-- Sending uses a 32 KiB socket buffer and a 100 ms packet deadline. A slow peer
-  loses its video session; the independent input worker remains running.
+- Each viewer uses a 32 KiB socket buffer, at most three queued packets (including
+  initial configuration), a 256 KiB send budget per pump and a 100 ms packet deadline.
+  Immutable encoded payloads are shared. A slow peer loses only its video session;
+  other viewers and the independent input worker remain running.
 - After a bounded encoder warm-up, a PC frame age above 250 ms restarts the stream.
 - Android validates configuration within 5 seconds and partial packets within
   500 ms. An unchanged source may idle between complete packets.

@@ -14,6 +14,8 @@ import kotlin.test.assertTrue
 internal class TestListener : ControlListener {
   val states = LinkedBlockingQueue<Pair<ConnectionState, String>>()
   val readiness = LinkedBlockingQueue<Boolean>()
+  val configurations = LinkedBlockingQueue<ControllerConfiguration>()
+  override fun onConfiguration(configuration: ControllerConfiguration) { configurations.put(configuration) }
   override fun onState(state: ConnectionState, detail: String) { states.put(state to detail) }
   override fun onTargetReady(ready: Boolean) { readiness.put(ready) }
   override fun onRtt(milliseconds: Double) { assertTrue(milliseconds >= 0) }

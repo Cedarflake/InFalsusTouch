@@ -4,6 +4,7 @@
 
 void videoTests();
 void profileTests();
+void coopTests();
 
 int main(int argc, char** argv) {
   try {
@@ -19,6 +20,7 @@ int main(int argc, char** argv) {
     }
     if (suite == "video" || suite == "all") videoTests();
     if (suite == "profile" || suite == "all") profileTests();
+    if (suite == "coop" || suite == "all") coopTests();
     std::cout << suite << " tests passed\n";
     return 0;
   } catch (const std::exception& error) {

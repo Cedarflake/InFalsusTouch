@@ -2,6 +2,9 @@
 
 - [Official In Falsus Steam description](https://store.steampowered.com/app/3971950/In_Falsus/?l=schinese): keyboard lower notes and mouse upper Field; local 1.0.4b tutorial confirms the central ASDF and side Shift/Space layout.
 - [Official In Falsus site](https://infalsus.lowiro.com/en-us/): aerial Field and rhythm gameplay.
+- [Unity Input System Key](https://docs.unity3d.com/Packages/com.unity.inputsystem@1.11/api/UnityEngine.InputSystem.Key.html): physical keyboard positions use the US reference layout.
+- [Unity Keyboard source, 1.11.2](https://github.com/Unity-Technologies/InputSystem/blob/1.11.2/Packages/com.unity.inputsystem/InputSystem/Devices/Keyboard.cs): numeric Key identifiers used by the observed IF preferences.
+- [Flutter Android embedding](https://docs.flutter.dev/add-to-app/android/add-flutter-screen): FlutterActivity and engine lifecycle; implementation was also checked against the installed Flutter 3.44.9 SDK source.
 
 - [Android multi-touch](https://developer.android.com/develop/ui/views/touch-and-input/gestures/multi): pointer IDs are stable, event indices can change.
 - [MotionEvent](https://developer.android.com/reference/android/view/MotionEvent): action indices and native pointer coordinates.

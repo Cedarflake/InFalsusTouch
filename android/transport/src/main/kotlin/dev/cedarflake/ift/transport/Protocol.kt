@@ -6,7 +6,7 @@ import java.nio.ByteOrder
 
 enum class MessageType(val wireValue: Int) {
   HELLO(1), LANE_DOWN(2), LANE_UP(3), FIELD_ABSOLUTE(4), FIELD_RELATIVE(5),
-  RELEASE_ALL(6), PING(7), ACK(128),
+  RELEASE_ALL(6), PING(7), FIELD_BEGIN(8), FIELD_END(9), ASSIGN_CONTROLS(10), ACK(128), CONFIGURATION(129),
 }
 
 data class Packet(
@@ -32,7 +32,7 @@ class PacketCodec {
     validate(type, lane, status, value)
     buffer.clear()
     buffer.putInt(MAGIC)
-    buffer.put(1)
+    buffer.put(2)
     buffer.put(type.wireValue.toByte())
     buffer.put(lane.toByte())
     buffer.put(status.toByte())
@@ -48,7 +48,7 @@ class PacketCodec {
     buffer.clear()
     buffer.put(bytes)
     buffer.flip()
-    if (buffer.int != MAGIC || buffer.get().toInt() != 1) throw ProtocolException("Unsupported magic/version")
+    if (buffer.int != MAGIC || buffer.get().toInt() != 2) throw ProtocolException("Unsupported magic/version; update both Host and app")
     val code = buffer.get().toInt() and 0xff
     val type = MessageType.entries.firstOrNull { it.wireValue == code }
       ?: throw ProtocolException("Unknown message type")
@@ -59,16 +59,25 @@ class PacketCodec {
     val timestamp = buffer.long
     if (buffer.long != 0L) throw ProtocolException("Reserved bytes must be zero")
     validate(type, lane, status, value)
+    if (type == MessageType.CONFIGURATION && (sequence == 0 || timestamp ushr 48 != 0L ||
+        (0 until 6).any { (timestamp ushr (it * 8) and 255) !in 1L..105L })) throw ProtocolException("Invalid binding configuration")
     return Packet(type, lane, status, sequence, value, timestamp)
   }
 
   private fun validate(type: MessageType, lane: Int, status: Int, value: Float) {
+    if (type == MessageType.CONFIGURATION) {
+      if (lane !in 0..127 || status !in 0..2 || !value.isFinite() || value !in 1f..7f || value != value.toInt().toFloat()) {
+        throw ProtocolException("Invalid controller configuration")
+      }
+      return
+    }
     val isLane = type == MessageType.LANE_DOWN || type == MessageType.LANE_UP
     if ((isLane && lane !in 1..6) || (!isLane && lane != 0)) throw ProtocolException("Invalid lane")
-    if (status !in 0..1 || (type != MessageType.ACK && status != 0)) throw ProtocolException("Invalid status")
+    if ((status != 0 && status != 1 && status != 2 && status != 4) || (type != MessageType.ACK && status != 0)) throw ProtocolException("Invalid status")
     val validValue = when (type) {
       MessageType.FIELD_ABSOLUTE -> value in 0f..1f
       MessageType.FIELD_RELATIVE -> value in -1f..1f
+      MessageType.ASSIGN_CONTROLS -> value in 0f..127f && value == value.toInt().toFloat()
       else -> value == 0f
     }
     if (!value.isFinite() || !validValue) throw ProtocolException("Invalid Field value")

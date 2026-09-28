@@ -2,8 +2,10 @@
 
 ## Current milestone
 
-Phase 1 input, Phase 2 hardware video and Phase 4 settings prototypes are implemented and verified
-on 2026-09-28. The connected Android 14 phone passed real USB H.264 decoding,
+The 0.5 prototype adds Flutter Material 3 English/Chinese settings, per-phone control
+selection, seven-controller cooperative input, shared video encoding and read-only
+IF key-binding synchronization. Phase 1 input, Phase 2 hardware video and Phase 4 settings
+prototypes are implemented and verified on 2026-09-28. The connected Android 14 phone passed real USB H.264 decoding,
 rendered color checks, seven synthetic pointers during playback and reconnect.
 Bounded queues, frame pacing and local latency statistics provide the Phase 3
 baseline. Settings now persist on both devices, with phone/PC Field calibration,
@@ -11,6 +13,8 @@ Aligned/Overlay/Reserved layouts, Fit/Stretch/Crop, USB discovery and PC video-q
 The latest aligned layout has taller 40% buttons, native pressed feedback, six-point
 judgment calibration, centered full-frame video and an independent 120 Hz display hint.
 Physical gameplay and absolute Field alignment remain open; the full goal is active.
+The 2026-09-29 UI update consolidates USB logs and centers partial key selections;
+its validation is Flutter analysis/tests, Kotlin tests, lint and APK installation.
 
 ## Acceptance gates
 
@@ -19,12 +23,15 @@ Physical gameplay and absolute Field alignment remain open; the full goal is act
 | Architecture and input protocol | Defined |
 | Windows host compilation | Passed, MSVC 19.44 / CMake 3.31.6 / Windows SDK 10.0.26100.0 |
 | Android APK compilation | Passed, Gradle 8.11.1 / AGP 8.9.2 / Kotlin 2.1.20 / JDK 21 |
-| C++ input protocol / input state / mapping / video / profile suites | 5/5 passed |
-| Kotlin settings / touch / input+video protocol / queue / socket / native-host tests | 30/30 passed, no skips |
+| C++ input protocol / input state / mapping / video / profile / cooperative suites | 6/6 passed |
+| Kotlin settings / touch / input+video protocol / queue / socket / native-host tests | 35/35 passed, no skips; includes 186 partial-selection/layout combinations |
+| Flutter analysis and UI tests | No analysis issues; 13/13 tests passed |
 | Native profile persistence and CLI precedence integration | Passed, including invalid/missing profile and unchanged-file failure checks |
 | TCP disconnect / malformed / reconnect integration | 8/8 checks passed |
-| Android lint | Passed, no issues found |
-| Android 14 device MotionEvent / USB / settings / persistence / calibration instrumentation | 9/9 passed |
+| Android lint | Passed, 0 errors; 5 advisory warnings for pinned test dependencies and KTX suggestions |
+| Cooperative TCP input and live key sync | Seven simulated clients, seven scenarios passed; physical multi-phone run pending |
+| Shared hardware video broadcast | Six healthy simulated viewers plus one stalled viewer passed; one shared encoding verified |
+| Android 14 device MotionEvent / USB / settings instrumentation | Previous UI build: 10/11 passed; latest layout and centering revision not rerun on device |
 | Android Activity launch and landscape screen inspection | Passed at 2400 x 1080 |
 | Physical finger tracking and full In Falsus chart gameplay | Not tested |
 | Actual In Falsus USB SendInput | Shift+Space starts the 1.0.4b tutorial; full chart input remains open |
@@ -43,10 +50,12 @@ Physical gameplay and absolute Field alignment remain open; the full goal is act
 .\scripts\build-windows.ps1
 .\scripts\build-android.ps1 -DeviceTests
 uv run --python 3.13 tests\tcp-integration.py --host dist\InFalsusTouchHost.exe
+uv run --python 3.13 tests\multiplayer-integration.py
 uv run --python 3.13 tests\profile-integration.py
 .\scripts\test-device.ps1 -SkipBuild
 uv run --python 3.13 tests\video-integration.py --seconds 8 --min-fps 58
 uv run --python 3.13 tests\video-device.py
+uv run --python 3.13 tests\multiplayer-video.py
 ```
 
 The device commands install the project's app and instrumentation APKs on exactly
@@ -69,7 +78,7 @@ Local artifacts and evidence (ignored by Git):
 - `android/transport/build/interop/` — native-host integration logs and traces.
 - `build/device-test/instrumentation.txt` and `input-trace.txt` — physical USB run.
 - `build/device-test/phase1-screen.png` — actual device screenshot, inspected.
-- `build/device-test/settings-screen.png` — settings dialog screenshot.
+- `build/device-test/flutter-settings-*.png` — settings screenshots from the prior UI build.
 - `build/video-test/metrics.json`, `host.log`, `pattern.log`, `sample.h264` — PC hardware stream test.
 - `build/video-device-test/instrumentation.txt`, `input-trace.txt`, `video-metrics.json` — real USB video test.
 - `build/video-device-test/video-surface.png` — decoded Surface pixels, six color bands checked.
@@ -77,6 +86,15 @@ Local artifacts and evidence (ignored by Git):
 - `build/video-device-test/calibration-screen.png` — full-screen Field calibration with video still playing, inspected.
 
 ## Video measurements
+
+Cooperative broadcast test (0.5): six healthy receivers sustained 60.12–60.23 FPS
+while a seventh receiver stopped consuming. The test matched 332 capture/encode
+timestamp pairs across viewers, confirming reuse of the same encoded frames.
+The stalled viewer was isolated. This is seven PC TCP clients, not seven USB phones;
+hub bandwidth, power and simultaneous physical-phone latency remain unverified.
+
+The following single-phone throughput figures are the earlier 0.4 native-UI baseline;
+they must not be treated as performance measurements of the final Flutter surface.
 
 Test hardware: NVIDIA GeForce RTX 4050 Laptop GPU, NVIDIA async/D3D11 H.264 MFT,
 165 Hz PC display, Android 14 model 22021211RC. The source is a moving Direct3D
@@ -97,6 +115,26 @@ color pattern. These short runs are not measurements of In Falsus under load.
   glass-to-glass latency. Earlier samples varied; no cross-device clocks are subtracted.
 
 ## Resolved issues
+
+- Flutter now keeps a full-screen texture at a fixed size across settings transitions.
+  Native touch routing uses only the actual settings-entry rectangle while playing;
+  all gameplay pointers stay in the native View. The app and settings content fill
+  the screen, while video keeps an independent aspect-ratio transform.
+- USB actions moved into the settings Connection page. Fixed action bounds and
+  centered labels prevent connection-state text from shifting surrounding controls.
+  The small settings entry requires two taps within two seconds, with a first-tap
+  Android system Toast, verified through an Android Toast accessibility event. The
+  return button now sits opposite the gameplay entry. The previous device run's
+  rapid-tap case hit the old overlapping return button; that case has not been rerun
+  after the position change. Gameplay shapes are unchanged.
+- USB logs are integrated into the USB status/action card; automatic discovery is
+  separate. Partial key selections pack in lane order at the center without resizing
+  their shapes. Hit testing uses the translated regions and original lane IDs.
+- Each phone may select any control subset, including none. There is no required
+  assignment sum. Shared-key holders are reference counted; one disconnect or
+  watchdog timeout cannot release another phone's hold. Field ownership is queued.
+- Saved IF key changes release old holds, synchronize labels and scans, and require
+  fresh touches. Unsupported/malformed bindings pause input without editing game saves.
 
 - Java Selector initialization failed in the inherited packaged Windows temp
   directory. A minimal TCP/Pipe/Selector probe isolated the Unix-domain socket

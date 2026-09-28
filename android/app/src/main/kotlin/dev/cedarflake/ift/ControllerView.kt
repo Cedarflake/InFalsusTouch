@@ -6,6 +6,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Path
+import android.graphics.Typeface
 import android.view.MotionEvent
 import android.view.View
 import dev.cedarflake.ift.settings.ControlSettings
@@ -23,12 +24,28 @@ class ControllerView(context: Context, private val sink: TouchSink) : View(conte
   private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
   private val lanePaths = Array(6) { Path() }
   private var videoPlacement: VideoPlacement? = null
-  private val labels = arrayOf("1  Shift", "2  A", "3  S", "4  D", "5  F", "6  Space")
+  private val labels = arrayOf("Shift", "A", "S", "D", "F", "Space")
+  private val numbers = arrayOf("1", "2", "3", "4", "5", "6")
+  private val labelMetrics = Paint.FontMetrics()
+  private var numberSize = 0f
+  private var keySize = 0f
+  private var numberAscent = 0f
+  private var keyAscent = 0f
+  private var numberHeight = 0f
+  private var labelHeight = 0f
   private val density = resources.displayMetrics.density
-  private val fieldLabel = context.getString(R.string.field_label)
-  private val phaseLabel = context.getString(R.string.phase_label)
+  private var fieldLabel = context.getString(R.string.field_label)
   private var isInputAllowed = false
   private var isVideoVisible = false
+  private var isFieldBusy = false
+
+  fun setBindings(value: List<String>) {
+    require(value.size == 6)
+    for (index in labels.indices) labels[index] = value[index]
+    invalidate()
+  }
+
+  fun setFieldBusy(value: Boolean) { isFieldBusy = value; invalidate() }
 
   init {
     isClickable = true
@@ -44,6 +61,9 @@ class ControllerView(context: Context, private val sink: TouchSink) : View(conte
 
   fun setSettings(value: ControlSettings) {
     settings = value
+    val language = if (value.language == "system") resources.configuration.locales[0].language else value.language
+    fieldLabel = if (language == "zh") "FIELD · 水平滑动" else "FIELD · slide horizontally"
+    contentDescription = if (language == "zh") "六轨按键与水平 Field 触控区" else context.getString(R.string.input_accessibility)
     updateGeometry()
   }
 
@@ -83,6 +103,27 @@ class ControllerView(context: Context, private val sink: TouchSink) : View(conte
         close()
       }
     }
+    val availableHeight = geometry.laneRegions.minOf { it.bottom - maxOf(it.judgmentLeft, it.judgmentRight) } - 6f * density
+    paint.typeface = Typeface.DEFAULT_BOLD
+    paint.textSize = 24f * density
+    paint.getFontMetrics(labelMetrics)
+    val largeHeight = labelMetrics.descent - labelMetrics.ascent
+    paint.typeface = Typeface.DEFAULT
+    paint.textSize = 12f * density
+    paint.getFontMetrics(labelMetrics)
+    val scale = (availableHeight / (largeHeight + labelMetrics.descent - labelMetrics.ascent + 2f * density)).coerceIn(0.4f, 1f)
+    numberSize = 24f * density * scale
+    keySize = 12f * density * scale
+    paint.typeface = Typeface.DEFAULT_BOLD
+    paint.textSize = numberSize
+    paint.getFontMetrics(labelMetrics)
+    numberAscent = labelMetrics.ascent
+    numberHeight = labelMetrics.descent - labelMetrics.ascent
+    paint.typeface = Typeface.DEFAULT
+    paint.textSize = keySize
+    paint.getFontMetrics(labelMetrics)
+    keyAscent = labelMetrics.ascent
+    labelHeight = numberHeight + 2f * density + labelMetrics.descent - labelMetrics.ascent
     invalidate()
   }
 
@@ -126,25 +167,25 @@ class ControllerView(context: Context, private val sink: TouchSink) : View(conte
     paint.color = Color.rgb(148, 162, 181)
     paint.textSize = 14f * density
     paint.textAlign = Paint.Align.CENTER
-    if (!isVideoVisible) canvas.drawText(phaseLabel, width / 2f, 80f * density, paint)
     paint.color = Color.rgb(97, 211, 197)
-    if (!isVideoVisible && settings.showLabels) canvas.drawText(fieldLabel, width / 2f, (geometry.fieldTop + geometry.laneTop) / 2, paint)
+    if (!isVideoVisible && settings.showLabels && settings.controlsMask and 64 != 0) canvas.drawText(fieldLabel, width / 2f, (geometry.fieldTop + geometry.fieldBottom) / 2, paint)
     canvas.save()
     canvas.clipRect(geometry.clipLeft, geometry.clipTop, geometry.clipRight, geometry.clipBottom)
-    if (settings.showFieldGuide) {
+    if (settings.showFieldGuide && settings.controlsMask and 64 != 0) {
       paint.style = Paint.Style.STROKE
       paint.strokeWidth = density
       canvas.drawRect(geometry.fieldLeft, geometry.fieldTop, geometry.fieldRight, geometry.fieldBottom, paint)
       paint.style = Paint.Style.FILL
     }
     if (controller.fieldPointerId >= 0) {
-      paint.color = Color.rgb(97, 211, 197)
+      paint.color = if (isFieldBusy) Color.rgb(247, 197, 115) else Color.rgb(97, 211, 197)
       paint.strokeWidth = 2f * density
       canvas.drawLine(geometry.fieldLeft, geometry.fieldLineY, geometry.fieldRight, geometry.fieldLineY, paint)
       val fieldX = geometry.fieldLeft + controller.fieldNormalizedX * (geometry.fieldRight - geometry.fieldLeft)
       canvas.drawCircle(fieldX, geometry.fieldLineY, 7f * density, paint)
     }
     for (lane in 0..5) {
+      if (settings.controlsMask and (1 shl lane) == 0) continue
       val region = geometry.laneRegions[lane]
       val pressed = controller.laneCount(lane) > 0
       val brightness = settings.brightness
@@ -161,10 +202,20 @@ class ControllerView(context: Context, private val sink: TouchSink) : View(conte
         paint.style = Paint.Style.FILL
       }
       if (settings.showLabels) {
-        paint.color = Color.WHITE
-        paint.textSize = 16f * density
+        val center = (region.left + region.right) / 2
         val top = maxOf(region.judgmentLeft, region.judgmentRight)
-        canvas.drawText(labels[lane], (region.left + region.right) / 2, top + (region.bottom - top) / 2, paint)
+        val labelTop = top + (region.bottom - top - labelHeight) / 2
+        paint.color = if (pressed) Color.WHITE else Color.rgb(224, 233, 231)
+        paint.typeface = Typeface.DEFAULT_BOLD
+        paint.textSize = numberSize
+        canvas.drawText(numbers[lane], center, labelTop - numberAscent, paint)
+        paint.color = if (pressed) Color.rgb(187, 248, 237) else Color.rgb(169, 187, 190)
+        paint.typeface = Typeface.DEFAULT
+        paint.textSize = keySize
+        val availableWidth = region.right - region.left - 8f * density
+        val labelWidth = paint.measureText(labels[lane])
+        if (labelWidth > availableWidth) paint.textSize *= availableWidth / labelWidth
+        canvas.drawText(labels[lane], center, labelTop + numberHeight + 2f * density - keyAscent, paint)
       }
     }
     canvas.restore()

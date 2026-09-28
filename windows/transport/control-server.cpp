@@ -4,7 +4,10 @@
 #include <chrono>
 #include <deque>
 #include <iostream>
+#include <memory>
 
+#include "windows/config/game-bindings.h"
+#include "windows/input/input-mixer.h"
 #include "windows/input/input-session.h"
 
 namespace ift {
@@ -18,98 +21,44 @@ struct PendingWrite {
   std::size_t offset = 0;
 };
 
-void refreshTarget(InputState& state, const HostOptions& options, const GameWindow& target) {
-  Rect client{0, 0, 1280, 720};
-  const bool active = options.dryRun || target.activeClient(client);
-  state.updateTarget(active, client);
-}
-
-void flushReplies(SOCKET socket, std::deque<PendingWrite>& replies) {
-  while (!replies.empty()) {
-    auto& reply = replies.front();
-    const int written = send(socket, reinterpret_cast<const char*>(reply.bytes.data() + reply.offset),
-                             static_cast<int>(packetSize - reply.offset), 0);
-    if (written == SOCKET_ERROR && WSAGetLastError() == WSAEWOULDBLOCK) {
-      return;
-    }
-    if (written <= 0) {
-      throw socketError("send ACK");
-    }
-    reply.offset += static_cast<std::size_t>(written);
-    if (reply.offset == packetSize) {
-      replies.pop_front();
-    }
+struct Controller {
+  Controller(SOCKET accepted, InputMixer& mixer, std::size_t slot, FieldConfig field)
+    : socket(accepted), input(mixer, slot), state(input, field), session(state) {
+    socket.nonblocking();
+    const BOOL noDelay = TRUE;
+    if (setsockopt(socket.get(), IPPROTO_TCP, TCP_NODELAY,
+        reinterpret_cast<const char*>(&noDelay), sizeof(noDelay)) != 0) throw socketError("TCP_NODELAY");
   }
-}
-
-void runClient(SOCKET socket, const HostOptions& options, const GameWindow& target,
-               InputState& state, const std::atomic_bool& stopping) {
-  InputSession session(state);
+  Socket socket;
+  ControllerInput input;
+  InputState state;
+  InputSession session;
   PacketBytes incoming{};
-  std::size_t received = 0;
   std::deque<PendingWrite> replies;
-  auto lastPacket = Clock::now();
-  auto partialStart = lastPacket;
-  auto lastMovement = lastPacket;
-  while (!stopping.load()) {
-    refreshTarget(state, options, target);
-    const auto now = Clock::now();
-    if (now - lastPacket > 500ms || (received > 0 && now - partialStart > 500ms)) {
-      throw std::runtime_error("Input heartbeat/partial-packet timeout");
-    }
-    fd_set readable;
-    fd_set writable;
-    FD_ZERO(&readable);
-    FD_ZERO(&writable);
-    FD_SET(socket, &readable);
-    if (!replies.empty()) {
-      FD_SET(socket, &writable);
-    }
-    timeval timeout{0, 8000};
-    if (select(0, &readable, &writable, nullptr, &timeout) == SOCKET_ERROR) {
-      throw socketError("select client");
-    }
-    if (FD_ISSET(socket, &writable)) {
-      flushReplies(socket, replies);
-    }
-    if (!FD_ISSET(socket, &readable)) {
-      continue;
-    }
-    const int count = recv(socket, reinterpret_cast<char*>(incoming.data() + received),
-                           static_cast<int>(packetSize - received), 0);
-    if (count == 0) {
-      return;
-    }
-    if (count == SOCKET_ERROR) {
-      if (WSAGetLastError() == WSAEWOULDBLOCK) {
-        continue;
-      }
-      throw socketError("recv input");
-    }
-    if (received == 0) {
-      partialStart = Clock::now();
-    }
-    received += static_cast<std::size_t>(count);
-    if (received != packetSize) {
-      continue;
-    }
-    refreshTarget(state, options, target);
-    const auto packet = decodePacket(incoming);
-    const auto packetTime = Clock::now();
-    const double seconds = std::chrono::duration<double>(packetTime - lastMovement).count();
-    if (packet.type == MessageType::fieldRelative) {
-      lastMovement = packetTime;
-    }
-    const auto reply = session.process(packet, seconds);
-    if (replies.size() >= 256) {
-      throw std::runtime_error("Client is not consuming ACKs");
-    }
-    replies.push_back({encodePacket(reply), 0});
-    flushReplies(socket, replies);
-    received = 0;
-    lastPacket = packetTime;
+  std::size_t received = 0;
+  bool joined = false;
+  std::string failure;
+  std::uint8_t controls = allControls;
+  Clock::time_point lastPacket = Clock::now();
+  Clock::time_point partialStart = lastPacket;
+  Clock::time_point lastMovement = lastPacket;
+
+  void queue(const Packet& packet) {
+    if (replies.size() >= 256) throw std::runtime_error("Client is not consuming replies");
+    replies.push_back({encodePacket(packet), 0});
   }
-}
+  void flush() {
+    while (!replies.empty()) {
+      auto& reply = replies.front();
+      const int written = send(socket.get(), reinterpret_cast<const char*>(reply.bytes.data() + reply.offset),
+        static_cast<int>(packetSize - reply.offset), 0);
+      if (written == SOCKET_ERROR && WSAGetLastError() == WSAEWOULDBLOCK) return;
+      if (written <= 0) throw socketError("send reply");
+      reply.offset += static_cast<std::size_t>(written);
+      if (reply.offset == packetSize) replies.pop_front();
+    }
+  }
+};
 
 }
 
@@ -119,53 +68,127 @@ void runControlServer(const HostOptions& options, const GameWindow& target,
   Socket listener(socket(AF_INET, SOCK_STREAM, IPPROTO_TCP));
   const BOOL exclusive = TRUE;
   if (setsockopt(listener.get(), SOL_SOCKET, SO_EXCLUSIVEADDRUSE,
-                 reinterpret_cast<const char*>(&exclusive), sizeof(exclusive)) != 0) {
-    throw socketError("SO_EXCLUSIVEADDRUSE");
-  }
+      reinterpret_cast<const char*>(&exclusive), sizeof(exclusive)) != 0) throw socketError("SO_EXCLUSIVEADDRUSE");
   sockaddr_in address{};
   address.sin_family = AF_INET;
   address.sin_port = htons(options.port);
   address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
   if (bind(listener.get(), reinterpret_cast<sockaddr*>(&address), sizeof(address)) != 0 ||
-      listen(listener.get(), 1) != 0) {
-    throw socketError("bind/listen; is another host using the port?");
-  }
+      listen(listener.get(), static_cast<int>(maxControllers)) != 0) throw socketError("bind/listen; is another host using the port?");
   listener.nonblocking();
-  InputState state(sink, options.field);
-  std::cout << "Listening on 127.0.0.1:" << options.port
-            << (options.dryRun ? " (dry-run)" : "") << std::endl;
-  while (!stopping.load()) {
-    fd_set readable;
-    FD_ZERO(&readable);
-    FD_SET(listener.get(), &readable);
-    timeval timeout{0, 10000};
-    const int ready = select(0, &readable, nullptr, nullptr, &timeout);
-    if (ready == SOCKET_ERROR) {
-      throw socketError("select listener");
-    }
-    if (ready == 0) {
-      continue;
-    }
-    Socket client(accept(listener.get(), nullptr, nullptr));
-    client.nonblocking();
-    const BOOL noDelay = TRUE;
-    if (setsockopt(client.get(), IPPROTO_TCP, TCP_NODELAY,
-                   reinterpret_cast<const char*>(&noDelay), sizeof(noDelay)) != 0) {
-      throw socketError("TCP_NODELAY");
-    }
-    state.updateTarget(false, {});
-    std::cout << "Controller connected" << std::endl;
-    try {
-      runClient(client.get(), options, target, state, stopping);
-    } catch (const std::exception& error) {
-      // Cleanup precedes diagnostics so a slow console cannot prolong a hold.
-      if (!state.releaseAll()) {
-        throw std::runtime_error("Key release failed; host stopped to prevent further injection");
+  GameBindings bindings(!options.syncBindings ? std::filesystem::path{} :
+    options.bindingsPath.empty() ? defaultGamePreferences() : std::filesystem::path(options.bindingsPath));
+  bindings.refresh();
+  sink.setBindings(bindings.keys());
+  InputMixer mixer(sink);
+  ControlGroup group;
+  std::array<std::unique_ptr<Controller>, maxControllers> controllers;
+  std::uint32_t generation = 0;
+  auto nextBindings = Clock::now();
+  const auto publish = [&](bool resetBindings) {
+    if (++generation == 0) ++generation;
+    for (std::size_t index = 0; index < controllers.size(); ++index) {
+      auto* controller = controllers[index].get();
+      if (!controller || !controller->joined) continue;
+      const auto mask = group.controls(index);
+      if (resetBindings || mask != controller->controls) controller->state.setControls(mask);
+      controller->controls = mask;
+      try {
+        controller->queue({MessageType::configuration, mask, bindings.status(), generation,
+          static_cast<float>(group.size()), packBindings(bindings.keys())});
+      } catch (const std::exception& error) {
+        controller->failure = error.what();
       }
-      std::cerr << "Controller disconnected: " << error.what() << std::endl;
     }
-    if (!state.releaseAll()) {
-      throw std::runtime_error("Key release failed on disconnect");
+  };
+  std::cout << "Listening on 127.0.0.1:" << options.port << " (up to " << maxControllers << " controllers)"
+    << (options.dryRun ? " (dry-run)" : "") << std::endl;
+  while (!stopping.load()) {
+    const auto now = Clock::now();
+    if (now >= nextBindings) {
+      if (bindings.refresh()) {
+        for (auto& controller : controllers) if (controller) controller->state.setControls(controller->controls);
+        sink.setBindings(bindings.keys());
+        publish(false);
+      }
+      nextBindings = now + 500ms;
+    }
+    Rect client{0, 0, 1280, 720};
+    const bool active = bindings.status() != 2 && (options.dryRun || target.activeClient(client));
+    fd_set readable, writable;
+    FD_ZERO(&readable);
+    FD_ZERO(&writable);
+    FD_SET(listener.get(), &readable);
+    for (auto& controller : controllers) {
+      if (!controller) continue;
+      controller->state.updateTarget(active, client);
+      FD_SET(controller->socket.get(), &readable);
+      if (!controller->replies.empty()) FD_SET(controller->socket.get(), &writable);
+    }
+    timeval timeout{0, 8000};
+    if (select(0, &readable, &writable, nullptr, &timeout) == SOCKET_ERROR) throw socketError("select controllers");
+    for (std::size_t index = 0; index < controllers.size(); ++index) {
+      auto* controller = controllers[index].get();
+      if (!controller) continue;
+      std::string failure;
+      try {
+        if (!controller->failure.empty()) throw std::runtime_error(controller->failure);
+        const auto tick = Clock::now();
+        if (tick - controller->lastPacket > 500ms ||
+            (controller->received && tick - controller->partialStart > 500ms)) throw std::runtime_error("Input heartbeat/partial-packet timeout");
+        if (FD_ISSET(controller->socket.get(), &writable)) controller->flush();
+        if (!FD_ISSET(controller->socket.get(), &readable)) continue;
+        const int count = recv(controller->socket.get(),
+          reinterpret_cast<char*>(controller->incoming.data() + controller->received),
+          static_cast<int>(packetSize - controller->received), 0);
+        if (count == 0) throw std::runtime_error("Peer closed");
+        if (count == SOCKET_ERROR) {
+          if (WSAGetLastError() == WSAEWOULDBLOCK) continue;
+          throw socketError("recv input");
+        }
+        if (!controller->received) controller->partialStart = tick;
+        controller->received += static_cast<std::size_t>(count);
+        if (controller->received != packetSize) continue;
+        const auto packet = decodePacket(controller->incoming);
+        const double seconds = std::chrono::duration<double>(tick - controller->lastMovement).count();
+        if (packet.type == MessageType::fieldRelative) controller->lastMovement = tick;
+        auto reply = controller->session.process(packet, seconds);
+        if (!controller->joined) {
+          group.join(index);
+          controller->joined = true;
+          publish(false);
+        }
+        if (packet.type == MessageType::assignControls) {
+          group.assign(index, static_cast<std::uint8_t>(packet.value));
+          publish(false);
+        }
+        reply.status = controller->state.isReady() ? controller->input.fieldStatus() : 1;
+        controller->queue(reply);
+        controller->flush();
+        controller->received = 0;
+        controller->lastPacket = tick;
+      } catch (const std::exception& error) {
+        failure = error.what();
+      }
+      if (!failure.empty()) {
+        if (!controller->state.releaseAll()) throw std::runtime_error("Key release failed; host stopped to prevent further injection");
+        if (controller->joined) group.leave(index);
+        controllers[index].reset();
+        publish(false);
+        std::cerr << "Controller " << index + 1 << " disconnected: " << failure << std::endl;
+      }
+    }
+    if (FD_ISSET(listener.get(), &readable)) {
+      const SOCKET accepted = accept(listener.get(), nullptr, nullptr);
+      if (accepted == INVALID_SOCKET) {
+        if (WSAGetLastError() == WSAEWOULDBLOCK) continue;
+        throw socketError("accept controller");
+      }
+      std::size_t slot = 0;
+      while (slot < controllers.size() && controllers[slot]) ++slot;
+      if (slot == controllers.size()) { closesocket(accepted); continue; }
+      controllers[slot] = std::make_unique<Controller>(accepted, mixer, slot, options.field);
+      std::cout << "Controller " << slot + 1 << " connected" << std::endl;
     }
   }
 }

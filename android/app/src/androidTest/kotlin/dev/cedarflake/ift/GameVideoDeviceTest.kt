@@ -11,7 +11,7 @@ import android.view.InputDevice
 import android.view.MotionEvent
 import android.view.SurfaceView
 import android.view.ViewGroup
-import android.widget.Button
+import android.view.View
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -39,10 +39,10 @@ class GameVideoDeviceTest {
     assumeTrue(InstrumentationRegistry.getArguments().getString("gameVideo") == "true")
     val instrumentation = InstrumentationRegistry.getInstrumentation()
     val highRefresh = InstrumentationRegistry.getArguments().getString("highRefresh") != "false"
-    DeviceSettings { it.copy(showStatistics = false, autoConnect = false, autoHideControls = true,
+    DeviceSettings { it.copy(controlsMask = 127, showStatistics = false, autoConnect = false, autoHideControls = true,
       highRefreshDisplay = highRefresh, layoutMode = LayoutMode.ALIGNED, laneHeight = 0.4f, videoScale = VideoScale.FIT) }.use {
       DeviceActivity.launch().use { scenario ->
-        scenario.onActivity { it.findViewById<ViewGroup>(android.R.id.content).findViewWithTag<Button>("connect").performClick() }
+        scenario.onActivity { it.toggleConnection() }
         val first = waitForSample(scenario) { it.presentedFrames >= 100 }
         val cadence = FrameCadence()
         val display = JSONObject()
@@ -101,7 +101,7 @@ class GameVideoDeviceTest {
         val started = SystemClock.uptimeMillis()
         try {
           scenario.onActivity { activity ->
-            val view = activity.findViewById<ViewGroup>(android.R.id.content).findViewWithTag<ControllerView>("controller")
+            val view = activity.window.decorView
             for (count in 1..7) dispatch(view, bounds, count, if (count == 1) MotionEvent.ACTION_DOWN else
               MotionEvent.ACTION_POINTER_DOWN or ((count - 1) shl MotionEvent.ACTION_POINTER_INDEX_SHIFT), started)
           }
@@ -116,7 +116,7 @@ class GameVideoDeviceTest {
           }
         } finally {
           scenario.onActivity { activity ->
-            val view = activity.findViewById<ViewGroup>(android.R.id.content).findViewWithTag<ControllerView>("controller")
+            val view = activity.window.decorView
             dispatch(view, bounds, 7, MotionEvent.ACTION_CANCEL, started)
           }
         }
@@ -133,7 +133,7 @@ class GameVideoDeviceTest {
     }
   }
 
-  private fun dispatch(view: ControllerView, picture: Rect, count: Int, action: Int, started: Long) {
+  private fun dispatch(view: View, picture: Rect, count: Int, action: Int, started: Long) {
     // Observed hit positions in the 16:9 tutorial, independent of the layout implementation.
     val points = arrayOf(0.5f to 0.4f, 0.13f to 0.64f, 0.28f to 0.64f, 0.43f to 0.64f,
       0.57f to 0.64f, 0.72f to 0.64f, 0.87f to 0.64f)

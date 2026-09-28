@@ -8,6 +8,7 @@ import java.net.SocketTimeoutException
 import java.util.concurrent.Executor
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 
 enum class ConnectionState { DISCONNECTED, CONNECTING, CONNECTED }
@@ -16,6 +17,8 @@ interface ControlListener {
   fun onState(state: ConnectionState, detail: String)
   fun onTargetReady(ready: Boolean)
   fun onRtt(milliseconds: Double)
+  fun onConfiguration(configuration: ControllerConfiguration) {}
+  fun onFieldStatus(status: Int) {}
 }
 
 class ControlClient(
@@ -30,10 +33,20 @@ class ControlClient(
     val running = AtomicBoolean(true)
     val ready = AtomicBoolean(false)
     @Volatile var lastAckNs = System.nanoTime()
+    var configuration: ControllerConfiguration? = null
   }
 
   private val current = AtomicReference<Session?>()
   private val generation = AtomicLong()
+  private val desiredControls = AtomicInteger(127)
+
+  fun setControls(mask: Int) {
+    require(mask in 0..127)
+    if (desiredControls.getAndSet(mask) == mask) return
+    current.get()?.let { session ->
+      if (!session.queue.offer(MessageType.ASSIGN_CONTROLS, value = mask.toFloat())) end(session, "Input queue overflow")
+    }
+  }
 
   @Synchronized fun connect() {
     if (current.get() != null) return
@@ -56,9 +69,9 @@ class ControlClient(
   }
 
   fun send(type: MessageType, lane: Int = 0, value: Float = 0f) {
-    require(type != MessageType.HELLO && type != MessageType.ACK && type != MessageType.PING)
+    require(type != MessageType.HELLO && type != MessageType.ACK && type != MessageType.CONFIGURATION && type != MessageType.PING)
     val session = current.get() ?: return
-    if (!session.ready.get() && type != MessageType.RELEASE_ALL) return
+    if (!session.ready.get() && type != MessageType.RELEASE_ALL && type != MessageType.ASSIGN_CONTROLS) return
     if (!session.queue.offer(type, lane, value)) end(session, "Input queue overflow; reconnect required")
   }
 
@@ -98,6 +111,7 @@ class ControlClient(
       var partialStart = 0L
       var hasHandshake = false
       var lastRttReport = 0L
+      var lastFieldStatus = -1
       while (session.running.get()) {
         val now = System.nanoTime()
         if (now - session.lastAckNs > 750_000_000L) throw SocketTimeoutException("Host ACK timeout")
@@ -112,6 +126,21 @@ class ControlClient(
         offset += count
         if (offset != bytes.size) continue
         val packet = codec.decode(bytes)
+        if (packet.type == MessageType.CONFIGURATION) {
+          val configuration = ControllerConfiguration.decode(packet)
+          val previous = session.configuration
+          val changed = previous == null || previous.controls != configuration.controls ||
+            previous.keys != configuration.keys || previous.bindingStatus != configuration.bindingStatus
+          session.configuration = configuration
+          if (changed) {
+            updateReady(session, false)
+            if (configuration.controls != desiredControls.get()) session.queue.offer(MessageType.ASSIGN_CONTROLS, value = desiredControls.get().toFloat())
+            session.queue.offer(MessageType.RELEASE_ALL)
+          }
+          notify(session) { listener.onConfiguration(configuration) }
+          offset = 0
+          continue
+        }
         session.pending.acknowledge(packet)
         val receivedNs = System.nanoTime()
         session.lastAckNs = receivedNs
@@ -119,7 +148,11 @@ class ControlClient(
           hasHandshake = true
           notify(session) { listener.onState(ConnectionState.CONNECTED, "USB connected") }
         }
-        updateReady(session, packet.status == 0)
+        updateReady(session, packet.status != 1)
+        if (lastFieldStatus != packet.status) {
+          lastFieldStatus = packet.status
+          notify(session) { listener.onFieldStatus(packet.status) }
+        }
         if (receivedNs - lastRttReport > 250_000_000L) {
           val milliseconds = (receivedNs - packet.timestampNs) / 1_000_000.0
           notify(session) { listener.onRtt(milliseconds) }
@@ -133,8 +166,9 @@ class ControlClient(
   }
 
   private fun updateReady(session: Session, ready: Boolean) {
-    if (!ready) session.queue.clear()
-    if (session.ready.getAndSet(ready) != ready) {
+    val previous = session.ready.getAndSet(ready)
+    if (previous && !ready) session.queue.clear()
+    if (previous != ready) {
       notify(session) { listener.onTargetReady(ready) }
     }
   }

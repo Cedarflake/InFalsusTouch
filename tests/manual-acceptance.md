@@ -8,7 +8,7 @@ and real USB transport to a dry-run Windows host passed on 2026-09-28; see
 
 - Build both artifacts, connect an authorized USB phone and run setup-adb.ps1.
 - Select the running In Falsus window, open the app and focus the game.
-- Use the game's configured keys: Left Shift, A, S, D, F, Space.
+- Check that the six labels match IF's saved bindings (defaults: Shift, A, S, D, F, Space).
 - Select the plain US English keyboard layout for the game. Merely toggling an
   IME to English typing mode is insufficient when Shift itself is a lane key.
   Record the layout reported by Host before testing; restore the previous layout afterward.
@@ -46,6 +46,37 @@ and real USB transport to a dry-run Windows host passed on 2026-09-28; see
 - Open Android system UI / lose Activity focus: held input is cleared.
 - Close or minimize the selected game: release occurs and no new input is injected.
 - Try mismatched process privileges: failures must produce explicit diagnostics.
+
+## Interface and cooperative play
+
+- Open and close settings repeatedly: app backgrounds must fill the screen and
+  neither the settings nor the underlying game picture should briefly stretch.
+- Check Chinese and English, consistent corners and large numbers above smaller
+  synchronized key names. Long key names must fit without moving adjacent controls.
+- Connect with Host absent, start Host, cancel a pending retry and disconnect.
+  Feedback must be immediate; button positions must remain fixed through every state.
+- The gameplay screen must show only the small settings entry with equal edge
+  margins, avoiding the actual cutout. First tap shows an Android system Toast without
+  opening settings; the second within two seconds opens it. A late second tap
+  must start a new confirmation. USB controls belong only in the Connection page.
+- Rapidly tap the entry two or three times. Settings must stay open; the opening
+  tap burst must not activate the return control on the opposite side.
+  A later intentional return tap must still work.
+- Connect two or more physical phones with setup-adb.ps1 -AllDevices. Each can
+  select any subset of the six keys and Field, including no controls. Saving on one
+  phone must not alter another phone's choices, and relaunch must preserve choices.
+- Select one key, nonadjacent keys, and five keys. The visible group must be centered,
+  preserve key shapes and labels, and trigger the original lane IDs at the new positions.
+  Empty space must not send hidden-key input. Restoring six keys restores the chart layout.
+- Hold a shared key on two phones and release or unplug one. The remaining phone's
+  hold must continue. PC keyboard/mouse participation has no required coverage sum.
+- Touch Field on two phones. The first owner retains control; release hands it to
+  the waiting phone. A spectator or hidden control must never produce input.
+- Change IF bindings while connected, then press fresh touches: the old keys must
+  be released, all labels updated, and the new physical keys used. Unsupported
+  binding states must pause input with an explanation.
+- Seven simulated clients passed automated checks; seven physical phones still
+  require a hardware acceptance run, including hub bandwidth and power behavior.
 
 ## Record
 

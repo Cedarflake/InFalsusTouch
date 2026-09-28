@@ -46,7 +46,7 @@ def main(window, position, relative, repeat):
             assert user32.GetCursorPos(ctypes.byref(before))
             for step in range(repeat):
                 time.sleep(0.06)
-                assert wire.exchange(connection, 5 if relative else 4, 3 + step, value=position)[4] == 0
+                assert wire.exchange(connection, 5 if relative else 4, 3 + step, value=position)[4] in (0, 4)
             time.sleep(0.2)
             after = wintypes.POINT()
             assert user32.GetCursorPos(ctypes.byref(after))

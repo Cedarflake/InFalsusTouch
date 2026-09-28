@@ -1,15 +1,17 @@
 package dev.cedarflake.ift
 
-import android.app.AlertDialog
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.Rect
+import android.graphics.Point
 import android.os.SystemClock
+import android.view.Choreographer
+import android.view.InputDevice
 import android.view.MotionEvent
-import android.view.View
-import android.widget.Button
-import android.widget.CheckBox
-import android.widget.SeekBar
-import android.widget.Spinner
+import android.view.ViewGroup
+import android.view.Window
+import android.view.accessibility.AccessibilityEvent
+import android.view.accessibility.AccessibilityNodeInfo
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -19,19 +21,18 @@ import dev.cedarflake.ift.settings.FieldMode
 import dev.cedarflake.ift.settings.LayoutMode
 import dev.cedarflake.ift.settings.VideoScale
 import dev.cedarflake.ift.settings.JudgmentLayout
-import dev.cedarflake.ift.settings.VideoPlacement
+
+import io.flutter.embedding.android.FlutterView
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 
-import java.util.concurrent.CountDownLatch
 import java.io.File
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.atomic.AtomicReference
 
 @RunWith(AndroidJUnit4::class)
 class SettingsDeviceTest {
@@ -39,7 +40,7 @@ class SettingsDeviceTest {
     val context = InstrumentationRegistry.getInstrumentation().targetContext
     val name = "settings-device-test"
     val preferences = context.getSharedPreferences(name, Context.MODE_PRIVATE)
-    val value = ControlSettings(fieldMode = FieldMode.RELATIVE, layoutMode = LayoutMode.RESERVED,
+    val value = ControlSettings(language = "zh", controlsMask = 73, fieldMode = FieldMode.RELATIVE, layoutMode = LayoutMode.RESERVED,
       videoScale = VideoScale.CROP, laneHeight = 0.35f, fieldHeight = 0.5f, fieldLeft = 0.1f, fieldRight = 0.9f,
       laneOpacity = 0.6f, laneGapDp = 5f, brightness = 0.7f, showLabels = false,
       showStatistics = true, showFieldGuide = true, autoConnect = true, autoHideControls = false, highRefreshDisplay = false,
@@ -60,112 +61,214 @@ class SettingsDeviceTest {
     } finally { context.deleteSharedPreferences(name) }
   }
 
-  @Test fun settingsDialogValidatesRangeAndSavesAllControls() {
-    DeviceActivity.launch().use { scenario ->
-      val saved = AtomicReference<ControlSettings?>()
-      val closed = AtomicBoolean()
-      val shown = AtomicReference<AlertDialog>()
-      scenario.onActivity { activity ->
-        shown.set(SettingsDialog(activity, ControlSettings(), { saved.set(it) }, {}, {}, { closed.set(true) }).show())
-      }
-      val instrumentation = InstrumentationRegistry.getInstrumentation()
-      instrumentation.waitForIdleSync()
-      requireNotNull(instrumentation.uiAutomation.takeScreenshot()).let { screenshot ->
-        File(instrumentation.targetContext.filesDir, "settings-screen.png").outputStream().use {
-          screenshot.compress(Bitmap.CompressFormat.PNG, 100, it)
+  @Test fun flutterMaterialSettingsSwitchLanguagesAndPersistAcrossActivityLaunches() {
+    DeviceSettings { it.copy(language = "en", laneHeight = 0.4f, autoConnect = false) }.use {
+      DeviceActivity.launch().use {
+        openSettings()
+        screenshot("flutter-connection-en.png")
+        click("Touch")
+        waitForText("Controller settings")
+        screenshot("flutter-settings-en.png")
+        click("中文")
+        waitForText("控制设置")
+        screenshot("flutter-settings-zh.png")
+        click("连接")
+        screenshot("flutter-connection-zh.png")
+        SettingsStore(InstrumentationRegistry.getInstrumentation().targetContext).use { store ->
+          assertEquals("zh", store.load().value.language)
         }
-        screenshot.recycle()
       }
-      scenario.onActivity {
-        val dialog = requireNotNull(shown.get())
+      DeviceActivity.launch().use {
+        openSettings("zh")
+        waitForText("控制设置")
+        click("English")
+        waitForText("Controller settings")
+      }
+    }
+  }
+
+  @Test fun selectedControlsPersistAndCanAllBeHidden() {
+    DeviceSettings { it.copy(language = "en", controlsMask = 127, laneHeight = 0.4f, autoConnect = false) }.use {
+      DeviceActivity.launch().use {
+        openSettings()
+        click("Controls")
+        waitForText("Choose this device’s controls")
+        screenshot("flutter-controls-en.png")
+        click("中文")
+        waitForText("这台设备显示什么")
+        screenshot("flutter-controls-zh.png")
+        click("只看画面")
+        click("保存")
+        waitForText("设置", clickable = true)
+        SettingsStore(InstrumentationRegistry.getInstrumentation().targetContext).use { store ->
+          assertEquals(0, store.load().value.controlsMask)
+        }
+      }
+      DeviceActivity.launch().use {
+        openSettings("zh")
+        click("按键显示")
+        click("仅 Field")
+        click("保存")
+        waitForText("设置", clickable = true)
+        SettingsStore(InstrumentationRegistry.getInstrumentation().targetContext).use { store ->
+          assertEquals(64, store.load().value.controlsMask)
+        }
+      }
+    }
+  }
+
+  @Suppress("DEPRECATION")
+  @Test fun fullScreenFlutterSurfaceDoesNotResizeWhenOpeningOrClosingSettings() {
+    val instrumentation = InstrumentationRegistry.getInstrumentation()
+    DeviceSettings { it.copy(language = "en", controlsMask = 127, laneHeight = 0.4f, autoConnect = false) }.use {
+      DeviceActivity.launch().use { scenario ->
+        waitForText("Settings", clickable = true)
+        val frames = mutableListOf<Pair<Int, Int>>()
+        val physical = Point()
+        val finished = CountDownLatch(1)
+        scenario.onActivity { activity ->
+          activity.window.decorView.display.getRealSize(physical)
+          val content = activity.findViewById<ViewGroup>(android.R.id.content)
+          val root = content.getChildAt(0) as ControllerRoot
+          val flutter = root.interfaceView as FlutterView
+          assertEquals(physical.x, root.width)
+          assertEquals(physical.y, root.height)
+          Choreographer.getInstance().postFrameCallback(object : Choreographer.FrameCallback {
+            override fun doFrame(frameTimeNanos: Long) {
+              frames += flutter.width to flutter.height
+              if (frames.size < 90) Choreographer.getInstance().postFrameCallback(this) else finished.countDown()
+            }
+          })
+        }
+        openSettings()
+        waitForText("Controller settings")
+        click("Cancel")
+        waitForText("Settings", clickable = true)
+        assertTrue(finished.await(5, TimeUnit.SECONDS))
+        assertEquals("The Flutter texture resized during a panel transition", setOf(physical.x to physical.y), frames.toSet())
+        screenshot("flutter-fullscreen-controls.png")
+      }
+    }
+  }
+
+  @Test fun settingsEntryHasEqualMarginsAndRequiresASecondTap() {
+    DeviceSettings { it.copy(language = "zh", controlsMask = 127, laneHeight = 0.4f, autoConnect = false) }.use {
+      DeviceActivity.launch().use { scenario ->
+        val entry = Rect()
+        waitForText("设置", clickable = true).getBoundsInScreen(entry)
+        assertEquals("Settings entry must have equal left and top margins", entry.left, entry.top)
+        val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
+        val toast = CountDownLatch(1)
+        automation.setOnAccessibilityEventListener { event ->
+          if (event.eventType == AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED &&
+            event.className == "android.widget.Toast" && event.text.any { it.contains("再按一下进入设置") }) toast.countDown()
+        }
         try {
-          dialog.findViewById<View>(android.R.id.content).apply {
-            findViewWithTag<Spinner>("setting-field-mode").setSelection(1)
-            findViewWithTag<Spinner>("setting-layout").setSelection(1)
-            findViewWithTag<Spinner>("setting-scale").setSelection(2)
-            findViewWithTag<SeekBar>("setting-lane-height").progress = 25
-            findViewWithTag<SeekBar>("setting-field-height").progress = 40
-            findViewWithTag<SeekBar>("setting-field-left").progress = 95
-            findViewWithTag<SeekBar>("setting-field-right").progress = 89
-            findViewWithTag<CheckBox>("setting-statistics").isChecked = true
-            findViewWithTag<CheckBox>("setting-labels").isChecked = false
-            findViewWithTag<CheckBox>("setting-auto-connect").isChecked = true
-            findViewWithTag<CheckBox>("setting-auto-hide").isChecked = false
-            findViewWithTag<CheckBox>("setting-high-refresh").isChecked = false
-            dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
-            assertEquals(null, saved.get())
-            assertTrue(dialog.isShowing)
-            findViewWithTag<SeekBar>("setting-field-left").progress = 10
-          }
-          dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
-          assertEquals(ControlSettings(fieldMode = FieldMode.RELATIVE, layoutMode = LayoutMode.RESERVED,
-            videoScale = VideoScale.CROP, laneHeight = 0.35f, fieldHeight = 0.5f, fieldLeft = 0.1f, fieldRight = 0.9f,
-            showStatistics = true, showLabels = false, autoConnect = true, autoHideControls = false, highRefreshDisplay = false), saved.get())
-        } finally { dialog.dismiss() }
+          click("设置")
+          assertTrue("The first tap must show an Android system Toast", toast.await(3, TimeUnit.SECONDS))
+        } finally { automation.setOnAccessibilityEventListener(null) }
+        SystemClock.sleep(250)
+        scenario.onActivity { assertEquals("compact", it.uiSnapshot()["panel"]) }
+        screenshot("flutter-settings-hint-zh.png")
+        SystemClock.sleep(2100)
+        click("设置")
+        SystemClock.sleep(100)
+        scenario.onActivity { assertEquals("compact", it.uiSnapshot()["panel"]) }
+        click("设置")
+        waitForText("控制设置")
+        SystemClock.sleep(500)
+        scenario.onActivity { assertEquals("settings", it.uiSnapshot()["panel"]) }
       }
-      InstrumentationRegistry.getInstrumentation().waitForIdleSync()
-      assertTrue(closed.get())
     }
   }
 
-  @Test fun calibrationUsesWholeControllerWidthAndRejectsNarrowRange() {
-    InstrumentationRegistry.getInstrumentation().runOnMainSync {
-      val context = InstrumentationRegistry.getInstrumentation().targetContext
-      var left = -1f
-      var right = -1f
-      val calibration = FieldCalibrationView(context, ControlSettings(), { l, r -> left = l; right = r }, {})
-      calibration.measure(View.MeasureSpec.makeMeasureSpec(1000, View.MeasureSpec.EXACTLY),
-        View.MeasureSpec.makeMeasureSpec(600, View.MeasureSpec.EXACTLY))
-      calibration.layout(0, 0, 1000, 600)
-      val target = calibration.getChildAt(0)
-      val save = calibration.findViewWithTag<Button>("calibration-save")
-      fun tap(x: Float) {
-        val now = SystemClock.uptimeMillis()
-        for (action in intArrayOf(MotionEvent.ACTION_DOWN, MotionEvent.ACTION_UP)) {
-          val event = MotionEvent.obtain(now, now, action, x, 300f, 0)
-          try { target.dispatchTouchEvent(event) } finally { event.recycle() }
+  @Test fun rapidSettingsTapsCannotReachTheBackButtonAfterOpening() {
+    DeviceSettings { it.copy(language = "en", autoConnect = false) }.use {
+      DeviceActivity.launch().use { scenario ->
+        val entry = Rect()
+        waitForText("Settings", clickable = true).getBoundsInScreen(entry)
+        val events = mutableListOf<String>()
+        val began = SystemClock.uptimeMillis()
+        scenario.onActivity { activity ->
+          val original = activity.window.callback
+          activity.window.callback = object : Window.Callback by original {
+            override fun dispatchTouchEvent(event: MotionEvent): Boolean {
+              val root = activity.findViewById<ViewGroup>(android.R.id.content).getChildAt(0) as ControllerRoot
+              events += "${event.eventTime - began} ms action=${event.actionMasked} panel=${activity.uiSnapshot()["panel"]} regions=${root.interfaceRegions}"
+              return original.dispatchTouchEvent(event)
+            }
+          }
+        }
+        for (interval in listOf(30L, 450L)) {
+          repeat(3) {
+            tap(entry, waitForIdle = false)
+            SystemClock.sleep(interval)
+          }
+          SystemClock.sleep(500)
+          scenario.onActivity { assertEquals(events.joinToString("\n"), "settings", it.uiSnapshot()["panel"]) }
+          waitForText("Controller settings")
+          val back = Rect()
+          waitForText("Back to game", clickable = true).getBoundsInScreen(back)
+          assertTrue("The return control must not overlap the entry", !Rect.intersects(entry, back))
+          click("Back to game")
+          waitForText("Settings", clickable = true)
+          scenario.onActivity { assertEquals("compact", it.uiSnapshot()["panel"]) }
         }
       }
-      tap(123f)
-      tap(140f)
-      assertFalse(save.isEnabled)
-      tap(876f)
-      assertTrue(save.isEnabled)
-      save.performClick()
-      assertEquals(0.123f, left, 0.000001f)
-      assertEquals(0.876f, right, 0.000001f)
     }
   }
 
-  @Test fun judgmentCalibrationUsesVideoCoordinatesAndIgnoresSideBars() {
-    InstrumentationRegistry.getInstrumentation().runOnMainSync {
-      val context = InstrumentationRegistry.getInstrumentation().targetContext
-      val video = VideoPlacement(100, 50, 1600, 900, 1000)
-      val expected = JudgmentLayout()
-      var saved: JudgmentLayout? = null
-      val calibration = JudgmentCalibrationView(context, { video }, expected, { saved = it }, {})
-      calibration.measure(View.MeasureSpec.makeMeasureSpec(1800, View.MeasureSpec.EXACTLY),
-        View.MeasureSpec.makeMeasureSpec(1000, View.MeasureSpec.EXACTLY))
-      calibration.layout(0, 0, 1800, 1000)
-      val canvas = calibration.getChildAt(0)
-      fun tap(x: Float, y: Float) {
-        val now = SystemClock.uptimeMillis()
-        val event = MotionEvent.obtain(now, now, MotionEvent.ACTION_UP, x, y, 0)
-        try { canvas.dispatchTouchEvent(event) } finally { event.recycle() }
+  private fun openSettings(language: String = "en") {
+    val label = if (language == "zh") "设置" else "Settings"
+    click(label)
+    SystemClock.sleep(100)
+    click(label)
+    waitForText(if (language == "zh") "控制设置" else "Controller settings")
+  }
+
+  private fun click(label: String) {
+    val node = waitForText(label, clickable = true)
+    val bounds = Rect()
+    node.getBoundsInScreen(bounds)
+    assertTrue("Flutter control is off screen: " + label, !bounds.isEmpty)
+    tap(bounds)
+  }
+
+  private fun tap(bounds: Rect, waitForIdle: Boolean = true) {
+    val instrumentation = InstrumentationRegistry.getInstrumentation()
+    val start = SystemClock.uptimeMillis()
+    for (action in listOf(MotionEvent.ACTION_DOWN, MotionEvent.ACTION_UP)) {
+      val event = MotionEvent.obtain(start, SystemClock.uptimeMillis(), action, bounds.exactCenterX(), bounds.exactCenterY(), 0)
+      event.source = InputDevice.SOURCE_TOUCHSCREEN
+      try { instrumentation.sendPointerSync(event) } finally { event.recycle() }
+    }
+    if (waitForIdle) instrumentation.waitForIdleSync()
+  }
+
+  private fun waitForText(label: String, clickable: Boolean = false): AccessibilityNodeInfo {
+    val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
+    fun find(node: AccessibilityNodeInfo): AccessibilityNodeInfo? {
+      for (index in 0 until node.childCount) {
+        node.getChild(index)?.let { child -> find(child)?.let { return it } }
       }
-      tap(50f, 600f)
-      for ((x, y) in listOf(expected.fieldLeft to expected.fieldY, expected.fieldRight to expected.fieldY,
-        expected.floorLeft to expected.floorY, expected.floorRight to expected.floorY,
-        expected.sideLeft to expected.sideY, expected.sideRight to expected.sideY)) {
-        tap(video.left + video.width * x, video.top + video.height * y)
-      }
-      val save = calibration.findViewWithTag<Button>("judgment-save")
-      assertTrue(save.isEnabled)
-      save.performClick()
-      val result = requireNotNull(saved)
-      assertEquals(expected.fieldLeft, result.fieldLeft, 0.00001f)
-      assertEquals(expected.floorRight, result.floorRight, 0.00001f)
-      assertEquals(expected.sideY, result.sideY, 0.00001f)
+      val text = (node.text ?: node.contentDescription)?.toString().orEmpty()
+      return node.takeIf { label in text.lines() && (!clickable || it.isClickable) }
+    }
+    val deadline = SystemClock.uptimeMillis() + 20_000
+    while (SystemClock.uptimeMillis() < deadline) {
+      automation.rootInActiveWindow?.let { find(it)?.let { match -> return match } }
+      SystemClock.sleep(100)
+    }
+    error("Flutter control did not appear: " + label)
+  }
+
+  private fun screenshot(name: String) {
+    val instrumentation = InstrumentationRegistry.getInstrumentation()
+    SystemClock.sleep(200)
+    requireNotNull(instrumentation.uiAutomation.takeScreenshot()).let { bitmap ->
+      try {
+        File(instrumentation.targetContext.filesDir, name).outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+      } finally { bitmap.recycle() }
     }
   }
 }

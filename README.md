@@ -1,7 +1,7 @@
 # InFalsusTouch
 
 通过 USB 数据线把 Android 手机变成专用于 PC 音游 **In Falsus** 的横屏触控控制器。
-Windows 使用 C++20 / Win32，Android 使用 Kotlin / 原生 `MotionEvent`。
+Windows 使用 C++20 / Win32，Android 使用 Flutter Material 3 界面，触控与视频保留 Kotlin 原生处理。
 
 **当前里程碑：带设置与校准的 USB 控制器原型。** 已实现 6K、多指 Hold、Field 绝对/相对控制、
 独立输入通道，以及 WGC → GPU NV12 → 硬件 H.264 → Android MediaCodec / SurfaceView。
@@ -21,7 +21,7 @@ Field 的游戏内绝对位置对齐、物理手指游玩仍待验收。
   实际触点上限取决于硬件。
 - USB 数据线、USB Debugging、已授权的 ADB，经 USB 承载 localhost TCP。
 - Android 硬件 H.264 解码器需支持所选分辨率和帧率；不静默切换到软件编解码。
-- In Falsus 的六轨键位为 Left Shift / A / S / D / F / Space。
+- 默认六轨键位为 Left Shift / A / S / D / F / Space；Host 只读同步 IF 保存的键盘绑定。
 - 为游戏窗口选择 **英语（美国）键盘**。中文输入法的英文输入模式仍可能被 Shift 轨道切回中文；
   Host 启动时显示游戏线程的键盘布局，并对中日韩输入法布局提示。
 - Host 与游戏应以相同权限等级运行；Windows 的输入隔离可能阻止低权限进程向高权限游戏注入。
@@ -31,6 +31,7 @@ Field 的游戏内绝对位置对齐、物理手指游玩仍待验收。
 - Visual Studio 2022 Build Tools：Desktop development with C++、Windows SDK、CMake。
 - JDK 17 或 21；Gradle 8.11.1、Android Gradle Plugin 8.9.2、Kotlin 2.1.20。
 - Android SDK Platform 35、Build Tools 35.0.0、platform-tools。
+- Flutter 3.44.x / Dart 3.12.x；首次运行 `flutter pub get` 准备依赖，构建脚本使用离线缓存。
 - TCP 集成测试使用 `uv` 管理的 Python 3.13，仅依赖标准库。
 
 ## Build and test
@@ -45,6 +46,7 @@ Field 的游戏内绝对位置对齐、物理手指游玩仍待验收。
 .\scripts\build-windows.ps1
 .\scripts\build-android.ps1
 uv run --python 3.13 tests\tcp-integration.py --host dist\InFalsusTouchHost.exe
+uv run --python 3.13 tests\multiplayer-integration.py
 
 # 可选真机验证：安装本项目 app 和测试 APK，使用 dry-run Host，不注入桌面按键。
 .\scripts\test-device.ps1
@@ -53,9 +55,10 @@ uv run --python 3.13 tests\tcp-integration.py --host dist\InFalsusTouchHost.exe
 uv run --python 3.13 tests\video-integration.py
 .\scripts\build-android.ps1 -DeviceTests
 uv run --python 3.13 tests\video-device.py
+uv run --python 3.13 tests\multiplayer-video.py
 ```
 
-Windows 脚本构建 Release 并运行 CTest。Android 脚本运行 Kotlin 测试、构建 debug APK
+Windows 脚本构建 Release 并运行 CTest。Android 脚本运行 Flutter 分析、界面测试、Kotlin 测试，构建 debug APK
 并运行 lint。先构建 Windows 时，Android 测试会额外启动真实 Host 的 dry-run 模式，
 验证 Kotlin/C++ 握手、六押、Field、断线释放与重连。
 
@@ -70,12 +73,12 @@ Windows 脚本构建 Release 并运行 CTest。Android 脚本运行 Kotlin 测�
 
 1. 手机启用开发者选项与 **USB Debugging**，使用 USB 数据线连接 PC，确认手机上的授权提示。
 2. 用 `adb devices -l` 检查状态。设备必须为 `device`，不能是 `unauthorized`。
-3. 只连接一台 USB 手机，运行 `scripts/setup-adb.ps1`。`-Serial` 可额外核对设备；ADB 不在 PATH 时可传 `-AdbPath`。
+3. 单台运行 `scripts/setup-adb.ps1`；多台运行 `scripts/setup-adb.ps1 -AllDevices -Install`。`-Serial` 可指定一台，`-AdbPath` 可指定 ADB。
 4. 安装 `dist/InFalsusTouch.apk`，例如 `adb -d install -r .\dist\InFalsusTouch.apk`。
 5. 启动 In Falsus，然后运行 `dist/InFalsusTouchHost.exe`。
 6. Host 优先匹配标题中的 `In Falsus`；没有唯一匹配时显示窗口列表供选择。
-7. 打开 Android App，点击 **Connect**，切回 PC 游戏窗口，再开始触摸。
-8. 手机通过 **Settings** 调节 Field、布局和显示；工具栏隐藏后点 **Menu** 打开。关闭 Host 用 Ctrl+C；App 后台运行时会断连并释放。
+7. 打开 Android App，点击 **连接 USB / Connect USB**，切回 PC 游戏窗口，再开始触摸。
+8. 手机通过设置调节布局、按键显示和语言；工具栏隐藏后点侧边菜单打开。关闭 Host 用 Ctrl+C；App 后台运行时会断连并释放。
 
 脚本建立：
 
@@ -89,7 +92,7 @@ Android 固定连接 `127.0.0.1`，不提供 Wi-Fi Host 地址设置。
 
 视频默认 720p60 / 8 Mbps / H.264 Baseline / 半秒 GOP。只捕获所选窗口客户区，
 按原比例缩放并补黑边；手机默认 Fit 与 Aligned Field + Floor。Fit 将完整画面居中显示，
-左右对称避让挖孔，保留读谱区域。2400 × 1080 手机显示 16:9 游戏时左右各留 240 像素；
+软件界面铺满屏幕，游戏画面独立按比例居中，保留读谱区域。2400 × 1080 手机显示 16:9 游戏时左右各留 240 像素；
 强行等比铺满会裁去上下画面，因此裁切只作为可选项。
 
 默认启用 **Prefer 120 Hz display**，请求手机高刷新率；系统和省电设置决定实际结果。
@@ -109,9 +112,15 @@ Host 显示实际 WGC / GPU / 编码器诊断。支持 `MinUpdateInterval` 的 W
 
 ## Settings and saved profiles
 
+设置使用 Material 3 深色界面，支持 English / 中文即时切换并保存。每台手机在“按键显示”中
+独立选择六个按钮和 Field，支持全部、仅按键、仅 Field、只看画面。隐藏按钮关闭对应触区，
+选择部分按钮时按原编号顺序居中排列，保留宽度和形状，触区同步移动；全部六键时保留原轨道布局。
+仅 Field 时扩大滑动区域。选择不会改变其他设备，也不要求合计覆盖七项操作。
+
 手机 Settings 支持 Absolute / Relative、Aligned / Overlay / Reserved、Fit / Stretch / Crop，以及按键高度、
 透明度、间距、亮度、编号、Field 范围和调试统计。配置在本机保存，重启后恢复。
-连接后工具栏默认自动隐藏，保留 Menu 按钮；统计默认关闭，视频错误仍会显示。
+主画面只保留小设置入口，边距一致。第一次点击使用 Android 系统 Toast 提示“再按一下进入设置”，2 秒内再次点击进入设置。
+USB 连接、断开和日志合在「连接」页的 USB 卡片中，自动寻找独立显示；未连接时默认打开此页。性能统计默认关闭。
 
 Aligned 布局以真实画面定位上方 Field、中央 A/S/D/F 和两侧 Shift/Space，
 触区随视频缩放移动，黑边不接受游戏触摸。**Button touch height** 默认 40%，可调 10–50%；
@@ -129,6 +138,21 @@ PC 视频质量与 Field 参数可以保存为默认配置：
 默认文件为 `%LOCALAPPDATA%\InFalsusTouch\host.ini`。`--profile PATH` 选择其他配置；
 显式命令行参数始终覆盖保存值，`--no-profile` 只在本次运行忽略配置。损坏配置会报错，
 不会静默覆盖。详见 [SETTINGS.md](docs/SETTINGS.md)。
+
+## Cooperative play and key sync
+
+一个 Host 最多接受七台手机，同玩 PC 上的一局；电脑键盘和鼠标也可以参与。
+多个设备按同一个键时，Host 合并长按，最后一个持有者松手才抬键。断线、超时或打开设置
+只释放该设备自己的输入。多个设备显示 Field 时，先触摸者控制，松手后交给等待中的设备；
+等待期间本地 Field 标记使用暖色。所有手机共用一次窗口采集和硬件编码，慢视频接收端单独断开重试。
+
+Host 默认监测 `%USERPROFILE%\AppData\LocalLow\lowiro\infalsus\userV2.prefs`，
+同步六轨按键名称和物理扫描码。文件只读，不修改存档。保存的键位改变后先释放旧按键，
+再向手机发送新绑定，需重新按下才继续输入。当前支持已观察到的 `keybind_state=0`
+键盘绑定；未知键或其他绑定状态会明确暂停输入，避免猜测后发送错键。
+`--bindings PATH` 可指定配置位置，`--no-key-sync` 可使用默认键位。
+
+新输入协议为 v2，Host 与 APK 必须一起更新；v1 客户端会被拒绝。
 
 ## Window and Field calibration
 
@@ -184,4 +208,4 @@ flowchart TD
 
 正常断开连接会立即清理被 Host 记录为按下的键。USB 拔线但 TCP 未及时报告 EOF 时，
 Host 最多等待约 500 ms 心跳超时加系统调度开销后释放。强制杀进程或系统崩溃不保证执行清理。
-协议 v1 信任本机及已授权 USB 调试设备；loopback 上没有另外的身份认证。
+协议 v2 信任本机及已授权 USB 调试设备；loopback 上没有另外的身份认证。

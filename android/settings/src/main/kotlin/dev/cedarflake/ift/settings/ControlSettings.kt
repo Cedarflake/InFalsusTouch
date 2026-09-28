@@ -5,6 +5,8 @@ enum class LayoutMode { OVERLAY, RESERVED, ALIGNED }
 enum class VideoScale { FIT, FILL, CROP }
 
 data class ControlSettings(
+  val language: String = "system",
+  val controlsMask: Int = 127,
   val fieldMode: FieldMode = FieldMode.ABSOLUTE,
   val layoutMode: LayoutMode = LayoutMode.ALIGNED,
   val videoScale: VideoScale = VideoScale.FIT,
@@ -24,6 +26,8 @@ data class ControlSettings(
   val judgment: JudgmentLayout = JudgmentLayout(),
 ) {
   init {
+    require(language in setOf("system", "en", "zh"))
+    require(controlsMask in 0..127)
     require(laneHeight in 0.1f..0.5f)
     require(fieldHeight in 0.1f..1f)
     require(fieldLeft in 0f..1f && fieldRight in 0f..1f && fieldLeft < fieldRight)

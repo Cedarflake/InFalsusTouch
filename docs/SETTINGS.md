@@ -5,13 +5,32 @@ remain on the PC; neither side uploads configuration to a service.
 
 ## Phone
 
-Open **Settings** from the toolbar, or **Menu** after it hides. Save applies the
+Tap the small **Settings** entry twice within two seconds. The first tap uses an
+Android system Toast for “Tap again to open settings”; expiration resets the guard.
+The return control sits on the opposite side from the gameplay entry. Save applies the
 changes and commits them on a background writer. A failed write is reported;
 session settings remain usable. Invalid stored values fall back to defaults
-with a visible notification. Defaults resets the entire phone configuration.
+with a visible notification. Defaults resets phone controls while retaining the chosen language.
+The Material 3 UI switches English/Chinese immediately; unsaved control edits remain in the draft.
+The app fills the physical screen. Settings transitions keep a fixed Flutter surface;
+only controls and text avoid the camera cutout. USB actions and connection details
+live in **Connection**, which opens first when disconnected. The latest transport
+log is inside the USB card; automatic discovery remains in a separate section. Its action stays fixed
+in size, with centered text, immediate progress feedback and cancelable automatic
+retries. Gameplay shows only a 48 dp settings entry with equal 8 dp edge margins;
+it switches corners only if the actual cutout overlaps. UI buttons/chips use full
+pill shapes, the settings entry is circular, and cards have larger 32 dp corners.
+Gameplay lane shapes are unchanged. A partial key selection packs in original lane
+order and centers horizontally, preserving each key's width and height. Drawing
+and hit testing share those translated regions; key numbers and bindings retain
+their original lane identity. Showing all six keys keeps the original chart layout.
+Field and video placement remain independent. Settings use the full screen
+width; only controls intersecting an actual cutout receive local padding.
 
 | Setting | Default / bounds |
 | --- | --- |
+| Language | System initially; English or 中文 can be chosen and persisted |
+| Visible controls | All six lanes and Field; any subset including none is valid and saved per phone |
 | Field mode | Absolute; Relative is available |
 | Layout | Aligned Field + Floor; fixed Overlay and Reserved are also available |
 | Video scaling | Fit: complete, centered, undistorted image; Stretch changes proportions; Crop hides edges |
@@ -25,12 +44,11 @@ with a visible notification. Defaults resets the entire phone configuration.
 | Labels | On |
 | Video statistics / Field outline | Off |
 | Find USB Host automatically | Off; opt in for foreground retry |
-| Hide toolbar while connected | On; four seconds, with a Menu button |
+| Settings entry | Two taps within two seconds; no expanded gameplay toolbar |
 
 Fit is the recommended reading mode. A 16:9 game occupies 1920 x 1080 pixels on
-a 2400 x 1080 phone, with 240-pixel side bars. Opposing cutout/system-bar insets
-are made symmetric so a camera cutout cannot move the picture off center.
-Video, lane controls and Field calibration share the same safe content area.
+a 2400 x 1080 phone, with 240-pixel side bars. App UI insets do not resize this
+picture. Video, lane controls and Field calibration share physical screen coordinates.
 The default Aligned layout centers video on the screen; Reserved centers it in
 the smaller area above the lanes. Crop would hide 135 pixels at each of the top
 and bottom edges when filling this phone, potentially obscuring notes or the
@@ -52,6 +70,16 @@ The default 40% button height is independent of the lower judgment-line height.
 Pressed fills and judgment highlights are rendered locally and stay active until
 the last finger on that lane lifts. The Field marker shows the local touch position,
 not a confirmation of the PC game's cursor position.
+Each lane places a large bold number above a smaller synchronized IF key name.
+Both lines are centered, with consistent type sizes and fitting for long key names.
+
+**Controls / 按键显示** uses seven independent chips with current IF key names.
+Hidden lanes cannot acquire a touch; visible lanes keep their original positions.
+All / Keys only / Field only / View only presets affect only this device. In Field-only
+mode the gesture region extends farther down the picture. Other phones can overlap
+these choices, and unassigned operations may be handled by the PC keyboard/mouse.
+There is no forced sum across devices. The connection count includes view-only phones.
+If another phone currently owns Field, local feedback is amber until ownership passes.
 
 **Align game judgment lines** records six taps: Field left/right, central Floor
 left/right, then the outer left/right side-line endpoints. Points use video
@@ -60,7 +88,7 @@ gameplay lines. The preset was observed in the installed game's 16:9 tutorial;
 it is not automatic chart recognition. Existing saved layouts remain selected.
 
 The fixed-layout Field calibration screen covers the same usable display area as the
-controller, including the same system/cutout insets. Tap the comfortable left
+controller; its toolbar separately avoids the cutout. Tap the comfortable left
 edge, then the right edge, within the Field region. The minimum calibrated span
 is 5% of the controller width. Save commits the range; Cancel leaves it unchanged.
 Opening calibration first saves any pending settings in the dialog. Editing an

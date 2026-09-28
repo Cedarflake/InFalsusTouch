@@ -1,6 +1,7 @@
 plugins {
   id("com.android.application")
   kotlin("android")
+  id("dev.flutter.flutter-gradle-plugin")
 }
 
 android {
@@ -11,8 +12,8 @@ android {
     applicationId = "dev.cedarflake.infalsustouch"
     minSdk = 26
     targetSdk = 35
-    versionCode = 4
-    versionName = "0.4.0-prototype"
+    versionCode = 5
+    versionName = "0.5.0-prototype"
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
   compileOptions {
@@ -20,6 +21,10 @@ android {
     targetCompatibility = JavaVersion.VERSION_17
   }
   kotlinOptions.jvmTarget = "17"
+}
+
+flutter {
+  source = "../.."
 }
 
 dependencies {

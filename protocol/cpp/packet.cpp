@@ -29,8 +29,18 @@ std::uint64_t readInteger(std::span<const std::uint8_t> bytes,
 }
 
 void validatePacket(const Packet& packet) {
+  if (packet.type == MessageType::configuration) {
+    if (packet.lane > 127 || packet.status > 2 || packet.sequence == 0 ||
+        !std::isfinite(packet.value) || packet.value < 1 || packet.value > 7 || std::floor(packet.value) != packet.value ||
+        (packet.timestampNs >> 48) != 0) throw ProtocolError("Invalid controller configuration");
+    for (unsigned shift = 0; shift < 48; shift += 8) {
+      const auto key = (packet.timestampNs >> shift) & 0xff;
+      if (key == 0 || key > 105) throw ProtocolError("Invalid binding code");
+    }
+    return;
+  }
   const auto type = static_cast<std::uint8_t>(packet.type);
-  if ((type < 1 || type > 7) && packet.type != MessageType::ack) {
+  if ((type < 1 || type > 10) && packet.type != MessageType::ack) {
     throw ProtocolError("Unknown message type");
   }
   const bool isLane = packet.type == MessageType::laneDown ||
@@ -39,7 +49,8 @@ void validatePacket(const Packet& packet) {
       (!isLane && packet.lane != 0)) {
     throw ProtocolError("Invalid lane");
   }
-  if (packet.status > 1 || (packet.type != MessageType::ack && packet.status != 0)) {
+  if ((packet.status != 0 && packet.status != 1 && packet.status != 2 && packet.status != 4) ||
+      (packet.type != MessageType::ack && packet.status != 0)) {
     throw ProtocolError("Invalid status");
   }
   if (!std::isfinite(packet.value)) {
@@ -53,6 +64,8 @@ void validatePacket(const Packet& packet) {
     if (packet.value < -1 || packet.value > 1) {
       throw ProtocolError("Relative Field value outside [-1, 1]");
     }
+  } else if (packet.type == MessageType::assignControls) {
+    if (packet.value < 0 || packet.value > 127 || std::floor(packet.value) != packet.value) throw ProtocolError("Invalid assignment mask");
   } else if (packet.value != 0) {
     throw ProtocolError("Unexpected value");
   }
@@ -62,7 +75,7 @@ PacketBytes encodePacket(const Packet& packet) {
   validatePacket(packet);
   PacketBytes bytes{};
   std::copy(magic.begin(), magic.end(), bytes.begin());
-  bytes[4] = 1;
+  bytes[4] = 2;
   bytes[5] = static_cast<std::uint8_t>(packet.type);
   bytes[6] = packet.lane;
   bytes[7] = packet.status;
@@ -76,7 +89,7 @@ Packet decodePacket(std::span<const std::uint8_t> bytes) {
   if (bytes.size() != packetSize) {
     throw ProtocolError("Incorrect packet size");
   }
-  if (!std::equal(magic.begin(), magic.end(), bytes.begin()) || bytes[4] != 1) {
+  if (!std::equal(magic.begin(), magic.end(), bytes.begin()) || bytes[4] != 2) {
     throw ProtocolError("Unsupported magic/version");
   }
   if (readInteger(bytes, 24, 8) != 0) {

@@ -3,6 +3,7 @@ add_executable(InFalsusTouchHost
   config/host-options.cpp
   config/profile-file.cpp
   config/field-calibration.cpp
+  config/game-bindings.cpp
   input/win32-input.cpp
   input/trace-input.cpp
   target/game-window.cpp

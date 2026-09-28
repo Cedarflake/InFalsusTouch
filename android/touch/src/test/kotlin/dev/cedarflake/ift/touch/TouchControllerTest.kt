@@ -9,6 +9,10 @@ import kotlin.test.assertNull
 class TouchControllerTest {
   private class Sink : TouchSink {
     val events = mutableListOf<String>()
+    var fieldBegins = 0
+    var fieldEnds = 0
+    override fun fieldBegin() { fieldBegins++ }
+    override fun fieldEnd() { fieldEnds++ }
     override fun laneDown(lane: Int) { events += "D$lane" }
     override fun laneUp(lane: Int) { events += "U$lane" }
     override fun fieldAbsolute(x: Float) { events += "A$x" }
@@ -19,6 +23,32 @@ class TouchControllerTest {
   private val sink = Sink()
   private val geometry = TouchGeometry(600f, 400f, ControlSettings())
   private val touch = TouchController(sink, geometry)
+
+  @Test fun hiddenKeysAndFieldNeverSendInput() {
+    val selected = TouchController(sink, TouchGeometry(600f, 400f, ControlSettings(controlsMask = 2)))
+    selected.down(0, 50f, 350f)
+    selected.down(1, 300f, 350f)
+    selected.down(2, 300f, 150f)
+    selected.up(1)
+    assertEquals(listOf("D2", "U2"), sink.events)
+    assertEquals(0, sink.fieldBegins)
+    selected.resize(TouchGeometry(600f, 400f, ControlSettings(controlsMask = 0)))
+    sink.events.clear()
+    selected.down(3, 150f, 350f)
+    selected.down(4, 300f, 150f)
+    assertEquals(emptyList(), sink.events)
+  }
+
+  @Test fun fieldOnlyUsesLowerPictureAndSignalsOwnershipUntilLastRelease() {
+    val selected = TouchController(sink, TouchGeometry(600f, 400f, ControlSettings(controlsMask = 64)))
+    selected.down(0, 150f, 350f)
+    selected.down(1, 400f, 350f)
+    selected.up(1)
+    assertEquals(1, sink.fieldBegins)
+    assertEquals(0, sink.fieldEnds)
+    selected.up(0)
+    assertEquals(1, sink.fieldEnds)
+  }
 
   @Test fun laneBoundariesUseHalfOpenIntervals() {
     for (lane in 0..5) {

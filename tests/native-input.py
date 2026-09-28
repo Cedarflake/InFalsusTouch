@@ -122,7 +122,7 @@ def main(focus_step, prepare_keyboard):
             assert user32.ClientToScreen(primary, ctypes.byref(origin))
             positions = []
             for x in (0.0, 0.5, 1.0):
-                assert send(4, value=x)[4] == 0
+                assert send(4, value=x)[4] in (0, 4)
                 time.sleep(0.03)
                 actual = wintypes.POINT()
                 assert user32.GetCursorPos(ctypes.byref(actual))

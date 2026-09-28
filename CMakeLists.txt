@@ -18,7 +18,10 @@ add_library(ift_core
   windows/input/field-mapper.cpp
   windows/input/input-state.cpp
   windows/input/input-session.cpp
+  windows/input/input-mixer.cpp
+  windows/input/control-group.cpp
   windows/config/host-profile.cpp
+  windows/config/key-bindings.cpp
 )
 target_include_directories(ift_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 

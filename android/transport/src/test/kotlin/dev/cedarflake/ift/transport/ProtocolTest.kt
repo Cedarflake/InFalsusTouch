@@ -21,7 +21,7 @@ class ProtocolTest {
         count++
       }
     }
-    assertEquals(8, count)
+    assertEquals(12, count)
   }
 
   @Test fun malformedFramesFailClosed() {

@@ -6,7 +6,7 @@ InputSession::InputSession(InputState& state) : state_(state) {}
 
 Packet InputSession::process(const Packet& packet, double seconds) {
   validatePacket(packet);
-  if (packet.type == MessageType::ack || packet.sequence != nextSequence_ ||
+  if (packet.type == MessageType::ack || packet.type == MessageType::configuration || packet.sequence != nextSequence_ ||
       (!hasHello_ && packet.type != MessageType::hello) ||
       (hasHello_ && packet.type == MessageType::hello)) {
     throw ProtocolError("Invalid session handshake/sequence/direction");

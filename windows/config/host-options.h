@@ -14,6 +14,8 @@ struct HostOptions {
   std::wstring title = L"In Falsus";
   std::wstring tracePath;
   std::wstring profilePath;
+  std::wstring bindingsPath;
+  bool syncBindings = true;
   FieldConfig field;
   VideoOptions video;
   bool dryRun = false;

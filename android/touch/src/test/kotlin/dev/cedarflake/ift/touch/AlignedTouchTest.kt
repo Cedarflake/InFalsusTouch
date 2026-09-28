@@ -2,6 +2,7 @@ package dev.cedarflake.ift.touch
 
 import dev.cedarflake.ift.settings.ControlSettings
 import dev.cedarflake.ift.settings.JudgmentLayout
+import dev.cedarflake.ift.settings.LayoutMode
 import dev.cedarflake.ift.settings.VideoScale
 import dev.cedarflake.ift.settings.placeVideo
 
@@ -13,6 +14,39 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class AlignedTouchTest {
+  @Test fun partialSelectionsCenterWithoutResizingShapesOrChangingLaneIds() {
+    for (mode in LayoutMode.entries) {
+      val settings = ControlSettings(layoutMode = mode, laneHeight = 0.1f)
+      val video = placeVideo(2400, 1080, 1280, 720, settings)
+      val original = TouchGeometry(2400f, 1080f, settings, video)
+      for (mask in 1 until 63) {
+        val geometry = TouchGeometry(2400f, 1080f, settings.copy(controlsMask = mask or 64), video)
+        val selected = (0..5).filter { mask and (1 shl it) != 0 }
+        val first = geometry.laneRegions[selected.first()]
+        val last = geometry.laneRegions[selected.last()]
+        assertEquals(1200f, (first.left + last.right) / 2f, 0.001f)
+        assertNull(geometry.laneAt(first.left - 1f, 1070f))
+        assertNull(geometry.laneAt(last.right + 1f, 1070f))
+        for (lane in selected) {
+          val region = geometry.laneRegions[lane]
+          val previous = original.laneRegions[lane]
+          assertEquals(previous.right - previous.left, region.right - region.left, 0.001f)
+          assertEquals(previous.topLeft, region.topLeft)
+          assertEquals(previous.topRight, region.topRight)
+          assertEquals(previous.bottom, region.bottom)
+          assertEquals(previous.judgmentLeft, region.judgmentLeft)
+          assertEquals(previous.judgmentRight, region.judgmentRight)
+          val x = (region.left + region.right) / 2f
+          val y = (maxOf(region.topLeft, region.topRight) + region.bottom) / 2f
+          assertEquals(lane, geometry.laneAt(x, y))
+          assertFalse(geometry.isField(x, y))
+        }
+        assertEquals(original.fieldLeft, geometry.fieldLeft)
+        assertEquals(original.fieldRight, geometry.fieldRight)
+      }
+    }
+  }
+
   @Test fun judgmentRegionsFollowFitStretchAndCropOnDifferentScreens() {
     for ((width, height) in listOf(2400 to 1080, 1920 to 1080, 1600 to 1200)) {
       for (scale in VideoScale.entries) {

@@ -43,6 +43,7 @@ HostOptions parseOptions(int argc, wchar_t** argv) {
     if (option == L"--save-profile") { options.saveProfile = true; continue; }
     if (option == L"--calibrate") { options.calibrate = true; continue; }
     if (option == L"--no-profile") { useProfile = false; continue; }
+    if (option == L"--no-key-sync") { options.syncBindings = false; continue; }
     if (option == L"--video" || option == L"--no-video") {
       options.video.enabled = option == L"--video";
       explicitVideo = true;
@@ -120,6 +121,8 @@ HostOptions parseOptions(int argc, wchar_t** argv) {
       options.title = value;
     } else if (option == L"--trace") {
       options.tracePath = value;
+    } else if (option == L"--bindings") {
+      options.bindingsPath = value;
     } else if (option == L"--field-left") {
       options.field.left = number(value);
     } else if (option == L"--field-right") {
@@ -154,6 +157,9 @@ void printHelp() {
     "  --window 0xHANDLE       Select an exact window\n"
     "  --title TEXT            Match title (default: In Falsus)\n"
     "  --port 27184            Control listener on 127.0.0.1 only\n"
+    "  Up to 7 USB controllers choose their own visible keys and Field.\n"
+    "  --bindings PATH         Override In Falsus userV2.prefs path (read only)\n"
+    "  --no-key-sync           Use default Shift/A/S/D/F/Space bindings\n"
     "  --no-video              Input only (video is enabled by default)\n"
     "  --video-port 27183      Independent loopback video listener\n"
     "  --resolution 720p       720p or 1080p, client aspect preserved\n"

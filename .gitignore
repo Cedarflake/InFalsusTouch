@@ -4,6 +4,7 @@
 /dist/
 **/.gradle/
 **/.kotlin/
+**/.cxx/
 **/build/
 **/local.properties
 *.user
@@ -11,3 +12,8 @@
 .idea/
 *.log
 __pycache__/
+/.dart_tool/
+/.flutter-plugins-dependencies
+/coverage/
+/android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java
+/windows/flutter/

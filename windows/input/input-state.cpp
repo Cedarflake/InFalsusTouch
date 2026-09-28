@@ -37,6 +37,11 @@ bool InputState::apply(const Packet& packet, double seconds) {
   if (!isReady() || packet.type == MessageType::ping) {
     return isReady();
   }
+  if ((packet.type == MessageType::laneDown || packet.type == MessageType::laneUp) &&
+      !(controls_ & (1u << (packet.lane - 1)))) return true;
+  if ((packet.type == MessageType::fieldBegin || packet.type == MessageType::fieldEnd ||
+       packet.type == MessageType::fieldAbsolute || packet.type == MessageType::fieldRelative) &&
+      !(controls_ & 64)) return true;
   if (packet.type == MessageType::laneDown || packet.type == MessageType::laneUp) {
     auto& pressed = pressed_[packet.lane - 1];
     const bool down = packet.type == MessageType::laneDown;
@@ -50,6 +55,9 @@ bool InputState::apply(const Packet& packet, double seconds) {
       }
       pressed = down;
     }
+  } else if (packet.type == MessageType::fieldBegin || packet.type == MessageType::fieldEnd) {
+    sink_.field(packet.type == MessageType::fieldBegin);
+    relative_.reset();
   } else if (packet.type == MessageType::fieldAbsolute) {
     if (!sink_.absolute(mapField(packet.value, client_, config_))) {
       throw std::runtime_error("Absolute mouse injection failed");
@@ -61,6 +69,12 @@ bool InputState::apply(const Packet& packet, double seconds) {
     }
   }
   return true;
+}
+
+void InputState::setControls(std::uint8_t mask) {
+  if (!releaseAll()) throw std::runtime_error("Key release failed during reassignment");
+  controls_ = mask;
+  needsBarrier_ = true;
 }
 
 bool InputState::releaseAll() noexcept {
@@ -75,6 +89,7 @@ bool InputState::releaseAll() noexcept {
     }
   }
   relative_.reset();
+  sink_.field(false);
   return released;
 }
 

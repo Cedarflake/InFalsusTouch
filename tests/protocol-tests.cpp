@@ -34,7 +34,7 @@ void protocolTests() {
     }
     ++count;
   }
-  check(count == 8, "Missing protocol vectors");
+  check(count == 12, "Missing protocol vectors");
 
   const auto good = encodePacket({MessageType::hello});
   for (std::size_t size = 0; size < packetSize; ++size) {

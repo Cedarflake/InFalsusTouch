@@ -18,7 +18,11 @@ enum class MessageType : std::uint8_t {
   fieldRelative = 5,
   releaseAll = 6,
   ping = 7,
+  fieldBegin = 8,
+  fieldEnd = 9,
+  assignControls = 10,
   ack = 128,
+  configuration = 129,
 };
 
 struct Packet {

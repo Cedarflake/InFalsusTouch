@@ -1,10 +1,28 @@
-param([switch]$SkipLint, [switch]$DeviceTests)
+param([switch]$SkipLint, [switch]$DeviceTests, [switch]$SkipFlutterChecks)
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
+$flutterCommand = Get-Command flutter -ErrorAction Stop
+$flutterSdk = Split-Path -Parent (Split-Path -Parent $flutterCommand.Source)
+$localProperties = Join-Path $repoRoot 'android\local.properties'
+if (-not (Test-Path -LiteralPath $localProperties)) { throw 'Configure sdk.dir in android/local.properties first' }
+$properties = @(Get-Content -LiteralPath $localProperties | Where-Object { $_ -notmatch '^flutter.sdk=' })
+$properties += 'flutter.sdk=' + $flutterSdk.Replace('\', '/')
+[System.IO.File]::WriteAllLines($localProperties, $properties, [System.Text.UTF8Encoding]::new($false))
 $env:GRADLE_USER_HOME = Join-Path $repoRoot '.cache\gradle'
 $env:ANDROID_USER_HOME = Join-Path $repoRoot '.cache\android'
 $javaSocketDir = Join-Path $repoRoot '.cache\java-tmp'
 New-Item -ItemType Directory -Force -Path $javaSocketDir | Out-Null
+Push-Location $repoRoot
+try {
+  & $flutterCommand.Source pub get --offline
+  if ($LASTEXITCODE -ne 0) { throw 'Flutter dependencies are missing; run flutter pub get once with network access' }
+  if (-not $SkipFlutterChecks) {
+    & $flutterCommand.Source analyze --no-pub
+    if ($LASTEXITCODE -ne 0) { throw 'Flutter analysis failed' }
+    & $flutterCommand.Source test --no-pub --concurrency=1
+    if ($LASTEXITCODE -ne 0) { throw 'Flutter tests failed' }
+  }
+} finally { Pop-Location }
 $env:JAVA_TOOL_OPTIONS = "$env:JAVA_TOOL_OPTIONS `"-Djdk.net.unixdomain.tmpdir=$javaSocketDir`"".Trim()
 $gradle = Join-Path $repoRoot '.tools\gradle-8.11.1\bin\gradle.bat'
 if (-not (Test-Path -LiteralPath $gradle)) { $gradle = Join-Path $repoRoot 'android\gradlew.bat' }

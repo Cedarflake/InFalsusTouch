@@ -1,0 +1,16 @@
+include: package:flutter_lints/flutter.yaml
+
+analyzer:
+  language:
+    strict-casts: true
+    strict-inference: true
+    strict-raw-types: true
+  exclude:
+    - build/**
+    - .tools/**
+    - .cache/**
+
+linter:
+  rules:
+    prefer_single_quotes: false
+    prefer_double_quotes: true

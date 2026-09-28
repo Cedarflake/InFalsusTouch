@@ -81,9 +81,11 @@ def main():
                     nonlocal sequence
                     sequence += 1
                     sent = time.perf_counter_ns()
-                    packet = INPUT.pack(b"IFT1", 1, message, lane, 0, sequence, 0.0, sent, 0)
+                    packet = INPUT.pack(b"IFT1", 2, message, lane, 0, sequence, 0.0, sent, 0)
                     control.sendall(packet)
                     ack = INPUT.unpack(read_exact(control, 32))
+                    while ack[2] == 129:
+                        ack = INPUT.unpack(read_exact(control, 32))
                     assert ack[2] == 128 and ack[5] == sequence and ack[7] == sent
                     rtts.append((time.perf_counter_ns() - sent) / 1e6)
 

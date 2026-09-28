@@ -31,6 +31,8 @@ class HostInteropTest {
       }
       client.connect()
       listener.awaitReady()
+      val configuration = listener.configurations.poll(2, TimeUnit.SECONDS)
+      assertTrue(configuration != null && configuration.peers == 1 && configuration.labels.size == 6)
       for (lane in 1..6) client.send(MessageType.LANE_DOWN, lane)
       client.send(MessageType.FIELD_ABSOLUTE, value = 0.5f)
       awaitCondition { trace.exists() && trace.readLines().contains("ABS 640 360") }

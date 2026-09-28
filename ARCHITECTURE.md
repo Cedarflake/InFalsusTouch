@@ -2,7 +2,8 @@
 
 InFalsusTouch is a USB-connected Android touch controller for the Windows game
 In Falsus. Input latency and stable holds take priority over video quality.
-The implementation follows the original [requirements](docs/requirements.md).
+The implementation follows the original [requirements](docs/requirements.md), with subsequent
+user decisions adding Flutter Material 3, bilingual UI and optional cooperative USB play.
 
 ## Components and boundaries
 
@@ -23,7 +24,8 @@ flowchart LR
 
 | Directory | Responsibility |
 | --- | --- |
-| `android/app` | Activity lifecycle, native custom touch View, connection UI |
+| `lib` | Flutter Material 3 settings entry, bilingual settings, display selection and calibration |
+| `android/app` | FlutterActivity lifecycle, full-screen Flutter surface, native touch routing and platform bridge |
 | `android/touch` | Pure Kotlin pointer ownership, hit testing and lane counts |
 | `android/transport` | Pure JVM protocol codec, bounded queue, TCP connection |
 | `android/settings` | Validated layout, video placement and Field configuration |
@@ -67,14 +69,24 @@ owns the socket output and packet sequence; a reader consumes ACKs. Heartbeats
 and ACK deadlines detect stalled writes as well as a disconnected host. Session
 generations prevent old workers from changing a newly connected session.
 
-Windows has one control worker and one active input session. The worker owns all
-injected-key state and releases it before destroying the sink. Its polling budget
+Windows has one control worker and up to seven independent input sessions. Each
+session owns its sequence, framing, heartbeat, focus barrier and displayed controls.
+The shared input mixer counts holders across devices; disconnect releases only
+that device's contributions. Field uses first-touch ownership and FIFO handoff.
+Controls may overlap or be entirely hidden; there is no mandatory total count.
+Partial phone key selections pack in lane order and center horizontally. Rendering
+and hit testing share the translated regions, preserving shape dimensions and lane
+identity. Full six-key selections keep the calibrated chart positions.
+The worker owns all injected-key state and releases it before destroying the sink. Its polling budget
 is short enough to check window focus without waiting for another touch packet.
 Normal input has no synchronous file/console logging. Test tracing is opt-in.
 
 Video capture, encoding, sending and decoding use separate workers and sockets.
 The capture callback owns a latest-frame slot, and a video worker drives the GPU,
-async encoder events and a nonblocking sender. Encoding is limited to three
+async encoder events and nonblocking senders for up to seven viewers. Each frame
+is encoded once and its immutable payload is shared. A joining viewer waits for
+an IDR and receives its own CONFIG/sequence. A slow peer loses only its video
+connection after the bounded queue or send deadline, without blocking others. Encoding is limited to three
 samples; each sample owns its NV12 texture. The Android receiver holds two
 compressed frames; its decoder allows two submitted samples plus one current
 packet. H.264 dependent frames cannot be dropped arbitrarily: after overflow,
@@ -89,6 +101,22 @@ See [VIDEO_PROTOCOL.md](protocol/VIDEO_PROTOCOL.md) for all deadlines and clocks
 
 ## Video and layout contract (Phase 2 onward)
 
+Flutter renders into a fixed full-screen transparent texture above native SurfaceView
+and ControllerView. Switching panels never resizes this texture. Flutter reports
+visible menu rectangles after layout; ControllerRoot routes each complete gesture
+to the UI or native ControllerView based on its first pointer. Gameplay MotionEvents
+do not traverse Dart, platform views or a method channel, even when a held finger
+crosses the menu. Settings/calibration release and block native input. A typed method channel transfers settings and state;
+statistics are throttled to four updates per second. Theme and language are shared
+across Material 3 controls. Key presses repaint immediately in the native View.
+
+The host reads IF's bounded local preferences and translates Unity Input System Key
+identifiers to physical scan codes, including E0 extended keys. Binding changes
+release all old holds before changing scan codes and reinstall each focus barrier.
+Configuration frames deliver six key labels and per-device display selections.
+Unsupported or temporarily malformed preferences pause input until a valid file
+returns. The game's file is never written by Host.
+
 Capture only the selected window with Windows Graphics Capture. The encoder is a
 hardware, D3D11-aware async H.264 MFT on the capture GPU. It requests Baseline
 (no B slices), low latency, CBR and a short GOP. Unsupported optional codec controls
@@ -100,7 +128,11 @@ line, four central Floor lanes and two side lines use normalized picture coordin
 Buttons extend upward to a configurable height independently of their judgment
 lines. Field movement uses the region above those buttons. Local pressed fills
 and highlights share the same geometry and do not wait for a PC acknowledgement.
-Physical screen insets are symmetric; black bars and clipped pixels reject touches.
+App surfaces cover the physical screen; only UI controls apply cutout-safe padding.
+Video aspect ratio and centering are independent of those UI insets. Black bars and
+clipped pixels reject gameplay touches. The 48 dp settings entry uses equal 8 dp
+edge margins, avoids actual cutout rectangles and requires two taps within two seconds.
+Connection controls only appear inside settings; first-tap feedback does not block input.
 The window requests 120 Hz independently of the video's source frame-rate hint.
 The phone exposes Stretch, Crop, Overlay and Reserved with persistent touch/display
 settings. Calibration overlays share the controller's exact dimensions and

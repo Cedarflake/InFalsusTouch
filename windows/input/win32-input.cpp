@@ -7,15 +7,28 @@
 namespace ift {
 
 bool Win32Input::key(std::uint8_t lane, bool down) noexcept {
-  constexpr std::array<WORD, 6> scanCodes{0x2a, 0x1e, 0x1f, 0x20, 0x21, 0x39};
-  if (lane < 1 || lane > scanCodes.size()) {
+  if (lane < 1 || lane > bindings_.size()) {
     return false;
   }
+  const auto index = static_cast<std::size_t>(lane - 1);
+  const auto scan = keyScanCode(bindings_[index]);
+  if (!scan) return false;
+  if (pressed_[index] == down) return true;
+  const bool heldElsewhere = [&] {
+    for (std::size_t other = 0; other < pressed_.size(); ++other) {
+      if (other != index && pressed_[other] && bindings_[other] == bindings_[index]) return true;
+    }
+    return false;
+  }();
+  if (heldElsewhere) { pressed_[index] = down; return true; }
+  if (down) pressed_[index] = true;
   INPUT input{};
   input.type = INPUT_KEYBOARD;
-  input.ki.wScan = scanCodes[lane - 1];
-  input.ki.dwFlags = KEYEVENTF_SCANCODE | (down ? 0u : KEYEVENTF_KEYUP);
-  return SendInput(1, &input, sizeof(INPUT)) == 1;
+  input.ki.wScan = scan & 0xff;
+  input.ki.dwFlags = KEYEVENTF_SCANCODE | (scan > 0xff ? KEYEVENTF_EXTENDEDKEY : 0u) | (down ? 0u : KEYEVENTF_KEYUP);
+  if (SendInput(1, &input, sizeof(INPUT)) != 1) return false;
+  pressed_[index] = down;
+  return true;
 }
 
 bool Win32Input::absolute(Point clientPoint) noexcept {

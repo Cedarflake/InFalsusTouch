@@ -7,6 +7,8 @@ interface TouchSink {
   fun laneUp(lane: Int)
   fun fieldAbsolute(x: Float)
   fun fieldRelative(deltaX: Float)
+  fun fieldBegin() {}
+  fun fieldEnd() {}
   fun releaseAll()
 }
 
@@ -38,6 +40,7 @@ class TouchController(private val sink: TouchSink, private var geometry: TouchGe
       owners[pointerId] = FIELD
       fieldPointerId = pointerId
       previousFieldX = geometry.normalizedX(x)
+      sink.fieldBegin()
       if (geometry.settings.fieldMode == FieldMode.ABSOLUTE) sink.fieldAbsolute(previousFieldX)
     }
   }
@@ -59,7 +62,7 @@ class TouchController(private val sink: TouchSink, private var geometry: TouchGe
     val owner = owners[pointerId]
     owners[pointerId] = NONE
     if (owner in 1..6 && --laneCounts[owner - 1] == 0) sink.laneUp(owner)
-    if (pointerId == fieldPointerId) fieldPointerId = -1
+    if (pointerId == fieldPointerId) { fieldPointerId = -1; sink.fieldEnd() }
   }
 
   fun cancel() {

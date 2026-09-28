@@ -3,16 +3,12 @@ package dev.cedarflake.ift
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.os.Handler
-import android.os.Build
 import android.os.Looper
 import android.os.SystemClock
 import android.view.InputDevice
-import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.PixelCopy
 import android.view.SurfaceView
-import android.view.inspector.WindowInspector
-import android.widget.Button
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -36,13 +32,13 @@ import java.util.concurrent.atomic.AtomicReference
 class VideoDeviceTest {
   @Test fun usbVideoRendersColorsWhileSevenPointersHoldAndReconnects() {
     assumeTrue(InstrumentationRegistry.getArguments().getString("usbVideo") == "true")
-    DeviceSettings { it.copy(layoutMode = LayoutMode.OVERLAY, autoConnect = false, autoHideControls = true) }.use { verifyVideo() }
+    DeviceSettings { it.copy(controlsMask = 127, layoutMode = LayoutMode.OVERLAY, autoConnect = false, autoHideControls = true) }.use { verifyVideo() }
   }
 
   private fun verifyVideo() {
     val instrumentation = InstrumentationRegistry.getInstrumentation()
     DeviceActivity.launch().use { scenario ->
-      scenario.onActivity { it.findViewById<android.view.ViewGroup>(android.R.id.content).findViewWithTag<Button>("connect").performClick() }
+      scenario.onActivity { it.toggleConnection() }
       val first = waitForFrames(scenario, 100)
       assertTrue("Decoder should make sustained progress", first.presentFps > 20)
       val bitmap = Bitmap.createBitmap(1280, 720, Bitmap.Config.ARGB_8888)
@@ -79,18 +75,10 @@ class VideoDeviceTest {
       val steadyPresentFps = (held.presentedFrames - first.presentedFrames) / steadySeconds
       assertTrue("Expected sustained 720p60 reception, got $steadyReceiveFps", steadyReceiveFps in 58.0..62.0)
       assertTrue("Presentation rate fell below the acceptance bound: $steadyPresentFps", steadyPresentFps in 55.0..63.0)
-      scenario.onActivity { activity ->
-        val content = activity.findViewById<android.view.ViewGroup>(android.R.id.content)
-        content.findViewWithTag<Button>("menu").performClick()
-        content.findViewWithTag<Button>("settings").performClick()
-      }
+      scenario.onActivity { it.setPanel("settings") }
       SystemClock.sleep(500)
-      if (Build.VERSION.SDK_INT >= 29) {
-        scenario.onActivity {
-          val button = WindowInspector.getGlobalWindowViews()
-            .firstNotNullOfOrNull { it.findViewWithTag<Button>("calibrate-touch") }
-          requireNotNull(button).performClick()
-        }
+      run {
+        scenario.onActivity { it.setPanel("calibrateField") }
         instrumentation.waitForIdleSync()
         SystemClock.sleep(300)
         scenario.onActivity { activity ->
@@ -104,11 +92,7 @@ class VideoDeviceTest {
           }
           screenshot.recycle()
         }
-        scenario.onActivity { it.findViewById<android.view.ViewGroup>(android.R.id.content)
-          .findViewWithTag<Button>("calibration-cancel").performClick() }
-      } else {
-        instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
-        instrumentation.waitForIdleSync()
+        scenario.onActivity { it.setPanel("toolbar") }
       }
       scenario.onActivity { activity ->
         val view = activity.findViewById<android.view.ViewGroup>(android.R.id.content).findViewWithTag<ControllerView>("controller")
@@ -132,10 +116,10 @@ class VideoDeviceTest {
         .put("captureAvailableToEncodeMs", held.captureToEncodeMs).put("decodeMs", held.decoderMs)
         .put("receiveToPresentMs", held.receiveToPresentMs)
       File(instrumentation.targetContext.filesDir, "video-metrics.json").writeText(metrics.toString(2))
-      scenario.onActivity { it.findViewById<android.view.ViewGroup>(android.R.id.content).findViewWithTag<Button>("connect").performClick() }
+      scenario.onActivity { it.toggleConnection() }
       SystemClock.sleep(500)
       scenario.onActivity { assertEquals(null, it.videoSnapshot) }
-      scenario.onActivity { it.findViewById<android.view.ViewGroup>(android.R.id.content).findViewWithTag<Button>("connect").performClick() }
+      scenario.onActivity { it.toggleConnection() }
       assertTrue(waitForFrames(scenario, 60).presentedFrames >= 60)
     }
   }
