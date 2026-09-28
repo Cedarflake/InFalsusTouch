@@ -14,7 +14,8 @@ The latest aligned layout has taller 40% buttons, native pressed feedback, six-p
 judgment calibration, centered full-frame video and an independent 120 Hz display hint.
 Physical gameplay acceptance remains open. Relative Field is now the default,
 following the user's tablet trial and game-managed sensitivity decision.
-Experimental absolute Field alignment remains unresolved.
+The replacement absolute path now passes game-state positioning checks on the
+supported 1.0.4b build; physical phone/video alignment remains open.
 The 2026-09-29 UI update consolidates USB logs, centers partial key selections,
 adds automatic settings saving and appearance preferences, and keeps the connection
 action on the status row. The Controls page combines cooperative play and key/IME
@@ -23,12 +24,25 @@ Android system Toasts, including calibration without video and failed settings s
 The full 12-test device suite passed, followed by two focused Toast/entry tests after
 checking that page changes do not prematurely cancel error feedback.
 
-The Field update uses a fixed 1280-unit horizontal reference, retains fractional
-movement and removes Host gain, acceleration, smoothing and speed limiting.
+The latest Field update preserves actual horizontal touch pixels in Relative mode,
+including fast swipes and movement outside calibrated edges. Host adds no gain,
+acceleration, smoothing or speed limiting. Direct Absolute reads the game's raw
+position and effective sensitivity, then sends relative corrections without
+duplicating pending input. Repeated taps and 240 targets at 120 events/second passed
+in a normal chart. No fixed sensitivity is required.
 Old phone preferences switch to Relative while preserving other settings; old
 Host profiles retain calibration/video and retire their relative tuning values.
 [FIELD-MAPPING.md](FIELD-MAPPING.md) records the game probes and comparisons with
 InFalsusTouchTool, Moonlight and Sunshine.
+
+Touch settings now include optional Button vibration, off by default, with English/
+Chinese labels and automatic persistence. Native virtual-key feedback runs locally
+on a lane's first DOWN, independently of Host acknowledgement. Long holds, UP and
+Field sliding do not retrigger it. The system haptic preference is respected.
+Field's visible touch boundary now follows the selected buttons' upper edges,
+including slanted side keys. This removes the approximately 41-pixel dead strip
+reported with 30% button height and the user's calibration; judgment positions
+and button shapes are unchanged.
 
 ## Acceptance gates
 
@@ -38,18 +52,18 @@ InFalsusTouchTool, Moonlight and Sunshine.
 | Windows host compilation | Passed, MSVC 19.44 / CMake 3.31.6 / Windows SDK 10.0.26100.0 |
 | Android APK compilation | Passed, Gradle 8.11.1 / AGP 8.9.2 / Kotlin 2.1.20 / JDK 21 |
 | C++ input protocol / input state / mapping / video / profile / cooperative suites | 6/6 passed |
-| Kotlin settings / touch / input+video protocol / queue / socket / native-host tests | 37/37 passed, no skips; includes relative retouch, native-host deltas and 186 partial-selection/layout combinations |
-| Flutter analysis and UI tests | No analysis issues; 19/19 tests passed |
+| Kotlin settings / touch / input+video protocol / queue / socket / native-host tests | 42/42 passed, no skips; includes gap-free Field/button boundaries, pixel-preserving relative movement, large swipes, native-host deltas, haptic-setting codecs and 186 partial-selection/layout combinations |
+| Flutter analysis and UI tests | No analysis issues; 20/20 tests passed, including bilingual vibration toggle and immediate saving |
 | Native profile persistence and CLI precedence integration | Passed, including legacy tuning migration, retired flags, invalid/missing profile and unchanged-file failure checks |
 | TCP disconnect / malformed / reconnect integration | 8/8 checks passed, including coalesced full-width relative movement |
 | Android lint | Passed, 0 errors; 5 advisory warnings for pinned test dependencies and KTX suggestions |
 | Cooperative TCP input and live key sync | Seven simulated clients, seven scenarios passed; physical multi-phone run pending |
 | Shared hardware video broadcast | Six healthy simulated viewers plus one stalled viewer passed; one shared encoding verified |
-| Android 14 device MotionEvent / USB / settings persistence and migration | 12/12 full-suite tests passed on 2026-09-29; includes current settings UI and Chinese/English native Toast; 2/2 focused Toast/entry checks also passed after the final lifecycle adjustment |
+| Android 14 device MotionEvent / USB / settings persistence and migration | Latest 8/8 input checks passed, including final-up sample, 2400-pixel swipes and vibration preference persistence; earlier 12/12 UI suite and 2/2 focused Toast/entry checks passed |
 | Android Activity launch and landscape screen inspection | Passed at 2400 x 1080 |
-| Physical finger tracking and full In Falsus chart gameplay | Not tested |
+| Physical finger tracking and full In Falsus chart gameplay | User reports improved hand feel after the input update; systematic full-chart and alignment acceptance remains open |
 | Actual In Falsus USB SendInput | Shift+Space starts the 1.0.4b tutorial; full chart input remains open |
-| Actual-chart absolute Field mapping | Failed: repeated midpoint can retain different game positions; investigation and reproducible probes in [FIELD-MAPPING.md](FIELD-MAPPING.md) |
+| Actual-chart absolute Field mapping | Replacement passed repeated targets and 120-event/s sweep with read-only game feedback; largest settled normalized error 0.000317; physical screen alignment remains open. Earlier OS-absolute failure remains documented in [FIELD-MAPPING.md](FIELD-MAPPING.md) |
 | Actual-chart relative Field spot check | Small right/left reversal returned to center; one displacement and five increments reached similar positions; physical swipes and hand feel remain open |
 | Aligned game video / enlarged seven-pointer transport / feedback screenshots | 1/1 passed with real game capture and dry-run input |
 | OS native scan codes, Field mapping, EOF/watchdog/focus release | Passed against project-owned Win32 target; game cursor mapping is separate |
@@ -89,8 +103,10 @@ Device used: model 22021211RC, Android 14 / API 34, physical display 1080 x 2400
 The tests inject synthetic native MotionEvents, including seven pointers with
 reordered indices, on the device. They do not prove physical digitizer behavior.
 The input suite's USB/TCP test produced DOWN 1..6, ABS 640 360, REL 1280,
-REL -320 and UP 1..6. Current video runs use Relative and verify REL 320 / REL -160
-alongside all six key holds/releases. These socket tests use a dry-run input sink.
+REL -320 and UP 1..6. It also verifies a 2400-pixel swipe as REL 1280 + REL 1120
+and its full reversal. The video probes now expect View-pixel displacement;
+the earlier 720p/1080p evidence below predates that conversion. These socket
+tests use a dry-run input sink.
 
 Local artifacts and evidence (ignored by Git):
 
@@ -257,9 +273,9 @@ confirmed that the former default absolute mapping can leave the game's Field ma
 different positions for the same normalized request. A visible-edge homing attempt
 also retained an offset. The game locks the OS cursor; its coordinates cannot prove
 touch-to-game alignment. [Field investigation](FIELD-MAPPING.md) records the valid
-observations, excluded menu run, and next acceptance criteria. Relative is the
-chosen gameplay mode; physical hand-feel acceptance is still required. Absolute
-mapping remains experimental.
+observations, excluded menu runs, replacement direct-positioning checks and next
+acceptance criteria. Relative remains the default; both modes still need systematic
+physical acceptance. Absolute is currently limited to the verified game binary.
 See `tests/manual-acceptance.md` for the remaining physical checks.
 
 ## Real-game and native input evidence

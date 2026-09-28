@@ -27,7 +27,7 @@ the IEEE-754 binary32 bit representation. Never serialize a native C++ struct.
 | 2 | LANE_DOWN | Lane 1..6; default Shift/A/S/D/F/Space, actual keys follow IF configuration |
 | 3 | LANE_UP | Matching lane release, duplicates harmless |
 | 4 | FIELD_ABSOLUTE | Finite float in [0, 1] |
-| 5 | FIELD_RELATIVE | Finite normalized width delta in [-1, 1] |
+| 5 | FIELD_RELATIVE | Finite displacement in [-1, 1]; one wire unit is 1280 mouse units |
 | 6 | RELEASE_ALL | Release this device's keys and Field ownership; clear its focus-loss input barrier |
 | 7 | PING | Liveness request |
 | 8 | FIELD_BEGIN | Claim Field or join its ownership queue; value zero |
@@ -36,13 +36,20 @@ the IEEE-754 binary32 bit representation. Never serialize a native C++ struct.
 | 128 | ACK | Echo sequence and timestamp, lane/value zero |
 | 129 | CONFIGURATION | Unsolicited Host-to-phone snapshot, described below; never acknowledged |
 
-`FIELD_RELATIVE` is the default gameplay path. Android reports displacement as a
-fraction of the configured Field touch span. Host converts it at a fixed 1280
-mouse units per span, carrying fractional units within each gesture. It does not
-scale by the selected window width, arrival interval or video resolution, and
-adds no acceleration, smoothing or speed limit. Gameplay sensitivity belongs to
-In Falsus. `FIELD_ABSOLUTE` remains available for experimental OS cursor mapping;
-it does not establish an absolute position in the game's locked Field.
+`FIELD_RELATIVE` is the default gameplay path. Android sends horizontal View-pixel
+displacement divided by 1280, splitting larger moves into ordered valid packets.
+Host multiplies by 1280 and retains fractional mouse units within each gesture.
+One touch pixel therefore corresponds to one injected relative mouse unit,
+independently of Field calibration, window size, video resolution and arrival time.
+Host adds no sensitivity, acceleration, smoothing or speed cap; gameplay sensitivity
+belongs to In Falsus.
+
+`FIELD_ABSOLUTE` requests a normalized Field position. In the supported In Falsus
+build, Host reads the live Field position and sensitivity and uses relative mouse
+corrections to reach that target. New positions replace pending targets without
+duplicating unconsumed corrections. FIELD_END completes the last target; release,
+disconnect and focus loss cancel it. Unlocked menus and diagnostic windows retain
+the configured OS cursor mapping. See [Field mapping](../docs/FIELD-MAPPING.md).
 
 CONFIGURATION reuses the fixed frame with type-specific fields: lane contains the
 display mask (0..127); status is 0 synced IF bindings, 1 defaults, or 2 unavailable
@@ -65,8 +72,9 @@ touch, then the oldest remaining claimant. Movement from waiting devices is igno
 For diagnostic clients, a movement implicitly begins Field ownership; Android sends
 explicit BEGIN/END even for a stationary relative-mode finger.
 
-Server ACKs each complete valid request only after applying it or deciding the
-target is inactive. ACK statuses 2 and 4 are ready states, not focus loss.
+Server ACKs each complete valid request after applying or accepting it, or deciding
+the target is inactive. Direct Field ACKs confirm the target was accepted, not that
+the game has consumed the correction. ACK statuses 2 and 4 are ready states, not focus loss.
 Client RTT includes queueing, USB/TCP, processing and return;
 it is not an end-to-end touch-to-photon measurement. Sequences wrap from
 `0xffffffff` to 0. Unknown types, nonzero reserved fields, invalid lane/status,

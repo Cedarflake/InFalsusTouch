@@ -75,6 +75,10 @@ class ControlClient(
     if (!session.queue.offer(type, lane, value)) end(session, "Input queue overflow; reconnect required")
   }
 
+  fun sendRelativePixels(deltaX: Float) {
+    forEachRelativeStep(deltaX) { send(MessageType.FIELD_RELATIVE, value = it) }
+  }
+
   override fun close() {
     current.get()?.let { end(it, "Disconnected") }
   }

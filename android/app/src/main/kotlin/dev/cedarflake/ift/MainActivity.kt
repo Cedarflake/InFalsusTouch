@@ -218,7 +218,7 @@ class MainActivity : FlutterActivity(), SurfaceHolder.Callback {
       override fun laneDown(lane: Int) { client.send(MessageType.LANE_DOWN, lane) }
       override fun laneUp(lane: Int) { client.send(MessageType.LANE_UP, lane) }
       override fun fieldAbsolute(x: Float) { client.send(MessageType.FIELD_ABSOLUTE, value = x) }
-      override fun fieldRelative(deltaX: Float) { client.send(MessageType.FIELD_RELATIVE, value = deltaX) }
+      override fun fieldRelative(deltaX: Float) { client.sendRelativePixels(deltaX) }
       override fun fieldBegin() { client.send(MessageType.FIELD_BEGIN) }
       override fun fieldEnd() { client.send(MessageType.FIELD_END) }
       override fun releaseAll() { client.send(MessageType.RELEASE_ALL) }

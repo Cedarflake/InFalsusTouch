@@ -124,6 +124,7 @@ class VideoDeviceTest {
       assertTrue(timing.presentTimestamp >= timing.decodeTimestamp)
       val metrics = JSONObject().put("receiveFps", held.receiveFps).put("decodeFps", held.decodeFps)
         .put("width", held.width).put("height", held.height)
+        .put("touchWidth", instrumentation.targetContext.resources.displayMetrics.widthPixels)
         .put("steadySeconds", steadySeconds).put("steadyReceiveFps", steadyReceiveFps).put("steadyPresentFps", steadyPresentFps)
         .put("presentFps", held.presentFps).put("presentedFrames", held.presentedFrames)
         .put("droppedFrames", held.droppedFrames).put("queueDepth", held.queueDepth)

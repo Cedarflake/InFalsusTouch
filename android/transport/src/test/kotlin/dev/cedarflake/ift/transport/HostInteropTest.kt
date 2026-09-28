@@ -41,6 +41,11 @@ class HostInteropTest {
       client.send(MessageType.FIELD_RELATIVE, value = -0.25f)
       awaitCondition { trace.readLines().contains("REL -320") }
       assertEquals(listOf("REL 1280", "REL -320"), trace.readLines().filter { it.startsWith("REL ") })
+      client.sendRelativePixels(2400f)
+      client.sendRelativePixels(-2400f)
+      awaitCondition { trace.readLines().contains("REL -1120") }
+      assertEquals(listOf("REL 1280", "REL -320", "REL 1280", "REL 1120", "REL -1280", "REL -1120"),
+        trace.readLines().filter { it.startsWith("REL ") })
       client.close()
       listener.awaitState(ConnectionState.DISCONNECTED)
       awaitCondition { trace.readLines().count { it.startsWith("UP ") } == 6 }

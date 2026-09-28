@@ -32,10 +32,10 @@ try {
   & $AdbPath -d install -r -t (Join-Path $repoRoot 'android\app\build\outputs\apk\androidTest\debug\app-debug-androidTest.apk')
   if ($LASTEXITCODE -ne 0) { throw 'Instrumentation installation failed' }
   $testClasses = 'dev.cedarflake.ift.MotionEventDeviceTest,dev.cedarflake.ift.UsbTransportDeviceTest,dev.cedarflake.ift.SettingsDeviceTest'
-  $expectedTests = 12
+  $expectedTests = 13
   if ($InputOnly) {
     $testClasses = 'dev.cedarflake.ift.MotionEventDeviceTest,dev.cedarflake.ift.UsbTransportDeviceTest,dev.cedarflake.ift.SettingsDeviceTest#settingsPersistAcrossStoreInstancesAndRecoverFromCorruption,dev.cedarflake.ift.SettingsDeviceTest#legacyFieldModeMigratesWithoutResettingOtherPreferences'
-    $expectedTests = 7
+    $expectedTests = 8
   }
   $result = & $AdbPath -d shell am instrument -w -r -e usbHost true -e class $testClasses dev.cedarflake.infalsustouch.test/androidx.test.runner.AndroidJUnitRunner
   $instrumentExit = $LASTEXITCODE
@@ -56,6 +56,7 @@ try {
   }
   if ($trace -notcontains 'ABS 640 360') { throw 'USB Field mapping missing from host trace' }
   if ($trace -notcontains 'REL 1280' -or $trace -notcontains 'REL -320') { throw 'USB relative Field displacement was changed' }
+  if ($trace -notcontains 'REL 1120' -or $trace -notcontains 'REL -1280' -or $trace -notcontains 'REL -1120') { throw 'USB pixel displacement was capped or rescaled' }
   Write-Output 'PASS: physical USB transport, six-key hold, Field and disconnect release verified in dry-run mode.'
 } finally {
   if ($previousMapping) {

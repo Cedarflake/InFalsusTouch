@@ -6,7 +6,8 @@ object SettingsCodec {
     "videoScale" to videoScale.name, "laneHeight" to laneHeight.toDouble(), "fieldHeight" to fieldHeight.toDouble(),
     "fieldLeft" to fieldLeft.toDouble(), "fieldRight" to fieldRight.toDouble(),
     "laneOpacity" to laneOpacity.toDouble(), "laneGapDp" to laneGapDp.toDouble(), "brightness" to brightness.toDouble(),
-    "showLabels" to showLabels, "showStatistics" to showStatistics, "showFieldGuide" to showFieldGuide,
+    "showLabels" to showLabels, "buttonHaptics" to buttonHaptics,
+    "showStatistics" to showStatistics, "showFieldGuide" to showFieldGuide,
     "autoConnect" to autoConnect, "autoHideControls" to autoHideControls, "highRefreshDisplay" to highRefreshDisplay,
     "judgment" to with(judgment) { mapOf(
       "fieldLeft" to fieldLeft.toDouble(), "fieldRight" to fieldRight.toDouble(), "fieldY" to fieldY.toDouble(),
@@ -44,6 +45,7 @@ object SettingsCodec {
       fieldLeft = number("fieldLeft", base.fieldLeft), fieldRight = number("fieldRight", base.fieldRight),
       laneOpacity = number("laneOpacity", base.laneOpacity), laneGapDp = number("laneGapDp", base.laneGapDp),
       brightness = number("brightness", base.brightness), showLabels = boolean("showLabels", base.showLabels),
+      buttonHaptics = boolean("buttonHaptics", base.buttonHaptics),
       showStatistics = boolean("showStatistics", base.showStatistics), showFieldGuide = boolean("showFieldGuide", base.showFieldGuide),
       autoConnect = boolean("autoConnect", base.autoConnect), autoHideControls = boolean("autoHideControls", base.autoHideControls),
       highRefreshDisplay = boolean("highRefreshDisplay", base.highRefreshDisplay), judgment = judgment,

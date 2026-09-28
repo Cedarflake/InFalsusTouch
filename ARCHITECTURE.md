@@ -48,9 +48,11 @@ flowchart LR
   ignored until lifted; they cannot steal control or become lane presses.
 - Pointer IDs, not event indices, are persistent identities. CANCEL, focus loss,
   backgrounding, surface reconfiguration and connection loss clear local state.
-- Android sends normalized Field X or normalized horizontal deltas. Windows
-  maps them to the selected window's physical client area, including DPI and
-  multi-monitor desktop origin. Fixed Y and Field left/right are configurable.
+- Android sends normalized Field X or horizontal View-pixel deltas in 1280-unit
+  wire blocks. Relative input preserves displacement and leaves sensitivity to IF.
+  Direct Field uses read-only game position/sensitivity feedback and relative
+  corrections, with at most one unconsumed correction. OS cursor mapping remains
+  available for menus and diagnostic windows, including DPI and desktop origin.
 - Input is injected only while the selected window is foreground and valid.
   Losing focus releases keys; input resumes only after a RELEASE_ALL barrier.
 - A connection always starts with HELLO and an empty key state. Sequence numbers
@@ -143,7 +145,10 @@ override them. See [SETTINGS.md](docs/SETTINGS.md) for validation and storage ru
 
 Mapping a normalized Field coordinate to an OS cursor position is not proof that
 the game's internal cursor matches it. In Falsus 1.0.4b locks/recenters the cursor;
-absolute Field gameplay mapping still needs a verified game-specific solution.
+direct gameplay positioning therefore uses a version-checked read-only game-state
+reader. Relative corrections use the live effective sensitivity and raw unclamped
+position. See [Field mapping](docs/FIELD-MAPPING.md) for evidence and remaining
+physical alignment checks.
 
 Capture/encode/send times use a PC monotonic clock. Receive/decode/present times
 use an Android monotonic clock. Cross-device timestamp subtraction is invalid

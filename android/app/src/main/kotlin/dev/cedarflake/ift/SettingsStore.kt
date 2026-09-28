@@ -40,6 +40,7 @@ class SettingsStore(context: Context, name: String = "controller-settings") : Cl
         laneGapDp = preferences.getFloat("laneGapDp", defaults.laneGapDp),
         brightness = preferences.getFloat("brightness", defaults.brightness),
         showLabels = preferences.getBoolean("showLabels", defaults.showLabels),
+        buttonHaptics = preferences.getBoolean("buttonHaptics", defaults.buttonHaptics),
         showStatistics = preferences.getBoolean("showStatistics", defaults.showStatistics),
         showFieldGuide = preferences.getBoolean("showFieldGuide", defaults.showFieldGuide),
         autoConnect = preferences.getBoolean("autoConnect", defaults.autoConnect),
@@ -85,6 +86,7 @@ class SettingsStore(context: Context, name: String = "controller-settings") : Cl
         .putFloat("laneGapDp", value.laneGapDp)
         .putFloat("brightness", value.brightness)
         .putBoolean("showLabels", value.showLabels)
+        .putBoolean("buttonHaptics", value.buttonHaptics)
         .putBoolean("showStatistics", value.showStatistics)
         .putBoolean("showFieldGuide", value.showFieldGuide)
         .putBoolean("autoConnect", value.autoConnect)

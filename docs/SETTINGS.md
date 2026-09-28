@@ -56,6 +56,7 @@ width; only controls intersecting an actual cutout receive local padding.
 | Lane gap | 2 dp; 0–20 dp; hit regions remain contiguous |
 | Lane brightness | 100%; 10–100% |
 | Labels | On |
+| Button vibration | Off; optional native feedback on game-key press |
 | Video statistics / Field outline | Off |
 | Find USB Host automatically | Off; opt in for foreground retry |
 | Settings entry | Two taps within two seconds; no expanded gameplay toolbar |
@@ -65,8 +66,18 @@ In Falsus. Touch-down establishes a new origin without moving Field, so lifting
 and touching elsewhere does not reposition it. On upgrade, preferences written
 before this change switch to Relative without resetting language, theme, visible
 keys or calibration. Explicitly selecting experimental Absolute afterward is
-persisted normally. The experimental mode positions the OS cursor; it has not
-passed game Field alignment tests.
+persisted normally. Absolute now targets the game Field directly in the supported
+In Falsus 1.0.4b build: touch-down repositions it, movement follows the finger and
+lift completes the final position. Host reads effective sensitivity on every
+correction, so no particular game sensitivity is required. Other game builds need
+Relative until their state layout is verified. Physical picture-to-finger alignment
+still depends on the phone's judgment-line calibration.
+
+**Button vibration**, under Touch, uses Android's native virtual-key feedback on
+the first press of each lane. Held keys, additional fingers on an already-held lane,
+release and Field sliding do not generate extra pulses. It saves automatically and
+does not wait for Host acknowledgements. It follows the phone's system haptic setting;
+see [Android haptic feedback](https://developer.android.com/develop/ui/views/haptics/haptic-feedback).
 
 Fit is the recommended reading mode. A 16:9 game occupies 1920 x 1080 pixels on
 a 2400 x 1080 phone, with 240-pixel side bars. App UI insets do not resize this
@@ -88,6 +99,9 @@ the two slanted side judgment lines. Coordinates are stored relative to the
 encoded picture, so Fit/Stretch/Crop share the same transform for video and touch.
 Invisible crop regions and letterbox bars cannot acquire a pointer. Buttons grow
 upward to the selected height; Field accepts horizontal movement above the buttons.
+Its touch boundary and optional outline meet the buttons' actual upper edges,
+including the side slopes, so lowering the buttons does not leave an unresponsive
+strip below Field. Judgment-line calibration does not limit this touch height.
 The default 40% button height is independent of the lower judgment-line height.
 Pressed fills and judgment highlights are rendered locally and stay active until
 the last finger on that lane lifts. The Field marker shows the local touch position,
@@ -144,14 +158,16 @@ Dry-run tests ignore the default file, but can load an explicitly named profile.
 | `--fps` | 60; 24–60 |
 | `--bitrate` | 8000000; 500000–40000000 bits/second |
 
-Relative Field converts a full touch-area width to a fixed 1280 mouse movement
-units. This unit conversion does not depend on game window size, video resolution
-or packet arrival times. Fractional units carry into subsequent movements within
+Relative Field preserves horizontal View-pixel displacement as mouse movement
+units. Calibration no longer changes the amount of movement, and a swipe can
+continue beyond the calibrated Field edges. This conversion does not depend on
+game window size, video resolution or packet arrival times. Fractional units carry into subsequent movements within
 the gesture. Host adds no sensitivity multiplier, acceleration, smoothing or speed
 cap; adjust gameplay sensitivity in In Falsus. The Windows input path remains
 SendInput, and the app does not change system mouse settings.
 
-`--calibrate` is for experimental absolute mapping. It selects a game window and
+`--calibrate` controls OS cursor mapping for menus and diagnostic targets. It does
+not change direct gameplay positioning. It selects a game window and
 records the PC cursor at three prompts:
 left endpoint, right endpoint, and fixed height. Keep the console focused and
 the game visible beside it, move the mouse without clicking, then press Enter.
@@ -160,11 +176,13 @@ window that moves/resizes/closes invalidate the calibration without saving.
 The result uses physical client coordinates and does not affect relative input.
 Restart Host after calibration to use the saved values.
 
-Actual In Falsus 1.0.4b normal-chart probes show cursor locking and history-dependent
-Field positions for identical absolute requests. Adjusting endpoints alone is insufficient.
-Phone judgment alignment and PC cursor calibration are separate; absolute gameplay
-alignment remains unresolved. Relative input is the chosen gameplay path, with
-sensitivity controlled in the game. Do not infer in-game alignment from GetCursorPos alone.
+The earlier OS-absolute approach failed normal-chart probes. The replacement reads
+game Field state through a read-only process handle, checks the supported binary's
+SHA-256, and sends ordinary relative mouse input. It never writes game memory or
+changes game sensitivity. Repeated targets and a 120-events/second sweep passed
+game-state checks; complete physical phone-to-picture acceptance remains open.
+Phone judgment alignment and PC cursor calibration are separate. Do not infer
+in-game alignment from GetCursorPos alone.
 See [the Field investigation](FIELD-MAPPING.md) for the current evidence.
 
 Profiles are a bounded UTF-8/ASCII `key=value` format, saved with `version=2`.

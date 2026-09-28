@@ -7,6 +7,7 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.Typeface
+import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.View
 import dev.cedarflake.ift.settings.ControlSettings
@@ -20,9 +21,15 @@ import dev.cedarflake.ift.touch.TouchSink
 class ControllerView(context: Context, private val sink: TouchSink) : View(context) {
   private var settings = ControlSettings()
   private var geometry = TouchGeometry(1f, 1f, settings)
-  private val controller = TouchController(sink, geometry)
+  private val controller = TouchController(object : TouchSink by sink {
+    override fun laneDown(lane: Int) {
+      sink.laneDown(lane)
+      if (settings.buttonHaptics) performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+    }
+  }, geometry)
   private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
   private val lanePaths = Array(6) { Path() }
+  private val fieldPath = Path()
   private var videoPlacement: VideoPlacement? = null
   private val labels = arrayOf("Shift", "A", "S", "D", "F", "Space")
   private val numbers = arrayOf("1", "2", "3", "4", "5", "6")
@@ -92,6 +99,13 @@ class ControllerView(context: Context, private val sink: TouchSink) : View(conte
     if (width <= 0 || height <= 0) return
     geometry = TouchGeometry(width.toFloat(), height.toFloat(), settings, videoPlacement.takeIf { isVideoVisible })
     controller.resize(geometry)
+    fieldPath.apply {
+      rewind()
+      moveTo(geometry.fieldLeft, geometry.fieldTop)
+      lineTo(geometry.fieldRight, geometry.fieldTop)
+      for (point in geometry.fieldBoundary.asReversed()) lineTo(point.x, point.y)
+      close()
+    }
     val gap = settings.laneGapDp * density / 2
     geometry.laneRegions.forEachIndexed { index, region ->
       lanePaths[index].apply {
@@ -142,7 +156,9 @@ class ControllerView(context: Context, private val sink: TouchSink) : View(conte
         }
       }
       MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP -> {
-        controller.up(event.getPointerId(event.actionIndex))
+        val index = event.actionIndex
+        controller.move(event.getPointerId(index), event.getX(index))
+        controller.up(event.getPointerId(index))
         if (event.actionMasked == MotionEvent.ACTION_UP) performClick()
       }
       MotionEvent.ACTION_CANCEL -> controller.cancel()
@@ -174,7 +190,7 @@ class ControllerView(context: Context, private val sink: TouchSink) : View(conte
     if (settings.showFieldGuide && settings.controlsMask and 64 != 0) {
       paint.style = Paint.Style.STROKE
       paint.strokeWidth = density
-      canvas.drawRect(geometry.fieldLeft, geometry.fieldTop, geometry.fieldRight, geometry.fieldBottom, paint)
+      canvas.drawPath(fieldPath, paint)
       paint.style = Paint.Style.FILL
     }
     if (controller.fieldPointerId >= 0) {

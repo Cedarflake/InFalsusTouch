@@ -6,6 +6,7 @@ interface TouchSink {
   fun laneDown(lane: Int)
   fun laneUp(lane: Int)
   fun fieldAbsolute(x: Float)
+  // Relative movement is measured in View pixels, independently of the Field hit area.
   fun fieldRelative(deltaX: Float)
   fun fieldBegin() {}
   fun fieldEnd() {}
@@ -18,7 +19,7 @@ class TouchController(private val sink: TouchSink, private var geometry: TouchGe
   private var previousFieldX = 0f
   var fieldPointerId = -1
     private set
-  val fieldNormalizedX: Float get() = previousFieldX
+  val fieldNormalizedX: Float get() = geometry.normalizedX(previousFieldX)
 
   fun laneCount(lane: Int): Int = laneCounts[lane]
 
@@ -39,18 +40,18 @@ class TouchController(private val sink: TouchSink, private var geometry: TouchGe
     if (fieldPointerId == -1 && geometry.isField(x, y)) {
       owners[pointerId] = FIELD
       fieldPointerId = pointerId
-      previousFieldX = geometry.normalizedX(x)
+      previousFieldX = x.coerceIn(0f, geometry.width)
       sink.fieldBegin()
-      if (geometry.settings.fieldMode == FieldMode.ABSOLUTE) sink.fieldAbsolute(previousFieldX)
+      if (geometry.settings.fieldMode == FieldMode.ABSOLUTE) sink.fieldAbsolute(fieldNormalizedX)
     }
   }
 
   fun move(pointerId: Int, x: Float) {
     if (pointerId != fieldPointerId || !x.isFinite()) return
-    val currentX = geometry.normalizedX(x)
+    val currentX = x.coerceIn(0f, geometry.width)
     if (currentX == previousFieldX) return
     if (geometry.settings.fieldMode == FieldMode.ABSOLUTE) {
-      sink.fieldAbsolute(currentX)
+      if (geometry.normalizedX(currentX) != fieldNormalizedX) sink.fieldAbsolute(geometry.normalizedX(currentX))
     } else {
       sink.fieldRelative(currentX - previousFieldX)
     }

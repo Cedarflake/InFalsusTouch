@@ -68,7 +68,7 @@ class SettingsDeviceTest {
     val preferences = context.getSharedPreferences(name, Context.MODE_PRIVATE)
     val value = ControlSettings(language = "zh", theme = "light", controlsMask = 73, fieldMode = FieldMode.RELATIVE, layoutMode = LayoutMode.RESERVED,
       videoScale = VideoScale.CROP, laneHeight = 0.35f, fieldHeight = 0.5f, fieldLeft = 0.1f, fieldRight = 0.9f,
-      laneOpacity = 0.6f, laneGapDp = 5f, brightness = 0.7f, showLabels = false,
+      laneOpacity = 0.6f, laneGapDp = 5f, brightness = 0.7f, showLabels = false, buttonHaptics = true,
       showStatistics = true, showFieldGuide = true, autoConnect = true, autoHideControls = false, highRefreshDisplay = false,
       judgment = JudgmentLayout(fieldLeft = 0.08f, fieldRight = 0.92f, floorY = 0.88f, sideY = 0.74f))
     try {

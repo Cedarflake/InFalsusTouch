@@ -19,6 +19,7 @@ data class ControlSettings(
   val laneGapDp: Float = 2f,
   val brightness: Float = 1f,
   val showLabels: Boolean = true,
+  val buttonHaptics: Boolean = false,
   val showStatistics: Boolean = false,
   val showFieldGuide: Boolean = false,
   val autoConnect: Boolean = false,

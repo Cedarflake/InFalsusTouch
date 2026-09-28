@@ -111,4 +111,35 @@ class AlignedTouchTest {
     assertFailsWith<IllegalArgumentException> { JudgmentLayout(floorLeft = 0.9f) }
     assertFailsWith<IllegalArgumentException> { JudgmentLayout(sideY = Float.NaN) }
   }
+
+  @Test fun fieldFillsTheFormerGapAndMeetsSlantedKeysWithoutOverlap() {
+    val settings = ControlSettings(laneHeight = 0.3f, fieldHeight = 1f,
+      judgment = JudgmentLayout(fieldY = 0.62180537f, sideY = 0.70736086f, floorY = 0.85537016f))
+    val geometry = TouchGeometry(2400f, 1080f, settings, placeVideo(2400, 1080, 1280, 720, settings))
+    assertEquals(756f, geometry.fieldBottomAt(1200f), 0.001f)
+    assertTrue(geometry.isField(1200f, 755.5f))
+    assertNull(geometry.laneAt(1200f, 755.5f))
+    assertFalse(geometry.isField(1200f, 756f))
+    assertEquals(3, geometry.laneAt(1200f, 756f))
+
+    for (mode in LayoutMode.entries) for (scale in VideoScale.entries) {
+      for (mask in listOf(127, 65, 66, 73, 126)) {
+        val selected = settings.copy(layoutMode = mode, videoScale = scale, controlsMask = mask)
+        val actual = TouchGeometry(2400f, 1080f, selected, placeVideo(2400, 1080, 1280, 720, selected))
+        for (lane in 0..5) {
+          if (mask and (1 shl lane) == 0) continue
+          val region = actual.laneRegions[lane]
+          for (ratio in listOf(0.2f, 0.5f, 0.8f)) {
+            val x = region.left + (region.right - region.left) * ratio
+            val top = region.topLeft + (region.topRight - region.topLeft) * ratio
+            if (x < actual.fieldLeft || x >= actual.fieldRight || top <= actual.clipTop || top >= actual.clipBottom) continue
+            assertTrue(actual.isField(x, top - 0.1f), "Field must reach lane $lane in $mode/$scale/$mask")
+            assertNull(actual.laneAt(x, top - 0.1f))
+            assertFalse(actual.isField(x, top + 0.1f))
+            assertEquals(lane, actual.laneAt(x, top + 0.1f))
+          }
+        }
+      }
+    }
+  }
 }

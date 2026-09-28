@@ -86,7 +86,7 @@ class TouchControllerTest {
     touch.up(3)
     assertEquals(7, touch.fieldPointerId)
     for (lane in 0..5) assertEquals(if (lane == 3) 0 else 1, touch.laneCount(lane))
-    assertEquals(listOf("D1", "D2", "D3", "D4", "D5", "D6", "R0.25", "U4"), sink.events)
+    assertEquals(listOf("D1", "D2", "D3", "D4", "D5", "D6", "R150.0", "U4"), sink.events)
   }
 
   @Test fun additionalFieldFingerCannotStealOrBecomeLane() {
@@ -124,13 +124,13 @@ class TouchControllerTest {
     assertEquals(0, touch.laneCount(2))
   }
 
-  @Test fun relativeMovementUsesCalibratedWidthAndClampsEdges() {
+  @Test fun relativeMovementPreservesPixelsBeyondCalibratedFieldEdges() {
     val relative = TouchController(sink, TouchGeometry(600f, 400f,
       ControlSettings(fieldMode = FieldMode.RELATIVE, fieldLeft = 0.25f, fieldRight = 0.75f)))
     relative.down(5, 300f, 150f)
     relative.move(5, 375f)
     relative.move(5, 800f)
-    assertEquals(listOf("R0.25", "R0.25"), sink.events)
+    assertEquals(listOf("R75.0", "R225.0"), sink.events)
   }
 
   @Test fun defaultRelativeTouchDoesNotJumpOnRetouchOrReplayCancelledMotion() {
@@ -142,8 +142,21 @@ class TouchControllerTest {
     touch.move(5, 300f)
     touch.cancel()
     touch.move(5, 500f)
-    assertEquals(listOf("R0.25", "R0.25", "CLEAR"), sink.events)
+    assertEquals(listOf("R150.0", "R150.0", "CLEAR"), sink.events)
     assertEquals(2, sink.fieldBegins)
+  }
+
+  @Test fun equalPixelSwipesHaveTheSameScaleAcrossFieldSizes() {
+    for (width in listOf(600f, 1280f, 2400f)) {
+      for (left in listOf(0f, 0.25f)) {
+        val controller = TouchController(sink, TouchGeometry(width, 400f,
+          ControlSettings(fieldLeft = left, fieldRight = 1f - left)))
+        controller.down(5, width / 2f, 150f)
+        controller.move(5, width / 2f + 100f)
+        controller.up(5)
+      }
+    }
+    assertEquals(List(6) { "R100.0" }, sink.events)
   }
 
   @Test fun experimentalAbsoluteModeStillSendsPositions() {

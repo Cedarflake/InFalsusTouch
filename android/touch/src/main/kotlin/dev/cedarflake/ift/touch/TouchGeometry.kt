@@ -22,10 +22,6 @@ class TouchGeometry(val width: Float, val height: Float, val settings: ControlSe
   private val requestedLaneTop = if (isAligned) videoY(1f - settings.laneHeight) else height * (1f - settings.laneHeight)
   val laneTop = if (isAligned) minOf(requestedLaneTop, videoY(settings.judgment.floorY - settings.judgment.hitPadding)) else requestedLaneTop
   val fieldLineY = if (isAligned) videoY(settings.judgment.fieldY) else laneTop
-  val fieldBottom = if (settings.controlsMask and 63 == 0) clipBottom else if (isAligned) minOf(laneTop, videoY(settings.judgment.sideY - settings.judgment.hitPadding),
-    videoY(settings.judgment.fieldY + settings.judgment.hitPadding)) else laneTop
-  val fieldTop = if (isAligned) maxOf(clipTop, fieldBottom - requireNotNull(picture).height * settings.fieldHeight)
-    else (laneTop - height * settings.fieldHeight).coerceAtLeast(0f)
   val fieldLeft = if (isAligned) videoX(settings.judgment.fieldLeft) else width * settings.fieldLeft
   val fieldRight = if (isAligned) videoX(settings.judgment.fieldRight) else width * settings.fieldRight
   private val originalLaneRegions: List<TouchRegion> = if (isAligned) {
@@ -43,6 +39,26 @@ class TouchGeometry(val width: Float, val height: Float, val settings: ControlSe
   } else List(6) { lane -> TouchRegion(width * lane / 6, laneTop, width * (lane + 1) / 6, laneTop, height) }
 
   val laneRegions: List<TouchRegion> = centerSelectedLanes()
+  private val selectedRegions = laneRegions.filterIndexed { lane, _ -> settings.controlsMask and (1 shl lane) != 0 }
+  private val freeFieldBottom = if (selectedRegions.isEmpty()) clipBottom else laneTop
+  val fieldBoundary: List<TouchPoint> = buildFieldBoundary()
+  val fieldBottom = fieldBoundary.maxOf { it.y }
+  val fieldTop = if (isAligned) maxOf(clipTop, fieldBoundary.minOf { it.y } - requireNotNull(picture).height * settings.fieldHeight)
+    else (laneTop - height * settings.fieldHeight).coerceAtLeast(0f)
+
+  private fun regionBelow(x: Float): TouchRegion? = selectedRegions.firstOrNull { x >= it.left && x < it.right }
+  private fun clippedBottom(y: Float): Float = maxOf(clipTop, minOf(clipBottom, y))
+  fun fieldBottomAt(x: Float): Float = clippedBottom(regionBelow(x)?.topAt(x) ?: freeFieldBottom)
+
+  private fun buildFieldBoundary(): List<TouchPoint> {
+    val breaks = (listOf(fieldLeft, fieldRight) + selectedRegions.flatMap { listOf(it.left, it.right) }
+      .filter { it > fieldLeft && it < fieldRight }).distinct().sorted()
+    return breaks.zipWithNext().flatMap { (left, right) ->
+      val region = regionBelow((left + right) / 2f)
+      listOf(TouchPoint(left, clippedBottom(region?.topAt(left) ?: freeFieldBottom)),
+        TouchPoint(right, clippedBottom(region?.topAt(right) ?: freeFieldBottom)))
+    }
+  }
 
   private fun centerSelectedLanes(): List<TouchRegion> {
     val selected = originalLaneRegions.indices.filter { settings.controlsMask and (1 shl it) != 0 }
@@ -69,7 +85,7 @@ class TouchGeometry(val width: Float, val height: Float, val settings: ControlSe
   }
 
   fun isField(x: Float, y: Float): Boolean =
-    settings.controlsMask and 64 != 0 && isVisible(x, y) && x.isFinite() && y.isFinite() && x >= fieldLeft && x < fieldRight && y >= fieldTop && y < fieldBottom
+    settings.controlsMask and 64 != 0 && isVisible(x, y) && x.isFinite() && y.isFinite() && x >= fieldLeft && x < fieldRight && y >= fieldTop && y < fieldBottomAt(x)
 
   fun normalizedX(x: Float): Float = ((x - fieldLeft) / (fieldRight - fieldLeft)).coerceIn(0f, 1f)
 }

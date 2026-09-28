@@ -76,6 +76,10 @@ class AppStrings {
   String get brightness => zh ? "反馈亮度" : "Feedback brightness";
   String get gap => zh ? "按钮视觉间距" : "Visual button spacing";
   String get labels => zh ? "显示按键名称" : "Show key labels";
+  String get buttonHaptics => zh ? "按键震动" : "Button vibration";
+  String get buttonHapticsHint => zh
+      ? "按下游戏按键时轻震，遵循系统触感反馈设置。"
+      : "A light pulse when a game key is pressed. Follows system haptic settings.";
   String get layout => zh ? "触控布局" : "Touch layout";
   String get aligned => zh ? "对齐轨道" : "Aligned";
   String get overlay => zh ? "固定叠加" : "Fixed";
@@ -90,8 +94,8 @@ class AppStrings {
       ? "水平滑动控制 Field，灵敏度请在 In Falsus 中调整。抬手后可从任意位置继续滑动。"
       : "Slide horizontally to move Field. Adjust sensitivity in In Falsus. Lift and touch anywhere to continue sliding.";
   String get absoluteFieldHint => zh
-      ? "实验模式：仅定位系统光标，无法保证与游戏 Field 对齐。"
-      : "Experimental: positions the system cursor and does not guarantee alignment with the game's Field.";
+      ? "点按定位 Field，随后跟随手指横向移动，自动适配游戏灵敏度。目前支持 In Falsus 1.0.4b，需先对齐判定线。"
+      : "Tap to position Field, then slide to follow your finger. Adapts to game sensitivity. Currently supports In Falsus 1.0.4b; align judgment lines first.";
   String get fieldHeight => zh ? "Field 触控高度" : "Field touch height";
   String get leftEdge => zh ? "Field 左边界" : "Field left edge";
   String get rightEdge => zh ? "Field 右边界" : "Field right edge";

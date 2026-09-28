@@ -85,7 +85,9 @@ def main():
             trace = (output / "input-trace.txt").read_text(encoding="utf-8")
             for lane in range(1, 7):
                 assert trace.count(f"DOWN {lane}\n") == trace.count(f"UP {lane}\n") == 1, f"Lane {lane} hold/release mismatch"
-            assert trace.count("REL 320\n") == trace.count("REL -160\n") == 1, "Relative Field movement mismatch during video playback"
+            movements = [int(line.split()[1]) for line in trace.splitlines() if line.startswith("REL ")]
+            expected = [metrics["touchWidth"] * 0.25, -metrics["touchWidth"] * 0.125]
+            assert len(movements) == 2 and all(abs(actual - value) <= 1 for actual, value in zip(movements, expected)), "Pixel Field movement mismatch during video playback"
             assert "ABS " not in trace, "Relative Field unexpectedly used absolute input"
             print("PASS: real USB H.264 decode, six color checks, seven pointers, release and video reconnect")
             print(f"Evidence: {output.resolve()}")

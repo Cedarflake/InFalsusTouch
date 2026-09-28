@@ -36,6 +36,8 @@ class UsbTransportDeviceTest {
       client.send(MessageType.FIELD_BEGIN)
       client.send(MessageType.FIELD_RELATIVE, value = 1f)
       client.send(MessageType.FIELD_RELATIVE, value = -0.25f)
+      client.sendRelativePixels(2400f)
+      client.sendRelativePixels(-2400f)
       assertTrue("USB ACKs stopped", roundTrips.await(5, TimeUnit.SECONDS))
       client.close()
       assertTrue(disconnected.await(2, TimeUnit.SECONDS))

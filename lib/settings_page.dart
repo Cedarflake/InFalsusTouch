@@ -225,6 +225,7 @@ class _SettingsPageState extends State<SettingsPage> {
         slider(s.brightness, "brightness", 10, 100),
         slider(s.gap, "laneGapDp", 0, 20, divisor: 1, unit: "dp"),
         toggle(s.labels, "showLabels"),
+        toggle(s.buttonHaptics, "buttonHaptics", subtitle: s.buttonHapticsHint),
       ],
     ),
     _Section(

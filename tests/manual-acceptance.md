@@ -25,18 +25,27 @@ and real USB transport to a dry-run Windows host passed on 2026-09-29; see
 - Rapidly tap the same lane and alternating lanes; confirm no missed UP/stuck key.
 - Use Relative Field and tune sensitivity in In Falsus. Compare slow/fast swipes,
   tiny corrections, direction reversals and simultaneous six-key holds.
-- Lift and re-touch at another position: Field must not jump. Test ownership
+- In Relative mode, lift and re-touch at another position: Field must not jump. Test ownership
   handoff between devices without replaying the waiting device's movements.
 - Compare the same swipe with different game window positions, sizes and DPI.
   Host uses a fixed conversion; record any game-dependent differences separately.
 - Confirm fresh installs and upgraded preferences select Relative, and that
   language, theme, visible controls and calibrated coordinates survive upgrade.
-- Experimental Absolute is a separate diagnostic. Its normal-chart alignment
-  failure is recorded in `docs/FIELD-MAPPING.md`; OS cursor tests are insufficient.
+- In Absolute mode on the supported build, touch-down must immediately reposition
+  Field and sliding must follow the finger. Repeat left/center/right targets,
+  lift and re-touch elsewhere, then change IF sensitivity and repeat. Game-state
+  tests passed; physical touch/video alignment remains a separate check.
+- Enable Button vibration in Touch settings: each new game-key press should give
+  one brief system pulse. Holding, release, a second finger on the same held lane
+  and Field sliding must not add pulses. Disable it and repeat; confirm the choice
+  survives relaunch and respects the system haptic preference.
 - In Aligned mode, verify four central keys and two side keys at both the enlarged
   upper button area and the judgment line. Fit bars must not trigger input.
 - Adjust button height without moving the picture or judgment references. Field
   starts above the buttons; its Y coordinate does not move the PC pointer vertically.
+- At 30% and 10% button heights, start Field touches just above central and slanted
+  key edges. The visible Field outline must meet those edges without a dead strip;
+  a touch just below the edge must still belong to the key.
 - Verify immediate pressed fills, last-finger release and a distinct local Field marker.
 - Use six-point judgment calibration with actual gameplay visible; verify rescaling
   keeps the touch geometry attached to the same chart positions.
@@ -102,7 +111,7 @@ and real USB transport to a dry-run Windows host passed on 2026-09-29; see
 | Six-key + Field simultaneous operation | Not tested |
 | USB disconnect release timing | Not tested |
 | Real SendInput accepted by game | USB Shift+Space starts tutorial; full six-key gameplay remains open |
-| Absolute Field touch-to-marker alignment | Failed on a normal chart: identical positions retain different offsets; see [investigation](../docs/FIELD-MAPPING.md) |
+| Absolute Field touch-to-marker alignment | Replacement passed game-state repeated targets and 120-event/s sweep; physical phone/video alignment remains open; see [investigation](../docs/FIELD-MAPPING.md) |
 | Measured control RTT (method/sample count) | Not tested |
 
 ## Video and sustained gameplay

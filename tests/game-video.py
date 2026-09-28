@@ -46,12 +46,13 @@ def main(window, system_refresh, skip_install, output):
                 raise RuntimeError(f"Selected-game USB video test failed; inspect {output}")
             for name in ("game-surface.png", "game-phone.png", "game-phone-pressed.png", "game-metrics.json"):
                 (output / name).write_bytes(device.adb("exec-out", "run-as", device.APP, "cat", f"files/{name}", binary=True))
-            print(json.dumps(json.loads((output / "game-metrics.json").read_text()), indent=2))
+            metrics = json.loads((output / "game-metrics.json").read_text())
+            print(json.dumps(metrics, indent=2))
             trace = (output / "input-trace.txt").read_text(encoding="utf-8")
             for lane in range(1, 7):
                 assert trace.count(f"DOWN {lane}\n") == trace.count(f"UP {lane}\n") == 1, f"Aligned lane {lane} hold/release mismatch"
             movements = [int(line.split()[1]) for line in trace.splitlines() if line.startswith("REL ")]
-            assert len(movements) == 1 and abs(movements[0] - 320) <= 1, "Aligned relative Field movement mismatch"
+            assert len(movements) == 1 and abs(movements[0] - metrics["layout"]["width"] * 0.215) <= 1, "Aligned pixel Field movement mismatch"
             assert "ABS " not in trace, "Relative Field unexpectedly used absolute input"
             print("PASS: centered game video, aligned seven-pointer transport and local feedback capture")
     finally:

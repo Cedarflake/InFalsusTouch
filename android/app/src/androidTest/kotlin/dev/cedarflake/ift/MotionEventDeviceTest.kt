@@ -66,7 +66,16 @@ class MotionEventDeviceTest {
     val reordered = fingers.reversed().map { if (it.id == 7) it.copy(x = 450f) else it.copy(x = 590f) }
     dispatch(view, MotionEvent.ACTION_MOVE, reordered)
     dispatch(view, MotionEvent.ACTION_CANCEL, reordered)
-    assertEquals(listOf("D1", "D2", "D3", "D4", "D5", "D6", "R0.25", "CLEAR"), sink.events)
+    assertEquals(listOf("D1", "D2", "D3", "D4", "D5", "D6", "R150.0", "CLEAR"), sink.events)
+  }
+
+  @Test fun fieldReleaseIncludesItsFinalPositionWithoutJumpingOnRetouch() = withView { view, sink ->
+    dispatch(view, MotionEvent.ACTION_DOWN, listOf(Finger(7, 300f, 150f)))
+    dispatch(view, MotionEvent.ACTION_MOVE, listOf(Finger(7, 450f, 150f)))
+    dispatch(view, MotionEvent.ACTION_UP, listOf(Finger(7, 455f, 150f)))
+    dispatch(view, MotionEvent.ACTION_DOWN, listOf(Finger(7, 120f, 150f)))
+    dispatch(view, MotionEvent.ACTION_UP, listOf(Finger(7, 125f, 150f)))
+    assertEquals(listOf("R150.0", "R5.0", "R5.0"), sink.events)
   }
 
   @Test fun nativePointerUpUsesActionIndexAndReferenceCounts() = withView { view, sink ->

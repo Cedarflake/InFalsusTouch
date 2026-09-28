@@ -24,6 +24,7 @@ Map<String, Object?> settingsFixture() => {
   "laneGapDp": 2.0,
   "brightness": 1.0,
   "showLabels": true,
+  "buttonHaptics": false,
   "showStatistics": false,
   "showFieldGuide": false,
   "autoConnect": false,
@@ -462,6 +463,41 @@ void main() {
       expect(tester.widget<Slider>(find.byType(Slider).first).value, height);
       expect(objectMap(host.state["settings"])["language"], "zh");
       expect(objectMap(host.state["settings"])["laneHeight"], height / 100);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    "button vibration saves immediately and follows the UI language",
+    (tester) async {
+      final host = UiHost();
+      await host.mount(tester);
+      await tester.tap(find.text("Touch"));
+      await tester.pumpAndSettle();
+      final vibration = find.widgetWithText(SwitchListTile, "Button vibration");
+      await tester.ensureVisible(vibration);
+      await tester.pumpAndSettle();
+      expect(tester.widget<SwitchListTile>(vibration).value, isFalse);
+      await tester.tap(vibration);
+      await tester.pumpAndSettle();
+      expect(objectMap(host.state["settings"])["buttonHaptics"], isTrue);
+      expect(
+        objectMap(host.state["settings"])["judgment"],
+        settingsFixture()["judgment"],
+      );
+      await tester.tap(find.text("Other"));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text("中文"));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text("触控"));
+      await tester.pumpAndSettle();
+      final chineseVibration = find.widgetWithText(SwitchListTile, "按键震动");
+      await tester.ensureVisible(chineseVibration);
+      await tester.pumpAndSettle();
+      expect(tester.widget<SwitchListTile>(chineseVibration).value, isTrue);
+      await tester.tap(chineseVibration);
+      await tester.pumpAndSettle();
+      expect(objectMap(host.state["settings"])["buttonHaptics"], isFalse);
       expect(tester.takeException(), isNull);
     },
   );
