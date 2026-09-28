@@ -28,7 +28,7 @@ public:
 
   void updateTarget(bool active, Rect client);
   void setControls(std::uint8_t mask);
-  bool apply(const Packet& packet, double seconds);
+  bool apply(const Packet& packet);
   bool releaseAll() noexcept;
   bool isReady() const;
   std::uint8_t pressedMask() const;

@@ -36,6 +36,11 @@ class HostInteropTest {
       for (lane in 1..6) client.send(MessageType.LANE_DOWN, lane)
       client.send(MessageType.FIELD_ABSOLUTE, value = 0.5f)
       awaitCondition { trace.exists() && trace.readLines().contains("ABS 640 360") }
+      client.send(MessageType.FIELD_BEGIN)
+      client.send(MessageType.FIELD_RELATIVE, value = 1f)
+      client.send(MessageType.FIELD_RELATIVE, value = -0.25f)
+      awaitCondition { trace.readLines().contains("REL -320") }
+      assertEquals(listOf("REL 1280", "REL -320"), trace.readLines().filter { it.startsWith("REL ") })
       client.close()
       listener.awaitState(ConnectionState.DISCONNECTED)
       awaitCondition { trace.readLines().count { it.startsWith("UP ") } == 6 }

@@ -1,4 +1,4 @@
-param([switch]$SkipBuild, [string]$AdbPath)
+param([switch]$SkipBuild, [switch]$InputOnly, [string]$AdbPath)
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
 if (-not $SkipBuild) {
@@ -31,12 +31,18 @@ try {
   if ($LASTEXITCODE -ne 0) { throw 'App installation failed' }
   & $AdbPath -d install -r -t (Join-Path $repoRoot 'android\app\build\outputs\apk\androidTest\debug\app-debug-androidTest.apk')
   if ($LASTEXITCODE -ne 0) { throw 'Instrumentation installation failed' }
-  $result = & $AdbPath -d shell am instrument -w -r -e usbHost true -e class 'dev.cedarflake.ift.MotionEventDeviceTest,dev.cedarflake.ift.UsbTransportDeviceTest,dev.cedarflake.ift.SettingsDeviceTest' dev.cedarflake.infalsustouch.test/androidx.test.runner.AndroidJUnitRunner
+  $testClasses = 'dev.cedarflake.ift.MotionEventDeviceTest,dev.cedarflake.ift.UsbTransportDeviceTest,dev.cedarflake.ift.SettingsDeviceTest'
+  $expectedTests = 11
+  if ($InputOnly) {
+    $testClasses = 'dev.cedarflake.ift.MotionEventDeviceTest,dev.cedarflake.ift.UsbTransportDeviceTest,dev.cedarflake.ift.SettingsDeviceTest#settingsPersistAcrossStoreInstancesAndRecoverFromCorruption,dev.cedarflake.ift.SettingsDeviceTest#legacyFieldModeMigratesWithoutResettingOtherPreferences'
+    $expectedTests = 7
+  }
+  $result = & $AdbPath -d shell am instrument -w -r -e usbHost true -e class $testClasses dev.cedarflake.infalsustouch.test/androidx.test.runner.AndroidJUnitRunner
   $instrumentExit = $LASTEXITCODE
   $result | Set-Content -LiteralPath (Join-Path $outputRoot 'instrumentation.txt') -Encoding UTF8
   $result | Write-Output
-  if ($instrumentExit -ne 0 -or -not ($result -match 'OK \(10 tests\)') -or ($result -match 'FAILURES!!!|INSTRUMENTATION_FAILED|Process crashed')) {
-    throw 'Device instrumentation did not pass all ten tests'
+  if ($instrumentExit -ne 0 -or -not ($result -match [regex]::Escape("OK ($expectedTests tests)")) -or ($result -match 'FAILURES!!!|INSTRUMENTATION_FAILED|Process crashed')) {
+    throw "Device instrumentation did not pass all $expectedTests tests"
   }
   $deadline = [DateTime]::UtcNow.AddSeconds(2)
   do {
@@ -49,6 +55,7 @@ try {
     if ($trace -notcontains "DOWN $lane" -or $trace -notcontains "UP $lane") { throw "USB lane $lane did not complete its hold/release" }
   }
   if ($trace -notcontains 'ABS 640 360') { throw 'USB Field mapping missing from host trace' }
+  if ($trace -notcontains 'REL 1280' -or $trace -notcontains 'REL -320') { throw 'USB relative Field displacement was changed' }
   Write-Output 'PASS: physical USB transport, six-key hold, Field and disconnect release verified in dry-run mode.'
 } finally {
   if ($previousMapping) {

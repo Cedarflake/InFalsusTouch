@@ -84,6 +84,9 @@ HostOptions parseOptions(int argc, wchar_t** argv) {
     if (!explicitProfile) options.profilePath = defaultProfilePath().wstring();
     if (std::filesystem::exists(options.profilePath)) {
       const auto profile = readProfileFile(options.profilePath);
+      if (profile.hasLegacyRelativeSettings) {
+        std::cerr << "Legacy relative tuning ignored; adjust mouse sensitivity in In Falsus.\n";
+      }
       options.field = profile.field;
       const bool enabled = options.video.enabled;
       options.video = profile.video;
@@ -129,14 +132,9 @@ HostOptions parseOptions(int argc, wchar_t** argv) {
       options.field.right = number(value);
     } else if (option == L"--field-y") {
       options.field.y = number(value);
-    } else if (option == L"--sensitivity") {
-      options.field.sensitivity = number(value);
-    } else if (option == L"--acceleration") {
-      options.field.acceleration = number(value);
-    } else if (option == L"--smoothing") {
-      options.field.smoothing = number(value);
-    } else if (option == L"--max-speed") {
-      options.field.maxSpeed = number(value);
+    } else if (option == L"--sensitivity" || option == L"--acceleration" ||
+               option == L"--smoothing" || option == L"--max-speed") {
+      throw std::invalid_argument("Relative tuning was removed; adjust mouse sensitivity in In Falsus");
     } else {
       throw std::invalid_argument("Unknown option; use --help");
     }
@@ -164,8 +162,9 @@ void printHelp() {
     "  --video-port 27183      Independent loopback video listener\n"
     "  --resolution 720p       720p or 1080p, client aspect preserved\n"
     "  --fps 60 --bitrate 8000000\n"
+    "Relative Field uses 1280 mouse units per touch-area width; tune sensitivity in In Falsus.\n"
+    "Experimental absolute mapping only:\n"
     "  --field-left 0.05 --field-right 0.95 --field-y 0.5\n"
-    "  --sensitivity 1 --acceleration 0 --smoothing 0 --max-speed 12000\n"
     "  --calibrate             Pick game Field endpoints with the PC mouse, save and exit\n"
     "  --save-profile          Save Field and video options, then exit\n"
     "  --profile PATH          Load/save a named profile (explicit flags override it)\n"

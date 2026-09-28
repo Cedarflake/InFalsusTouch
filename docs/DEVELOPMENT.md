@@ -43,6 +43,9 @@ uv run --python 3.13 tests/profile-integration.py
 # 安装应用及测试 APK，使用 dry-run Host 验证真机 USB 输入。
 .\scripts\test-device.ps1
 
+# 仅验证原生触控、USB 输入与设置迁移，不操作设置页面。
+.\scripts\test-device.ps1 -SkipBuild -InputOnly
+
 # 使用项目自己的 Direct3D 测试窗口验证视频，不注入游戏输入。
 uv run --python 3.13 tests/video-integration.py
 .\scripts\build-android.ps1 -DeviceTests

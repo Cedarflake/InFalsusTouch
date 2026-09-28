@@ -66,7 +66,7 @@ class MotionEventDeviceTest {
     val reordered = fingers.reversed().map { if (it.id == 7) it.copy(x = 450f) else it.copy(x = 590f) }
     dispatch(view, MotionEvent.ACTION_MOVE, reordered)
     dispatch(view, MotionEvent.ACTION_CANCEL, reordered)
-    assertEquals(listOf("A0.5", "D1", "D2", "D3", "D4", "D5", "D6", "A0.75", "CLEAR"), sink.events)
+    assertEquals(listOf("D1", "D2", "D3", "D4", "D5", "D6", "R0.25", "CLEAR"), sink.events)
   }
 
   @Test fun nativePointerUpUsesActionIndexAndReferenceCounts() = withView { view, sink ->

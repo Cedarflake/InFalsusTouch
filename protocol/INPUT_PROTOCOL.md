@@ -36,6 +36,14 @@ the IEEE-754 binary32 bit representation. Never serialize a native C++ struct.
 | 128 | ACK | Echo sequence and timestamp, lane/value zero |
 | 129 | CONFIGURATION | Unsolicited Host-to-phone snapshot, described below; never acknowledged |
 
+`FIELD_RELATIVE` is the default gameplay path. Android reports displacement as a
+fraction of the configured Field touch span. Host converts it at a fixed 1280
+mouse units per span, carrying fractional units within each gesture. It does not
+scale by the selected window width, arrival interval or video resolution, and
+adds no acceleration, smoothing or speed limit. Gameplay sensitivity belongs to
+In Falsus. `FIELD_ABSOLUTE` remains available for experimental OS cursor mapping;
+it does not establish an absolute position in the game's locked Field.
+
 CONFIGURATION reuses the fixed frame with type-specific fields: lane contains the
 display mask (0..127); status is 0 synced IF bindings, 1 defaults, or 2 unavailable
 bindings/input paused. Sequence is a nonzero configuration generation. Value is

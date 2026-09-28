@@ -23,9 +23,16 @@ and real USB transport to a dry-run Windows host passed on 2026-09-28; see
 - Add a second Field finger: it must not steal control. Lift the owner: the
   second finger must not be promoted until it is lifted and pressed again.
 - Rapidly tap the same lane and alternating lanes; confirm no missed UP/stuck key.
-- Confirm left/center/right Field mapping at different window positions, DPI
-  scales and negative-origin monitors, including after moving the game window.
-- Test Relative mode and the sensitivity/acceleration/smoothing/speed options.
+- Use Relative Field and tune sensitivity in In Falsus. Compare slow/fast swipes,
+  tiny corrections, direction reversals and simultaneous six-key holds.
+- Lift and re-touch at another position: Field must not jump. Test ownership
+  handoff between devices without replaying the waiting device's movements.
+- Compare the same swipe with different game window positions, sizes and DPI.
+  Host uses a fixed conversion; record any game-dependent differences separately.
+- Confirm fresh installs and upgraded preferences select Relative, and that
+  language, theme, visible controls and calibrated coordinates survive upgrade.
+- Experimental Absolute is a separate diagnostic. Its normal-chart alignment
+  failure is recorded in `docs/FIELD-MAPPING.md`; OS cursor tests are insufficient.
 - In Aligned mode, verify four central keys and two side keys at both the enlarged
   upper button area and the judgment line. Fit bars must not trigger input.
 - Adjust button height without moving the picture or judgment references. Field
@@ -91,6 +98,7 @@ and real USB transport to a dry-run Windows host passed on 2026-09-28; see
 | Six-key + Field simultaneous operation | Not tested |
 | USB disconnect release timing | Not tested |
 | Real SendInput accepted by game | USB Shift+Space starts tutorial; full six-key gameplay remains open |
+| Absolute Field touch-to-marker alignment | Failed on a normal chart: identical positions retain different offsets; see [investigation](../docs/FIELD-MAPPING.md) |
 | Measured control RTT (method/sample count) | Not tested |
 
 ## Video and sustained gameplay

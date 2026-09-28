@@ -7,7 +7,7 @@ namespace ift {
 class InputSession {
 public:
   explicit InputSession(InputState& state);
-  Packet process(const Packet& packet, double seconds);
+  Packet process(const Packet& packet);
 
 private:
   InputState& state_;

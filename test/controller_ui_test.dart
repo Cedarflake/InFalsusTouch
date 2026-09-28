@@ -14,7 +14,7 @@ Map<String, Object?> settingsFixture() => {
   "theme": "dark",
   "controlsMask": 127,
   "layoutMode": "ALIGNED",
-  "fieldMode": "ABSOLUTE",
+  "fieldMode": "RELATIVE",
   "videoScale": "FIT",
   "laneHeight": 0.4,
   "fieldHeight": 0.65,

@@ -24,11 +24,12 @@ class SettingsStore(context: Context, name: String = "controller-settings") : Cl
   fun load(): LoadedSettings {
     val defaults = ControlSettings()
     return try {
+      val storedFieldMode = FieldMode.valueOf(preferences.getString("fieldMode", defaults.fieldMode.name) ?: defaults.fieldMode.name)
       LoadedSettings(ControlSettings(
         language = preferences.getString("language", defaults.language) ?: defaults.language,
         theme = preferences.getString("theme", defaults.theme) ?: defaults.theme,
         controlsMask = preferences.getInt("controlsMask", defaults.controlsMask),
-        fieldMode = FieldMode.valueOf(preferences.getString("fieldMode", defaults.fieldMode.name) ?: defaults.fieldMode.name),
+        fieldMode = if (preferences.getInt("fieldInputVersion", 0) < 1) defaults.fieldMode else storedFieldMode,
         layoutMode = LayoutMode.valueOf(preferences.getString("layoutMode", defaults.layoutMode.name) ?: defaults.layoutMode.name),
         videoScale = VideoScale.valueOf(preferences.getString("videoScale", defaults.videoScale.name) ?: defaults.videoScale.name),
         laneHeight = preferences.getFloat("laneHeight", defaults.laneHeight),
@@ -73,6 +74,7 @@ class SettingsStore(context: Context, name: String = "controller-settings") : Cl
         .putString("theme", value.theme)
         .putInt("controlsMask", value.controlsMask)
         .putString("fieldMode", value.fieldMode.name)
+        .putInt("fieldInputVersion", 1)
         .putString("layoutMode", value.layoutMode.name)
         .putString("videoScale", value.videoScale.name)
         .putFloat("laneHeight", value.laneHeight)

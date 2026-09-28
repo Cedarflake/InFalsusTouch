@@ -101,10 +101,16 @@ def run(host):
                         read_ack(connection, request)
                     exchange(connection, 4, 9, value=0.5)
                     exchange(connection, 3, 10, lane=3)
+                    exchange(connection, 8, 11)
+                    moves = [packet(5, 12, value=1), packet(5, 13, value=-0.25), packet(5, 14, value=0.125)]
+                    connection.sendall(b"".join(moves))
+                    for request in moves:
+                        assert read_ack(connection, request)[4] == 4
                 lines = wait_for_trace(trace, lambda rows: sum(row.startswith("UP ") for row in rows) == 6)
                 assert lines[:6] == [f"DOWN {lane}" for lane in range(1, 7)]
                 assert "ABS 640 360" in lines, lines
-                print("PASS: fragmented/coalesced packets, six-key hold, Field, EOF release")
+                assert [line for line in lines if line.startswith("REL ")] == ["REL 1280", "REL -320", "REL 160"], lines
+                print("PASS: fragmented/coalesced packets, full relative displacement, six-key hold, Field, EOF release")
 
                 for test_name, invalid in (
                     ("reserved byte", lambda: packet(7, 4)[:-1] + b"\x01"),

@@ -42,7 +42,7 @@ width; only controls intersecting an actual cutout receive local padding.
 | Language | System initially; English or 中文 can be chosen and persisted |
 | Theme | Dark initially; Light, Dark or System can be chosen and persisted |
 | Visible controls | All six lanes and Field; any subset including none is valid and saved per phone |
-| Field mode | Absolute; Relative is available |
+| Field mode | Relative; Absolute remains experimental |
 | Layout | Aligned Field + Floor; fixed Overlay and Reserved are also available |
 | Video scaling | Fit: complete, centered, undistorted image; Stretch changes proportions; Crop hides edges |
 | Prefer 120 Hz display | On; requests 120 Hz for the controller window, subject to system policy |
@@ -56,6 +56,14 @@ width; only controls intersecting an actual cutout receive local padding.
 | Video statistics / Field outline | Off |
 | Find USB Host automatically | Off; opt in for foreground retry |
 | Settings entry | Two taps within two seconds; no expanded gameplay toolbar |
+
+Field uses horizontal relative movement by default. Adjust mouse sensitivity in
+In Falsus. Touch-down establishes a new origin without moving Field, so lifting
+and touching elsewhere does not reposition it. On upgrade, preferences written
+before this change switch to Relative without resetting language, theme, visible
+keys or calibration. Explicitly selecting experimental Absolute afterward is
+persisted normally. The experimental mode positions the OS cursor; it has not
+passed game Field alignment tests.
 
 Fit is the recommended reading mode. A 16:9 game occupies 1920 x 1080 pixels on
 a 2400 x 1080 phone, with 240-pixel side bars. App UI insets do not resize this
@@ -129,30 +137,39 @@ Dry-run tests ignore the default file, but can load an explicitly named profile.
 | --- | --- |
 | `--field-left`, `--field-right` | 0.05 / 0.95; normalized selected client, left < right |
 | `--field-y` | 0.5; normalized fixed client Y |
-| `--sensitivity` | 1; >0 and <=20 |
-| `--acceleration` | 0; 0–10 |
-| `--smoothing` | 0; >=0 and <1 |
-| `--max-speed` | 12000; >0 and <=100000 pixels/second |
 | `--resolution` | `720p`; also `1080p` |
 | `--fps` | 60; 24–60 |
 | `--bitrate` | 8000000; 500000–40000000 bits/second |
 
-`--calibrate` selects a game window and records the PC cursor at three prompts:
+Relative Field converts a full touch-area width to a fixed 1280 mouse movement
+units. This unit conversion does not depend on game window size, video resolution
+or packet arrival times. Fractional units carry into subsequent movements within
+the gesture. Host adds no sensitivity multiplier, acceleration, smoothing or speed
+cap; adjust gameplay sensitivity in In Falsus. The Windows input path remains
+SendInput, and the app does not change system mouse settings.
+
+`--calibrate` is for experimental absolute mapping. It selects a game window and
+records the PC cursor at three prompts:
 left endpoint, right endpoint, and fixed height. Keep the console focused and
 the game visible beside it, move the mouse without clicking, then press Enter.
 Type `q` to cancel. Points outside the game client, reversed endpoints, or a
 window that moves/resizes/closes invalidate the calibration without saving.
-The result uses physical client coordinates and retains relative-mode settings.
+The result uses physical client coordinates and does not affect relative input.
 Restart Host after calibration to use the saved values.
 
-Actual In Falsus 1.0.4b tutorial probes show cursor locking/recentering. The default
-absolute client mapping moves the in-game Field cursor over only part of its range.
+Actual In Falsus 1.0.4b normal-chart probes show cursor locking and history-dependent
+Field positions for identical absolute requests. Adjusting endpoints alone is insufficient.
 Phone judgment alignment and PC cursor calibration are separate; absolute gameplay
-alignment remains unresolved. Relative input moves the cursor, with travel depending
-on game/Host sensitivity. Do not infer in-game alignment from GetCursorPos alone.
+alignment remains unresolved. Relative input is the chosen gameplay path, with
+sensitivity controlled in the game. Do not infer in-game alignment from GetCursorPos alone.
+See [the Field investigation](FIELD-MAPPING.md) for the current evidence.
 
-Profiles are a bounded UTF-8/ASCII `key=value` format with `version=1`. Unknown,
-duplicate, malformed or unsupported values are errors. Save flushes a temporary
+Profiles are a bounded UTF-8/ASCII `key=value` format, saved with `version=2`.
+Version 1 files still load: valid legacy sensitivity/acceleration/smoothing/speed
+values are ignored with a console notice, while calibration and video settings
+are preserved. Saving rewrites them as version 2 without those retired values.
+The old CLI flags are rejected with guidance to use In Falsus's sensitivity setting.
+Unknown, duplicate, malformed or unsupported values are errors. Save flushes a temporary
 file then replaces the destination; a failed validation leaves the existing
 file unchanged. Window handles, diagnostic flags, port overrides and trace paths
 are session options and are not persisted. Copying the default profile to a

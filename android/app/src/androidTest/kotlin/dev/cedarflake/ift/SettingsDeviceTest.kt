@@ -35,6 +35,33 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 @RunWith(AndroidJUnit4::class)
 class SettingsDeviceTest {
+  @Test fun legacyFieldModeMigratesWithoutResettingOtherPreferences() {
+    val context = InstrumentationRegistry.getInstrumentation().targetContext
+    val name = "field-migration-test"
+    val preferences = context.getSharedPreferences(name, Context.MODE_PRIVATE)
+    val original = ControlSettings(language = "zh", theme = "light", controlsMask = 73,
+      fieldMode = FieldMode.ABSOLUTE, fieldLeft = 0.12345f, laneHeight = 0.35f)
+    fun save(value: ControlSettings) {
+      SettingsStore(context, name).use { store ->
+        val completed = CountDownLatch(1)
+        val success = AtomicBoolean()
+        store.save(value) { success.set(it); completed.countDown() }
+        assertTrue(completed.await(3, TimeUnit.SECONDS))
+        assertTrue(success.get())
+      }
+    }
+    try {
+      save(original)
+      assertTrue(preferences.edit().remove("fieldInputVersion").commit())
+      val migrated = original.copy(fieldMode = FieldMode.RELATIVE)
+      SettingsStore(context, name).use { assertEquals(LoadedSettings(migrated, false), it.load()) }
+      save(migrated)
+      SettingsStore(context, name).use { assertEquals(LoadedSettings(migrated, false), it.load()) }
+      save(original)
+      SettingsStore(context, name).use { assertEquals(LoadedSettings(original, false), it.load()) }
+    } finally { context.deleteSharedPreferences(name) }
+  }
+
   @Test fun settingsPersistAcrossStoreInstancesAndRecoverFromCorruption() {
     val context = InstrumentationRegistry.getInstrumentation().targetContext
     val name = "settings-device-test"

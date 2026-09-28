@@ -23,9 +23,20 @@ void mappingTests() {
     mapField(std::numeric_limits<double>::quiet_NaN(), client, config);
   });
   RelativeMapper relative;
-  check(relative.move(0.1, 1000, 0.01, config) == 100, "Relative displacement failed");
+  check(relative.move(1) == 1280, "A full-width swipe must not be speed limited");
+  check(relative.move(-1) == -1280, "Relative movement must be symmetric");
+  int split = 0;
+  for (int index = 0; index < 4096; ++index) split += relative.move(1.0 / 4096);
+  check(split == 1280, "Frequent sub-unit moves must preserve the full displacement");
+  for (int index = 0; index < 4096; ++index) split += relative.move(-1.0 / 4096);
+  check(split == 0, "Reversing the same path must not introduce drift");
+  check(relative.move(1.0 / 4096) == 0, "Sub-unit motion must accumulate");
+  check(relative.move(-1.0 / 4096) == 0, "Sub-unit reversal must cancel without a jump");
+  check(relative.move(3.0 / 4096) == 0, "Sub-unit motion must remain pending");
   relative.reset();
-  auto limited = config;
-  limited.maxSpeed = 100;
-  check(relative.move(1, 1000, 0.01, limited) == 1, "Relative speed cap failed");
+  check(relative.move(1.0 / 4096) == 0, "A new gesture must not inherit a fractional remainder");
+  for (const auto invalid : {2.0, -2.0, std::numeric_limits<double>::infinity(),
+       std::numeric_limits<double>::quiet_NaN()}) {
+    expectError<std::invalid_argument>([&] { relative.move(invalid); });
+  }
 }

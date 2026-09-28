@@ -1,6 +1,7 @@
 #include "windows/config/host-profile.h"
 
 #include <charconv>
+#include <cmath>
 #include <iomanip>
 #include <locale>
 #include <set>
@@ -41,6 +42,7 @@ void validate(const HostProfile& profile) {
 HostProfile parseProfile(std::string_view text) {
   if (text.size() > 8192) throw std::invalid_argument("Host profile is too large");
   HostProfile profile;
+  int version = 0;
   std::set<std::string> keys;
   while (!text.empty()) {
     const auto newline = text.find('\n');
@@ -53,15 +55,22 @@ HostProfile parseProfile(std::string_view text) {
     const auto value = trim(line.substr(separator + 1));
     if (!keys.emplace(key).second) throw std::invalid_argument("Duplicate host profile key");
     if (key == "version") {
-      if (value != "1") throw std::invalid_argument("Unsupported host profile version");
+      if (value != "1" && value != "2") throw std::invalid_argument("Unsupported host profile version");
+      version = value == "1" ? 1 : 2;
     } else if (key == "field-left") profile.field.left = number<double>(value);
     else if (key == "field-right") profile.field.right = number<double>(value);
     else if (key == "field-y") profile.field.y = number<double>(value);
-    else if (key == "sensitivity") profile.field.sensitivity = number<double>(value);
-    else if (key == "acceleration") profile.field.acceleration = number<double>(value);
-    else if (key == "smoothing") profile.field.smoothing = number<double>(value);
-    else if (key == "max-speed") profile.field.maxSpeed = number<double>(value);
-    else if (key == "resolution") {
+    else if (key == "sensitivity" || key == "acceleration" || key == "smoothing" || key == "max-speed") {
+      const auto legacy = number<double>(value);
+      if (!std::isfinite(legacy) ||
+          (key == "sensitivity" && (legacy <= 0 || legacy > 20)) ||
+          (key == "acceleration" && (legacy < 0 || legacy > 10)) ||
+          (key == "smoothing" && (legacy < 0 || legacy >= 1)) ||
+          (key == "max-speed" && (legacy <= 0 || legacy > 100000))) {
+        throw std::invalid_argument("Invalid legacy relative profile setting");
+      }
+      profile.hasLegacyRelativeSettings = true;
+    } else if (key == "resolution") {
       if (value == "720p") { profile.video.width = 1280; profile.video.height = 720; }
       else if (value == "1080p") { profile.video.width = 1920; profile.video.height = 1080; }
       else throw std::invalid_argument("Profile resolution must be 720p or 1080p");
@@ -69,7 +78,10 @@ HostProfile parseProfile(std::string_view text) {
     else if (key == "bitrate") profile.video.bitrate = number<std::uint32_t>(value);
     else throw std::invalid_argument("Unknown host profile key");
   }
-  if (!keys.contains("version")) throw std::invalid_argument("Host profile is missing version=1");
+  if (!version) throw std::invalid_argument("Host profile is missing its version");
+  if (version != 1 && profile.hasLegacyRelativeSettings) {
+    throw std::invalid_argument("Relative tuning was removed; adjust mouse sensitivity in In Falsus");
+  }
   validate(profile);
   return profile;
 }
@@ -78,14 +90,10 @@ std::string serializeProfile(const HostProfile& profile) {
   validate(profile);
   std::ostringstream output;
   output.imbue(std::locale::classic());
-  output << std::setprecision(17) << "version=1\n"
+  output << std::setprecision(17) << "version=2\n"
     << "field-left=" << profile.field.left << '\n'
     << "field-right=" << profile.field.right << '\n'
     << "field-y=" << profile.field.y << '\n'
-    << "sensitivity=" << profile.field.sensitivity << '\n'
-    << "acceleration=" << profile.field.acceleration << '\n'
-    << "smoothing=" << profile.field.smoothing << '\n'
-    << "max-speed=" << profile.field.maxSpeed << '\n'
     << "resolution=" << (profile.video.height == 720 ? "720p" : "1080p") << '\n'
     << "fps=" << profile.video.fps << '\n'
     << "bitrate=" << profile.video.bitrate << '\n';

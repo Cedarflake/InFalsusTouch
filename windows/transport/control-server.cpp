@@ -41,7 +41,6 @@ struct Controller {
   std::uint8_t controls = allControls;
   Clock::time_point lastPacket = Clock::now();
   Clock::time_point partialStart = lastPacket;
-  Clock::time_point lastMovement = lastPacket;
 
   void queue(const Packet& packet) {
     if (replies.size() >= 256) throw std::runtime_error("Client is not consuming replies");
@@ -150,9 +149,7 @@ void runControlServer(const HostOptions& options, const GameWindow& target,
         controller->received += static_cast<std::size_t>(count);
         if (controller->received != packetSize) continue;
         const auto packet = decodePacket(controller->incoming);
-        const double seconds = std::chrono::duration<double>(tick - controller->lastMovement).count();
-        if (packet.type == MessageType::fieldRelative) controller->lastMovement = tick;
-        auto reply = controller->session.process(packet, seconds);
+        auto reply = controller->session.process(packet);
         if (!controller->joined) {
           group.join(index);
           controller->joined = true;

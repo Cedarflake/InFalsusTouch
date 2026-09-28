@@ -12,12 +12,21 @@ baseline. Settings now persist on both devices, with phone/PC Field calibration,
 Aligned/Overlay/Reserved layouts, Fit/Stretch/Crop, USB discovery and PC video-quality profiles.
 The latest aligned layout has taller 40% buttons, native pressed feedback, six-point
 judgment calibration, centered full-frame video and an independent 120 Hz display hint.
-Physical gameplay and absolute Field alignment remain open; the full goal is active.
+Physical gameplay acceptance remains open. Relative Field is now the default,
+following the user's tablet trial and game-managed sensitivity decision.
+Experimental absolute Field alignment remains unresolved.
 The 2026-09-29 UI update consolidates USB logs, centers partial key selections,
 adds automatic settings saving and appearance preferences, and keeps the connection
 action on the status row. The Controls page combines cooperative play and key/IME
 guidance in one top card. Validation includes Flutter analysis/tests, Kotlin tests,
 lint and APK installation; the latest device UI flow has not been rerun.
+
+The Field update uses a fixed 1280-unit horizontal reference, retains fractional
+movement and removes Host gain, acceleration, smoothing and speed limiting.
+Old phone preferences switch to Relative while preserving other settings; old
+Host profiles retain calibration/video and retire their relative tuning values.
+[FIELD-MAPPING.md](FIELD-MAPPING.md) records the game probes and comparisons with
+InFalsusTouchTool, Moonlight and Sunshine.
 
 ## Acceptance gates
 
@@ -27,17 +36,18 @@ lint and APK installation; the latest device UI flow has not been rerun.
 | Windows host compilation | Passed, MSVC 19.44 / CMake 3.31.6 / Windows SDK 10.0.26100.0 |
 | Android APK compilation | Passed, Gradle 8.11.1 / AGP 8.9.2 / Kotlin 2.1.20 / JDK 21 |
 | C++ input protocol / input state / mapping / video / profile / cooperative suites | 6/6 passed |
-| Kotlin settings / touch / input+video protocol / queue / socket / native-host tests | 35/35 passed, no skips; includes 186 partial-selection/layout combinations |
+| Kotlin settings / touch / input+video protocol / queue / socket / native-host tests | 37/37 passed, no skips; includes relative retouch, native-host deltas and 186 partial-selection/layout combinations |
 | Flutter analysis and UI tests | No analysis issues; 18/18 tests passed |
-| Native profile persistence and CLI precedence integration | Passed, including invalid/missing profile and unchanged-file failure checks |
-| TCP disconnect / malformed / reconnect integration | 8/8 checks passed |
+| Native profile persistence and CLI precedence integration | Passed, including legacy tuning migration, retired flags, invalid/missing profile and unchanged-file failure checks |
+| TCP disconnect / malformed / reconnect integration | 8/8 checks passed, including coalesced full-width relative movement |
 | Android lint | Passed, 0 errors; 5 advisory warnings for pinned test dependencies and KTX suggestions |
 | Cooperative TCP input and live key sync | Seven simulated clients, seven scenarios passed; physical multi-phone run pending |
 | Shared hardware video broadcast | Six healthy simulated viewers plus one stalled viewer passed; one shared encoding verified |
-| Android 14 device MotionEvent / USB / settings instrumentation | Previous UI build: 10/11 passed; latest layout and centering revision not rerun on device |
+| Android 14 device MotionEvent / USB / settings persistence and migration | 7/7 selected tests passed on 2026-09-29; actual USB trace contains REL 1280 / REL -320 and six key releases; current full UI flow not rerun |
 | Android Activity launch and landscape screen inspection | Passed at 2400 x 1080 |
 | Physical finger tracking and full In Falsus chart gameplay | Not tested |
 | Actual In Falsus USB SendInput | Shift+Space starts the 1.0.4b tutorial; full chart input remains open |
+| Actual-chart absolute Field mapping | Failed: repeated midpoint can retain different game positions; investigation and reproducible probes in [FIELD-MAPPING.md](FIELD-MAPPING.md) |
 | Aligned game video / enlarged seven-pointer transport / feedback screenshots | 1/1 passed with real game capture and dry-run input |
 | OS native scan codes, Field mapping, EOF/watchdog/focus release | Passed against project-owned Win32 target; game cursor mapping is separate |
 | Phone display and centered Fit | Panel/app 120 Hz; complete 1920 x 1080 frame at (240, 0) on 2400 x 1080 |
@@ -56,6 +66,7 @@ uv run --python 3.13 tests\tcp-integration.py --host dist\InFalsusTouchHost.exe
 uv run --python 3.13 tests\multiplayer-integration.py
 uv run --python 3.13 tests\profile-integration.py
 .\scripts\test-device.ps1 -SkipBuild
+.\scripts\test-device.ps1 -SkipBuild -InputOnly
 uv run --python 3.13 tests\video-integration.py --seconds 8 --min-fps 58
 uv run --python 3.13 tests\video-device.py
 uv run --python 3.13 tests\multiplayer-video.py
@@ -179,11 +190,14 @@ Complete six-key chart acceptance by In Falsus, physical seven-finger capacity, 
 cable-unplug detection time, multi-monitor/DPI behavior and user-perceived input
 latency still need gameplay testing. Long thermal/stability runs, 1080p60,
 multi-monitor capture, window resize/device-loss recovery and physical
-glass-to-glass latency remain unverified. Actual 1.0.4b tutorial probes show that
-the game locks/recenters the OS cursor. Default absolute mapping moves the game's
-Field cursor over only part of its range; visual alignment of the phone's judgment
-lines does not establish touch-to-game-cursor alignment. Relative probes move the
-cursor, but a verified absolute mapping solution is still required.
+glass-to-glass latency remain unverified. Normal-chart probes on 2026-09-29
+confirmed that the former default absolute mapping can leave the game's Field marker at
+different positions for the same normalized request. A visible-edge homing attempt
+also retained an offset. The game locks the OS cursor; its coordinates cannot prove
+touch-to-game alignment. [Field investigation](FIELD-MAPPING.md) records the valid
+observations, excluded menu run, and next acceptance criteria. Relative is the
+chosen gameplay mode; physical hand-feel acceptance is still required. Absolute
+mapping remains experimental.
 See `tests/manual-acceptance.md` for the remaining physical checks.
 
 ## Real-game and native input evidence

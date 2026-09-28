@@ -11,6 +11,7 @@ namespace ift {
 struct HostProfile {
   FieldConfig field;
   VideoOptions video;
+  bool hasLegacyRelativeSettings = false;
 };
 
 HostProfile parseProfile(std::string_view text);

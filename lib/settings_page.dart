@@ -278,9 +278,11 @@ class _SettingsPageState extends State<SettingsPage> {
     ),
     _Section(
       title: s.field,
-      subtitle: s.fieldHint,
+      subtitle: draft.text("fieldMode") == "RELATIVE"
+          ? s.fieldHint
+          : s.absoluteFieldHint,
       children: [
-        choice("fieldMode", {"ABSOLUTE": s.absolute, "RELATIVE": s.relative}),
+        choice("fieldMode", {"RELATIVE": s.relative, "ABSOLUTE": s.absolute}),
         slider(s.fieldHeight, "fieldHeight", 10, 100),
         if (draft.text("layoutMode") != "ALIGNED") ...[
           slider(s.leftEdge, "fieldLeft", 0, 99),

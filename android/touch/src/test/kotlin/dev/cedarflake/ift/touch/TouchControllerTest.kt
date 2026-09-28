@@ -86,7 +86,7 @@ class TouchControllerTest {
     touch.up(3)
     assertEquals(7, touch.fieldPointerId)
     for (lane in 0..5) assertEquals(if (lane == 3) 0 else 1, touch.laneCount(lane))
-    assertEquals(listOf("A0.5", "D1", "D2", "D3", "D4", "D5", "D6", "A0.75", "U4"), sink.events)
+    assertEquals(listOf("D1", "D2", "D3", "D4", "D5", "D6", "R0.25", "U4"), sink.events)
   }
 
   @Test fun additionalFieldFingerCannotStealOrBecomeLane() {
@@ -96,7 +96,7 @@ class TouchControllerTest {
     touch.up(3)
     touch.move(8, 50f)
     assertEquals(-1, touch.fieldPointerId)
-    assertEquals(listOf("A0.25"), sink.events)
+    assertEquals(emptyList(), sink.events)
     touch.up(8)
     touch.down(8, 50f, 350f)
     assertEquals("D1", sink.events.last())
@@ -131,5 +131,25 @@ class TouchControllerTest {
     relative.move(5, 375f)
     relative.move(5, 800f)
     assertEquals(listOf("R0.25", "R0.25"), sink.events)
+  }
+
+  @Test fun defaultRelativeTouchDoesNotJumpOnRetouchOrReplayCancelledMotion() {
+    touch.down(5, 300f, 150f)
+    touch.move(5, 450f)
+    touch.up(5)
+    touch.down(5, 150f, 150f)
+    touch.move(5, 150f)
+    touch.move(5, 300f)
+    touch.cancel()
+    touch.move(5, 500f)
+    assertEquals(listOf("R0.25", "R0.25", "CLEAR"), sink.events)
+    assertEquals(2, sink.fieldBegins)
+  }
+
+  @Test fun experimentalAbsoluteModeStillSendsPositions() {
+    val absolute = TouchController(sink, TouchGeometry(600f, 400f, ControlSettings(fieldMode = FieldMode.ABSOLUTE)))
+    absolute.down(5, 300f, 150f)
+    absolute.move(5, 450f)
+    assertEquals(listOf("A0.5", "A0.75"), sink.events)
   }
 }

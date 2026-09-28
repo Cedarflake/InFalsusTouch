@@ -4,7 +4,7 @@ namespace ift {
 
 InputSession::InputSession(InputState& state) : state_(state) {}
 
-Packet InputSession::process(const Packet& packet, double seconds) {
+Packet InputSession::process(const Packet& packet) {
   validatePacket(packet);
   if (packet.type == MessageType::ack || packet.type == MessageType::configuration || packet.sequence != nextSequence_ ||
       (!hasHello_ && packet.type != MessageType::hello) ||
@@ -13,7 +13,7 @@ Packet InputSession::process(const Packet& packet, double seconds) {
   }
   ++nextSequence_;
   hasHello_ = true;
-  const bool ready = state_.apply(packet, seconds);
+  const bool ready = state_.apply(packet);
   return {MessageType::ack, 0, static_cast<std::uint8_t>(ready ? 0 : 1),
           packet.sequence, 0, packet.timestampNs};
 }

@@ -23,7 +23,7 @@ void InputState::updateTarget(bool active, Rect client) {
   }
 }
 
-bool InputState::apply(const Packet& packet, double seconds) {
+bool InputState::apply(const Packet& packet) {
   validatePacket(packet);
   if (packet.type == MessageType::releaseAll || packet.type == MessageType::hello) {
     if (!releaseAll()) {
@@ -63,7 +63,7 @@ bool InputState::apply(const Packet& packet, double seconds) {
       throw std::runtime_error("Absolute mouse injection failed");
     }
   } else if (packet.type == MessageType::fieldRelative) {
-    const int delta = relative_.move(packet.value, client_.width, seconds, config_);
+    const int delta = relative_.move(packet.value);
     if (delta != 0 && !sink_.relative(delta)) {
       throw std::runtime_error("Relative mouse injection failed");
     }

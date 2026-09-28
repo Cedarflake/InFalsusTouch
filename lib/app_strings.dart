@@ -84,11 +84,14 @@ class AppStrings {
       ? "中央四轨与左右侧轨跟随游戏画面。Field 在按钮上方，只处理横向移动。"
       : "Four center lanes and two side lanes follow the picture. Field tracks horizontal movement above the buttons.";
   String get field => zh ? "Field 控制" : "Field control";
-  String get absolute => zh ? "绝对位置" : "Absolute";
+  String get absolute => zh ? "绝对位置（实验）" : "Absolute (experimental)";
   String get relative => zh ? "相对滑动" : "Relative";
   String get fieldHint => zh
-      ? "游戏会锁定鼠标。绝对位置仍需校准；本地触点标记不代表游戏光标已对齐。"
-      : "The game locks the mouse. Absolute travel still needs calibration; the touch marker does not confirm in-game cursor alignment.";
+      ? "水平滑动控制 Field，灵敏度请在 In Falsus 中调整。抬手后可从任意位置继续滑动。"
+      : "Slide horizontally to move Field. Adjust sensitivity in In Falsus. Lift and touch anywhere to continue sliding.";
+  String get absoluteFieldHint => zh
+      ? "实验模式：仅定位系统光标，无法保证与游戏 Field 对齐。"
+      : "Experimental: positions the system cursor and does not guarantee alignment with the game's Field.";
   String get fieldHeight => zh ? "Field 触控高度" : "Field touch height";
   String get leftEdge => zh ? "Field 左边界" : "Field left edge";
   String get rightEdge => zh ? "Field 右边界" : "Field right edge";

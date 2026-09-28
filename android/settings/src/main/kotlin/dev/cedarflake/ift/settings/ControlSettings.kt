@@ -8,7 +8,7 @@ data class ControlSettings(
   val language: String = "system",
   val theme: String = "dark",
   val controlsMask: Int = 127,
-  val fieldMode: FieldMode = FieldMode.ABSOLUTE,
+  val fieldMode: FieldMode = FieldMode.RELATIVE,
   val layoutMode: LayoutMode = LayoutMode.ALIGNED,
   val videoScale: VideoScale = VideoScale.FIT,
   val laneHeight: Float = 0.4f,

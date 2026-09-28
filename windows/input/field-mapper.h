@@ -18,10 +18,6 @@ struct FieldConfig {
   double left = 0.05;
   double right = 0.95;
   double y = 0.5;
-  double sensitivity = 1;
-  double acceleration = 0;
-  double smoothing = 0;
-  double maxSpeed = 12000;
 
   void validate() const;
 };
@@ -32,11 +28,10 @@ FieldConfig calibrateField(const FieldConfig& base, const Rect& client, Point le
 
 class RelativeMapper {
 public:
-  int move(double normalizedDelta, int width, double seconds, const FieldConfig& config);
+  int move(double normalizedDelta);
   void reset();
 
 private:
-  double velocity_ = 0;
   double remainder_ = 0;
 };
 
