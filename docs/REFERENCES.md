@@ -1,0 +1,9 @@
+# Platform references
+
+- [Android multi-touch](https://developer.android.com/develop/ui/views/touch-and-input/gestures/multi): pointer IDs are stable, event indices can change.
+- [MotionEvent](https://developer.android.com/reference/android/view/MotionEvent): action indices and native pointer coordinates.
+- [SendInput](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-sendinput): injection results and privilege isolation.
+- [MOUSEINPUT](https://learn.microsoft.com/en-us/windows/win32/api/winuser/ns-winuser-mouseinput): absolute virtual-desktop coordinates.
+- [ADB](https://developer.android.com/tools/adb): authorized USB debugging, device selection and reverse forwarding.
+- [AGP 8.9 compatibility](https://developer.android.com/build/releases/agp-8-9-0-release-notes): Gradle 8.11.1, SDK 35 and JDK requirements.
+- [AndroidX Test releases](https://developer.android.com/jetpack/androidx/releases/test): pinned device-test dependencies.

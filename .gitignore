@@ -1,0 +1,12 @@
+/.tools/
+/.cache/
+/build/
+/dist/
+**/.gradle/
+**/build/
+**/local.properties
+*.user
+*.iml
+.idea/
+*.log
+__pycache__/
