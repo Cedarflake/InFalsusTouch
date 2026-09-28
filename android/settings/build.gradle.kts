@@ -1,5 +1,7 @@
 plugins { kotlin("jvm") }
 
+dependencies { testImplementation(kotlin("test-junit")) }
+
 java {
   sourceCompatibility = JavaVersion.VERSION_17
   targetCompatibility = JavaVersion.VERSION_17

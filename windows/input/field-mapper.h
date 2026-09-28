@@ -28,6 +28,7 @@ struct FieldConfig {
 
 Point mapField(double normalizedX, const Rect& client, const FieldConfig& config);
 Point normalizeDesktop(Point point, const Rect& desktop);
+FieldConfig calibrateField(const FieldConfig& base, const Rect& client, Point left, Point right, Point vertical);
 
 class RelativeMapper {
 public:

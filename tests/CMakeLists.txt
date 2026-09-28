@@ -4,10 +4,11 @@ add_executable(ift_core_tests
   input-tests.cpp
   mapping-tests.cpp
   video-tests.cpp
+  profile-tests.cpp
 )
 target_link_libraries(ift_core_tests PRIVATE ift_core)
 target_compile_definitions(ift_core_tests PRIVATE IFT_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
-foreach(suite IN ITEMS protocol input mapping video)
+foreach(suite IN ITEMS protocol input mapping video profile)
   add_test(NAME ${suite} COMMAND ift_core_tests ${suite})
 endforeach()
 

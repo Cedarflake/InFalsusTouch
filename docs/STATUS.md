@@ -2,12 +2,13 @@
 
 ## Current milestone
 
-Phase 1 input and Phase 2 hardware video prototypes are implemented and verified
+Phase 1 input, Phase 2 hardware video and Phase 4 settings prototypes are implemented and verified
 on 2026-09-28. The connected Android 14 phone passed real USB H.264 decoding,
 rendered color checks, seven synthetic pointers during playback and reconnect.
 Bounded queues, frame pacing and local latency statistics provide the Phase 3
-baseline. Physical gameplay and the Phase 4 settings/calibration UX remain open;
-the full product goal is still active.
+baseline. Settings now persist on both devices, with phone/PC Field calibration,
+Overlay/Reserved layouts, Fit/Fill/Crop, USB discovery and PC video-quality profiles.
+Physical gameplay remains open; the full product goal is still active.
 
 ## Acceptance gates
 
@@ -16,18 +17,19 @@ the full product goal is still active.
 | Architecture and input protocol | Defined |
 | Windows host compilation | Passed, MSVC 19.44 / CMake 3.31.6 / Windows SDK 10.0.26100.0 |
 | Android APK compilation | Passed, Gradle 8.11.1 / AGP 8.9.2 / Kotlin 2.1.20 / JDK 21 |
-| C++ input protocol / input state / mapping / video suites | 4/4 passed |
-| Kotlin touch / input+video protocol / queue / socket / native-host tests | 22/22 passed, no skips |
+| C++ input protocol / input state / mapping / video / profile suites | 5/5 passed |
+| Kotlin settings / touch / input+video protocol / queue / socket / native-host tests | 25/25 passed, no skips |
+| Native profile persistence and CLI precedence integration | Passed, including invalid/missing profile and unchanged-file failure checks |
 | TCP disconnect / malformed / reconnect integration | 8/8 checks passed |
 | Android lint | Passed, no issues found |
-| Android 14 device MotionEvent + USB transport instrumentation | 4/4 passed |
+| Android 14 device MotionEvent / USB / settings / persistence / calibration instrumentation | 7/7 passed |
 | Android Activity launch and landscape screen inspection | Passed at 2400 x 1080 |
 | Physical finger tracking and In Falsus gameplay | Not tested |
 | WGC / GPU conversion / hardware H.264 / TCP | Passed, including Baseline SPS and >=58 FPS gate |
-| Android hardware decode / actual output colors / concurrent seven-pointer input / reconnect | 1/1 device integration test passed |
-| 720p60 short-run throughput | PC 60.15 FPS; USB phone steady receive 60.00 FPS, present callbacks 59.00 FPS |
+| Android hardware decode / output colors / seven-pointer input / settings and calibration isolation / reconnect | 1/1 device integration test passed |
+| 720p60 short-run throughput | PC 60.15 FPS; latest USB phone steady receive 59.99 FPS, present callbacks 58.85 FPS |
 | Measured latency tuning | Bounded queues, WGC pacing, low-latency codec selection and local statistics implemented |
-| Full settings / calibration UX | Phase 4, not implemented |
+| Settings / calibration UX | Implemented; phone persistence/dialog/calibration and PC profile/mapping checks passed; physical PC cursor wizard use remains manual |
 
 ## Reproduce
 
@@ -35,6 +37,7 @@ the full product goal is still active.
 .\scripts\build-windows.ps1
 .\scripts\build-android.ps1 -DeviceTests
 uv run --python 3.13 tests\tcp-integration.py --host dist\InFalsusTouchHost.exe
+uv run --python 3.13 tests\profile-integration.py
 .\scripts\test-device.ps1 -SkipBuild
 uv run --python 3.13 tests\video-integration.py --seconds 8 --min-fps 58
 uv run --python 3.13 tests\video-device.py
@@ -60,10 +63,12 @@ Local artifacts and evidence (ignored by Git):
 - `android/transport/build/interop/` — native-host integration logs and traces.
 - `build/device-test/instrumentation.txt` and `input-trace.txt` — physical USB run.
 - `build/device-test/phase1-screen.png` — actual device screenshot, inspected.
+- `build/device-test/settings-screen.png` — settings dialog screenshot.
 - `build/video-test/metrics.json`, `host.log`, `pattern.log`, `sample.h264` — PC hardware stream test.
 - `build/video-device-test/instrumentation.txt`, `input-trace.txt`, `video-metrics.json` — real USB video test.
 - `build/video-device-test/video-surface.png` — decoded Surface pixels, six color bands checked.
 - `build/video-device-test/video-screen.png` — actual device UI with video and lane overlay, inspected.
+- `build/video-device-test/calibration-screen.png` — full-screen Field calibration with video still playing, inspected.
 
 ## Video measurements
 
@@ -76,12 +81,13 @@ color pattern. These short runs are not measurements of In Falsus under load.
   and time before WGC handed the frame to the application.
 - Concurrent local dry-run input RTT: median 0.158 ms, maximum 0.289 ms.
   This local loopback test does not include USB; the phone reports its own RTT.
-- Phone steady interval: 7.017 seconds, receive 60.00 FPS, presentation callbacks
-  59.00 FPS while Field and six lanes remained held. Queue depth at the final
-  sample was zero. Thirty compressed/decoded frames were dropped over the session,
+- Latest phone steady interval after the settings/layout change: 7.017 seconds,
+  receive 59.99 FPS, presentation callbacks 58.85 FPS while Field and six lanes
+  remained held. Queue depth at the final sample was zero. Twenty-nine
+  compressed/decoded frames were dropped over the session,
   including startup recovery; this is not a zero-drop claim.
-- Last phone sample: decoder 5.32 ms, complete-packet receive to presentation
-  callback 35.63 ms. These are individual local stage samples, not percentiles or
+- Last phone sample: decoder 7.33 ms, complete-packet receive to presentation
+  callback 37.66 ms. These are individual local stage samples, not percentiles or
   glass-to-glass latency. Earlier samples varied; no cross-device clocks are subtracted.
 
 ## Resolved issues
@@ -106,6 +112,10 @@ color pattern. These short runs are not measurements of In Falsus under load.
   instrumentation shell, observes the resumed Activity and uses bounded waits.
 - Codec startup can outrun the tiny receive queue. Recovery waits for an IDR,
   flushes and resubmits SPS/PPS instead of decoding a broken dependency chain.
+- Dialog dismissal can run after the calibration overlay is created. Input
+  gating now checks the active overlay before restoring control. The USB video
+  test opens settings while six keys are held, enters calibration, injects fresh
+  synthetic touches, and verifies exactly one down/up pair per lane at the Host.
 
 ## Remaining acceptance
 
@@ -113,6 +123,6 @@ Real SendInput acceptance by In Falsus, physical seven-finger capacity, actual
 cable-unplug detection time, multi-monitor/DPI behavior and user-perceived input
 latency still need gameplay testing. Long thermal/stability runs, 1080p60,
 multi-monitor capture, window resize/device-loss recovery and physical
-glass-to-glass latency remain unverified. Full settings persistence, calibration
-workflow and exposing Overlay/Reserved/Fit/Fill/Crop are the next UX work.
+glass-to-glass latency remain unverified. The installed game executable has been
+located from the user's supplied directory; actual game acceptance is next.
 See `tests/manual-acceptance.md` for the remaining physical checks.

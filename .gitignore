@@ -3,6 +3,7 @@
 /build/
 /dist/
 **/.gradle/
+**/.kotlin/
 **/build/
 **/local.properties
 *.user

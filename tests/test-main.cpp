@@ -3,6 +3,7 @@
 #include <iostream>
 
 void videoTests();
+void profileTests();
 
 int main(int argc, char** argv) {
   try {
@@ -17,6 +18,7 @@ int main(int argc, char** argv) {
       mappingTests();
     }
     if (suite == "video" || suite == "all") videoTests();
+    if (suite == "profile" || suite == "all") profileTests();
     std::cout << suite << " tests passed\n";
     return 0;
   } catch (const std::exception& error) {

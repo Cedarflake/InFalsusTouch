@@ -95,8 +95,12 @@ hardware, D3D11-aware async H.264 MFT on the capture GPU. It requests Baseline
 are reported. Encoder absence is explicit; there is no automatic software fallback.
 Android selects a hardware decoder, prefers reported low-latency support, and
 decodes directly to a Surface. Default Fit and Overlay preserve the game aspect.
-The layout model supports Fill, Crop and Reserved; exposing and persisting all
-settings and calibration remains the UX milestone.
+The phone exposes Fill, Crop and Reserved together with persistent touch/display
+settings. Calibration overlays share the controller's exact dimensions and
+insets. Settings and calibration release/disable game input while video remains
+active. A foreground retry policy discovers the fixed USB endpoint when enabled.
+Windows profiles persist Field mapping and video quality; explicit CLI values
+override them. See [SETTINGS.md](docs/SETTINGS.md) for validation and storage rules.
 
 Capture/encode/send times use a PC monotonic clock. Receive/decode/present times
 use an Android monotonic clock. Cross-device timestamp subtraction is invalid

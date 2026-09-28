@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cwctype>
 #include <iostream>
+#include <limits>
 #include <stdexcept>
 
 namespace ift {
@@ -80,6 +81,7 @@ HWND chooseWindow(const HostOptions& options) {
   if (!(std::wcin >> choice) || choice == 0 || choice > windows.size()) {
     throw std::runtime_error("No valid target selected; use --list / --window");
   }
+  std::wcin.ignore(std::numeric_limits<std::streamsize>::max(), L'\n');
   return windows[choice - 1].handle;
 }
 

@@ -2,6 +2,9 @@
 
 #include <iostream>
 #include <stdexcept>
+#include <vector>
+
+#include "windows/config/profile-file.h"
 
 namespace ift {
 namespace {
@@ -32,8 +35,14 @@ std::uint64_t integer(const std::wstring& text) {
 HostOptions parseOptions(int argc, wchar_t** argv) {
   HostOptions options;
   bool explicitVideo = false;
+  bool useProfile = true;
+  bool explicitProfile = false;
+  std::vector<std::pair<std::wstring, std::wstring>> values;
   for (int index = 1; index < argc; ++index) {
     const std::wstring option = argv[index];
+    if (option == L"--save-profile") { options.saveProfile = true; continue; }
+    if (option == L"--calibrate") { options.calibrate = true; continue; }
+    if (option == L"--no-profile") { useProfile = false; continue; }
     if (option == L"--video" || option == L"--no-video") {
       options.video.enabled = option == L"--video";
       explicitVideo = true;
@@ -59,6 +68,30 @@ HostOptions parseOptions(int argc, wchar_t** argv) {
       throw std::invalid_argument("Missing option value; use --help");
     }
     const std::wstring value = argv[index];
+    if (option == L"--profile") {
+      if (value.empty()) throw std::invalid_argument("Profile path cannot be empty");
+      options.profilePath = value;
+      explicitProfile = true;
+    } else values.emplace_back(option, value);
+  }
+  if (!useProfile && (explicitProfile || options.saveProfile || options.calibrate)) {
+    throw std::invalid_argument("--no-profile cannot be combined with profile or calibration options");
+  }
+  if (options.calibrate && options.dryRun) throw std::invalid_argument("Calibration requires a real selected game window");
+  if (useProfile && !options.help && !options.list && !options.videoDiagnostics &&
+      (!options.dryRun || explicitProfile || options.saveProfile)) {
+    if (!explicitProfile) options.profilePath = defaultProfilePath().wstring();
+    if (std::filesystem::exists(options.profilePath)) {
+      const auto profile = readProfileFile(options.profilePath);
+      options.field = profile.field;
+      const bool enabled = options.video.enabled;
+      options.video = profile.video;
+      options.video.enabled = enabled;
+    } else if (explicitProfile && !options.saveProfile && !options.calibrate) {
+      throw std::invalid_argument("Profile does not exist; create it with --save-profile or --calibrate");
+    }
+  }
+  for (const auto& [option, value] : values) {
     if (option == L"--port") {
       const auto port = integer(value);
       if (port < 1024 || port > 65535) {
@@ -127,6 +160,11 @@ void printHelp() {
     "  --fps 60 --bitrate 8000000\n"
     "  --field-left 0.05 --field-right 0.95 --field-y 0.5\n"
     "  --sensitivity 1 --acceleration 0 --smoothing 0 --max-speed 12000\n"
+    "  --calibrate             Pick game Field endpoints with the PC mouse, save and exit\n"
+    "  --save-profile          Save Field and video options, then exit\n"
+    "  --profile PATH          Load/save a named profile (explicit flags override it)\n"
+    "  --no-profile            Ignore saved defaults for this run\n"
+    "Default profile: %LOCALAPPDATA%\\InFalsusTouch\\host.ini. Dry-run ignores it.\n"
     "  --dry-run [--trace PATH] Simulate input without calling SendInput\n"
     "  --dry-run --video --window 0xHANDLE  Capture with simulated input\n"
     "Focus the selected game before touching. Ctrl+C releases keys and exits.\n";

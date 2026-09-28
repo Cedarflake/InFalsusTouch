@@ -42,6 +42,24 @@ Point normalizeDesktop(Point point, const Rect& desktop) {
   };
 }
 
+FieldConfig calibrateField(const FieldConfig& base, const Rect& client, Point left, Point right, Point vertical) {
+  if (client.width <= 1 || client.height <= 1) throw std::invalid_argument("Game client is too small to calibrate");
+  const auto inside = [&](Point point) {
+    const auto x = static_cast<long long>(point.x) - client.x;
+    const auto y = static_cast<long long>(point.y) - client.y;
+    return x >= 0 && x < client.width && y >= 0 && y < client.height;
+  };
+  if (!inside(left) || !inside(right) || !inside(vertical)) {
+    throw std::invalid_argument("Calibration points must be inside the selected game client");
+  }
+  auto result = base;
+  result.left = static_cast<double>(left.x - client.x) / (client.width - 1);
+  result.right = static_cast<double>(right.x - client.x) / (client.width - 1);
+  result.y = static_cast<double>(vertical.y - client.y) / (client.height - 1);
+  result.validate();
+  return result;
+}
+
 int RelativeMapper::move(double normalizedDelta, int width, double seconds,
                          const FieldConfig& config) {
   const double dt = std::clamp(seconds, 0.001, 0.05);

@@ -108,13 +108,19 @@ class ControllerView(context: Context, private val sink: TouchSink) : View(conte
     if (!isVideoVisible) canvas.drawText(phaseLabel, width / 2f, 80f * density, paint)
     paint.color = Color.rgb(97, 211, 197)
     if (!isVideoVisible && settings.showLabels) canvas.drawText(fieldLabel, width / 2f, (geometry.fieldTop + geometry.laneTop) / 2, paint)
+    if (settings.showFieldGuide) {
+      paint.style = Paint.Style.STROKE
+      paint.strokeWidth = density
+      canvas.drawRect(geometry.fieldLeft, geometry.fieldTop, geometry.fieldRight, geometry.laneTop, paint)
+      paint.style = Paint.Style.FILL
+    }
     val laneWidth = width / 6f
     val gap = settings.laneGapDp * density / 2
     for (lane in 0..5) {
       val pressed = controller.laneCount(lane) > 0
       val brightness = settings.brightness
       paint.color = if (pressed) Color.rgb((97 * brightness).toInt(), (211 * brightness).toInt(), (197 * brightness).toInt())
-        else Color.argb((255 * settings.laneOpacity).toInt(), 65, 83, 108)
+        else Color.argb((255 * settings.laneOpacity).toInt(), (65 * brightness).toInt(), (83 * brightness).toInt(), (108 * brightness).toInt())
       canvas.drawRect(lane * laneWidth + gap, geometry.laneTop, (lane + 1) * laneWidth - gap, height.toFloat(), paint)
       if (settings.showLabels) {
         paint.color = if (pressed) Color.BLACK else Color.WHITE

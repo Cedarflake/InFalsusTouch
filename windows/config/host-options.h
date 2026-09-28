@@ -13,12 +13,15 @@ struct HostOptions {
   std::uintptr_t window = 0;
   std::wstring title = L"In Falsus";
   std::wstring tracePath;
+  std::wstring profilePath;
   FieldConfig field;
   VideoOptions video;
   bool dryRun = false;
   bool list = false;
   bool videoDiagnostics = false;
   bool help = false;
+  bool saveProfile = false;
+  bool calibrate = false;
 };
 
 HostOptions parseOptions(int argc, wchar_t** argv);

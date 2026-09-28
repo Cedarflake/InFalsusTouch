@@ -3,7 +3,7 @@
 通过 USB 数据线把 Android 手机变成专用于 PC 音游 **In Falsus** 的横屏触控控制器。
 Windows 使用 C++20 / Win32，Android 使用 Kotlin / 原生 `MotionEvent`。
 
-**当前里程碑：输入与 USB 硬件视频原型。** 已实现 6K、多指 Hold、Field 绝对/相对控制、
+**当前里程碑：带设置与校准的 USB 控制器原型。** 已实现 6K、多指 Hold、Field 绝对/相对控制、
 独立输入通道，以及 WGC → GPU NV12 → 硬件 H.264 → Android MediaCodec / SurfaceView。
 真机验证覆盖了视频像素、同时输入和断开重连；In Falsus 实际游玩仍待验收。
 完整状态和性能测量边界见 [STATUS](docs/STATUS.md)。
@@ -72,7 +72,7 @@ Windows 脚本构建 Release 并运行 CTest。Android 脚本运行 Kotlin 测�
 5. 启动 In Falsus，然后运行 `dist/InFalsusTouchHost.exe`。
 6. Host 优先匹配标题中的 `In Falsus`；没有唯一匹配时显示窗口列表供选择。
 7. 打开 Android App，点击 **Connect**，切回 PC 游戏窗口，再开始触摸。
-8. 切换 Field Absolute / Relative 可用手机顶部按钮。关闭 Host 用 Ctrl+C；App 后台运行时会断连并释放。
+8. 手机通过 **Settings** 调节 Field、布局和显示；工具栏隐藏后点 **Menu** 打开。关闭 Host 用 Ctrl+C；App 后台运行时会断连并释放。
 
 脚本建立：
 
@@ -96,7 +96,25 @@ Android 固定连接 `127.0.0.1`，不提供 Wi-Fi Host 地址设置。
 Host 显示实际 WGC / GPU / 编码器诊断。支持 `MinUpdateInterval` 的 Windows 会由 Host
 统一控制取帧节奏，避免 165 Hz 屏幕被 WGC 的默认间隔限制到约 55 FPS。
 旧版系统、源窗口刷新率和 GPU 负载仍可能影响实际 FPS。视频断连会单独重试；
-输入断连需要重新 Connect，不重放旧 Hold。
+输入默认手动 Connect；设置中启用 **Find USB Host automatically** 后，会在前台自动连接和重试，
+不重放旧 Hold。主动 Disconnect 会停止重试，直到再次连接或重新打开 App。
+
+## Settings and saved profiles
+
+手机 Settings 支持 Absolute / Relative、Overlay / Reserved、Fit / Fill / Crop，以及轨道高度、
+透明度、间距、亮度、编号、Field 范围和调试统计。配置在本机保存，重启后恢复。
+连接后工具栏默认自动隐藏，保留 Menu 按钮；统计默认关闭，视频错误仍会显示。
+
+PC 视频质量与 Field 参数可以保存为默认配置：
+
+```powershell
+.\dist\InFalsusTouchHost.exe --resolution 1080p --fps 60 --bitrate 12000000 --save-profile
+.\dist\InFalsusTouchHost.exe
+```
+
+默认文件为 `%LOCALAPPDATA%\InFalsusTouch\host.ini`。`--profile PATH` 选择其他配置；
+显式命令行参数始终覆盖保存值，`--no-profile` 只在本次运行忽略配置。损坏配置会报错，
+不会静默覆盖。详见 [SETTINGS.md](docs/SETTINGS.md)。
 
 ## Window and Field calibration
 
@@ -105,11 +123,17 @@ Host 显示实际 WGC / GPU / 编码器诊断。支持 `MinUpdateInterval` 的 W
 .\dist\InFalsusTouchHost.exe --window 0x123456
 .\dist\InFalsusTouchHost.exe --title "In Falsus" --field-left 0.05 --field-right 0.95 --field-y 0.5
 .\dist\InFalsusTouchHost.exe --sensitivity 1 --acceleration 0 --smoothing 0 --max-speed 12000
+.\dist\InFalsusTouchHost.exe --calibrate
 ```
 
 `--window` 的句柄必须使用本次 `--list` 的实际值。Field 坐标相对于所选窗口客户区；
 Host 负责 DPI 与多显示器坐标转换。`max-speed` 单位为像素/秒，`smoothing` 范围为 `[0,1)`。
 Relative 最终还会受 Windows 相对鼠标输入处理影响，默认推荐 Absolute。
+
+PC 校准时，让游戏窗口与 Host 控制台同时可见、保持控制台焦点，把鼠标移到游戏 Field 的
+左端、右端和固定高度，各按一次 Enter；输入 `q` 取消。校准完成后保存并退出，重新启动 Host 生效。
+手机的 **Calibrate phone Field area** 单独设置手指可舒适滑动的左右边界，不能代替 PC 游戏区域校准。
+设置和校准期间会释放触点，视频继续播放；关闭后需重新按下才能控制游戏。
 
 Host 仅在目标窗口处于前台时接受游戏输入。切换到其他窗口会释放所有按键；
 返回游戏后必须抬起旧触点再按下。失焦不会把旧 Hold 自动重放到新窗口。

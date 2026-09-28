@@ -3,19 +3,19 @@ package dev.cedarflake.ift
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.os.Handler
+import android.os.Build
 import android.os.Looper
-import android.os.ParcelFileDescriptor
 import android.os.SystemClock
 import android.view.InputDevice
+import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.PixelCopy
 import android.view.SurfaceView
+import android.view.inspector.WindowInspector
 import android.widget.Button
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry
-import androidx.test.runner.lifecycle.Stage
 
 import dev.cedarflake.ift.video.VideoSnapshot
 
@@ -27,7 +27,6 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 import java.io.File
-import java.io.Closeable
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
@@ -76,7 +75,39 @@ class VideoDeviceTest {
       assertTrue("Expected sustained 720p60 reception, got $steadyReceiveFps", steadyReceiveFps in 58.0..62.0)
       assertTrue("Presentation rate fell below the acceptance bound: $steadyPresentFps", steadyPresentFps in 55.0..63.0)
       scenario.onActivity { activity ->
+        val content = activity.findViewById<android.view.ViewGroup>(android.R.id.content)
+        content.findViewWithTag<Button>("menu").performClick()
+        content.findViewWithTag<Button>("settings").performClick()
+      }
+      SystemClock.sleep(500)
+      if (Build.VERSION.SDK_INT >= 29) {
+        scenario.onActivity {
+          val button = WindowInspector.getGlobalWindowViews()
+            .firstNotNullOfOrNull { it.findViewWithTag<Button>("calibrate-touch") }
+          requireNotNull(button).performClick()
+        }
+        instrumentation.waitForIdleSync()
+        SystemClock.sleep(300)
+        scenario.onActivity { activity ->
+          val view = activity.findViewById<android.view.ViewGroup>(android.R.id.content).findViewWithTag<ControllerView>("controller")
+          for (count in 1..7) dispatch(view, count, if (count == 1) MotionEvent.ACTION_DOWN else
+            MotionEvent.ACTION_POINTER_DOWN or ((count - 1) shl MotionEvent.ACTION_POINTER_INDEX_SHIFT), SystemClock.uptimeMillis())
+        }
+        instrumentation.uiAutomation.takeScreenshot()?.let { screenshot ->
+          File(instrumentation.targetContext.filesDir, "calibration-screen.png").outputStream().use {
+            screenshot.compress(Bitmap.CompressFormat.PNG, 100, it)
+          }
+          screenshot.recycle()
+        }
+        scenario.onActivity { it.findViewById<android.view.ViewGroup>(android.R.id.content)
+          .findViewWithTag<Button>("calibration-cancel").performClick() }
+      } else {
+        instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
+        instrumentation.waitForIdleSync()
+      }
+      scenario.onActivity { activity ->
         val view = activity.findViewById<android.view.ViewGroup>(android.R.id.content).findViewWithTag<ControllerView>("controller")
+        dispatch(view, 7, MotionEvent.ACTION_MOVE, started)
         dispatch(view, 7, MotionEvent.ACTION_CANCEL, started)
       }
       instrumentation.uiAutomation.takeScreenshot()?.let { screenshot ->
@@ -114,34 +145,6 @@ class VideoDeviceTest {
       SystemClock.sleep(100)
     }
     error("Video did not present $count frames; last=${last.get()}")
-  }
-
-  private class DeviceActivity(private val activity: MainActivity) : Closeable {
-    fun onActivity(action: (MainActivity) -> Unit) {
-      InstrumentationRegistry.getInstrumentation().runOnMainSync { action(activity) }
-    }
-
-    override fun close() { onActivity { it.finish() } }
-
-    companion object {
-      fun launch(): DeviceActivity {
-        val instrumentation = InstrumentationRegistry.getInstrumentation()
-        val command = "am start -W -a android.intent.action.MAIN -c android.intent.category.LAUNCHER " +
-          "-f 0x10008000 -n dev.cedarflake.infalsustouch/dev.cedarflake.ift.MainActivity"
-        ParcelFileDescriptor.AutoCloseInputStream(instrumentation.uiAutomation.executeShellCommand(command)).use { it.readBytes() }
-        val current = AtomicReference<MainActivity?>()
-        val deadline = SystemClock.uptimeMillis() + 5000
-        while (SystemClock.uptimeMillis() < deadline) {
-          instrumentation.runOnMainSync {
-            current.set(ActivityLifecycleMonitorRegistry.getInstance().getActivitiesInStage(Stage.RESUMED)
-              .filterIsInstance<MainActivity>().firstOrNull())
-          }
-          current.get()?.let { return DeviceActivity(it) }
-          SystemClock.sleep(50)
-        }
-        error("Controller Activity did not resume after shell launch")
-      }
-    }
   }
 
   private fun dispatch(view: ControllerView, count: Int, action: Int, started: Long) {

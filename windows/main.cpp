@@ -6,6 +6,8 @@
 #include <thread>
 
 #include "windows/config/host-options.h"
+#include "windows/config/field-calibration.h"
+#include "windows/config/profile-file.h"
 #include "windows/input/trace-input.h"
 #include "windows/input/win32-input.h"
 #include "windows/transport/control-server.h"
@@ -34,7 +36,7 @@ BOOL WINAPI handleConsoleSignal(DWORD signal) {
 int wmain(int argc, wchar_t** argv) {
   int result = 0;
   try {
-    const auto options = ift::parseOptions(argc, argv);
+    auto options = ift::parseOptions(argc, argv);
     if (options.help) {
       ift::printHelp();
       return 0;
@@ -45,6 +47,12 @@ int wmain(int argc, wchar_t** argv) {
     }
     if (options.videoDiagnostics) {
       ift::printVideoDiagnostics();
+      return 0;
+    }
+    if (options.calibrate || options.saveProfile) {
+      if (options.calibrate) options.field = ift::calibrateGameWindow(ift::chooseWindow(options), options.field);
+      ift::writeProfileFile(options.profilePath, {options.field, options.video});
+      std::wcout << L"Saved profile: " << options.profilePath << L"\nStart Host again to use these settings.\n";
       return 0;
     }
     const auto window = options.dryRun && !options.video.enabled ? nullptr : ift::chooseWindow(options);

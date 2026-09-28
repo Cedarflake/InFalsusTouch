@@ -1,9 +1,7 @@
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
   <string name="app_name">InFalsusTouch</string>
   <string name="connect">Connect</string>
   <string name="disconnect">Disconnect</string>
-  <string name="absolute">Field: Absolute</string>
-  <string name="relative">Field: Relative</string>
   <string name="field_label">FIELD · slide horizontally</string>
   <string name="input_accessibility">Six rhythm lanes and a horizontal Field touch controller</string>
   <string name="status_idle">USB controller · Connect through ADB reverse</string>
@@ -11,4 +9,36 @@
   <string name="status_ready">USB ready · Input RTT %1$.1f ms</string>
   <string name="phase_label">InFalsusTouch · USB rhythm controller</string>
   <string name="video_idle">Video waiting for USB connection</string>
+  <string name="menu">Menu</string>
+  <string name="settings">Settings</string>
+  <string name="field_mode">Field mode</string>
+  <string name="layout_mode">Touch layout</string>
+  <string name="video_scale">Video scaling</string>
+  <string name="scale_help">Overlay puts lanes over video. Reserved keeps video above the lanes. Fit shows the whole frame; Fill stretches it; Crop fills the area with some edges hidden.</string>
+  <string name="lane_height">Lane height</string>
+  <string name="field_height">Field touch height</string>
+  <string name="touch_left">Phone Field left edge</string>
+  <string name="touch_right">Phone Field right edge</string>
+  <string name="lane_opacity">Lane opacity</string>
+  <string name="lane_gap">Lane gap</string>
+  <string name="lane_brightness">Lane brightness</string>
+  <string name="show_labels">Show lane labels</string>
+  <string name="show_statistics">Show video statistics</string>
+  <string name="show_field_guide">Show Field outline</string>
+  <string name="auto_connect">Find USB Host automatically</string>
+  <string name="auto_hide_controls">Hide toolbar while connected</string>
+  <string name="usb_discovery_help">Automatic connection looks for Host through ADB reverse while this app is open. Start Host and run setup-adb.ps1 on your PC first. Disconnect stops retries until you connect again or reopen the app.</string>
+  <string name="calibrate_touch">Calibrate phone Field area</string>
+  <string name="host_calibration_help" tools:ignore="TypographyDashes">Game Field edges and video quality are configured on your PC. Run Host with --calibrate to save the game area; use --resolution, --fps and --bitrate for video quality.</string>
+  <string name="save_settings">Save</string>
+  <string name="reset_settings">Defaults</string>
+  <string name="invalid_field_range">Left edge must be smaller than right edge.</string>
+  <string name="setting_value">%1$s: %2$d %3$s</string>
+  <string name="settings_recovered">Saved settings were invalid. Defaults are in use.</string>
+  <string name="settings_save_failed">Settings could not be saved. Changes remain active for this session.</string>
+  <string name="calibration_left">Tap the leftmost comfortable position in the Field area.</string>
+  <string name="calibration_right">Now tap the rightmost comfortable position.</string>
+  <string name="calibration_done">Highlighted area maps from the game Field left edge to its right edge. Save to apply.</string>
+  <string name="calibration_range_error">Choose a right edge at least 5% of the screen to the right of the left edge.</string>
+  <string name="calibration_restart">Start again</string>
 </resources>

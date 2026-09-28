@@ -16,6 +16,10 @@ data class ControlSettings(
   val laneGapDp: Float = 2f,
   val brightness: Float = 1f,
   val showLabels: Boolean = true,
+  val showStatistics: Boolean = false,
+  val showFieldGuide: Boolean = false,
+  val autoConnect: Boolean = false,
+  val autoHideControls: Boolean = true,
 ) {
   init {
     require(laneHeight in 0.1f..0.5f)

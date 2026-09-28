@@ -8,11 +8,7 @@ import android.view.SurfaceView
 import android.widget.FrameLayout
 
 import dev.cedarflake.ift.settings.ControlSettings
-import dev.cedarflake.ift.settings.LayoutMode
-import dev.cedarflake.ift.settings.VideoScale
-
-import kotlin.math.max
-import kotlin.math.min
+import dev.cedarflake.ift.settings.placeVideo
 
 @SuppressLint("ViewConstructor")
 class VideoViewport(context: Context) : FrameLayout(context) {
@@ -42,18 +38,11 @@ class VideoViewport(context: Context) : FrameLayout(context) {
 
   override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
     val availableWidth = right - left
-    val availableHeight = if (settings.layoutMode == LayoutMode.RESERVED) {
-      ((bottom - top) * (1 - settings.laneHeight)).toInt()
-    } else bottom - top
-    visibleBounds.set(0, 0, availableWidth, availableHeight)
+    val availableHeight = bottom - top
+    if (availableWidth <= 0 || availableHeight <= 0) return
+    val placement = placeVideo(availableWidth, availableHeight, videoWidth, videoHeight, settings)
+    visibleBounds.set(0, 0, availableWidth, placement.clipHeight)
     clipBounds = visibleBounds
-    val scaleX = availableWidth.toFloat() / videoWidth
-    val scaleY = availableHeight.toFloat() / videoHeight
-    val scale = if (settings.videoScale == VideoScale.CROP) max(scaleX, scaleY) else min(scaleX, scaleY)
-    val width = if (settings.videoScale == VideoScale.FILL) availableWidth else (videoWidth * scale).toInt()
-    val height = if (settings.videoScale == VideoScale.FILL) availableHeight else (videoHeight * scale).toInt()
-    val x = (availableWidth - width) / 2
-    val y = (availableHeight - height) / 2
-    surface.layout(x, y, x + width, y + height)
+    surface.layout(placement.left, placement.top, placement.left + placement.width, placement.top + placement.height)
   }
 }
