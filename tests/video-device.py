@@ -31,6 +31,11 @@ def mappings():
             if len(parts := line.split()) == 3}
 
 
+def apks(build_mode):
+    name = "InFalsusTouch-profile.apk" if build_mode == "profile" else "InFalsusTouch.apk"
+    return ROOT / "dist" / name, ROOT / f"android/app/build/outputs/apk/androidTest/{build_mode}/app-{build_mode}-androidTest.apk"
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--host", type=pathlib.Path, default=ROOT / "dist/InFalsusTouchHost.exe")
@@ -38,11 +43,12 @@ def main():
     parser.add_argument("--fps", type=int, choices=range(24, 121), default=60)
     parser.add_argument("--seconds", type=int, choices=range(6, 61), default=10)
     parser.add_argument("--skip-install", action="store_true")
+    parser.add_argument("--build-mode", choices=("debug", "profile"), default="debug")
     parser.add_argument("--output", type=pathlib.Path)
     args = parser.parse_args()
     width, height = (1920, 1080) if args.resolution == "1080p" else (1280, 720)
     run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
-    output = args.output or ROOT / "build" / "video-device-test" / f"{args.resolution}{args.fps}-{run_id}"
+    output = args.output or ROOT / "build" / "video-device-test" / f"{args.resolution}{args.fps}-{args.build_mode}-{run_id}"
     serial = adb("get-serialno").strip()
     if not serial or serial == "unknown":
         raise RuntimeError("Connect exactly one authorized USB phone")
@@ -67,10 +73,12 @@ def main():
             for local, remote in assigned.items():
                 adb("reverse", local, remote)
             if not args.skip_install:
-                print(adb("install", "-r", str(ROOT / "dist/InFalsusTouch.apk")), flush=True)
-                print(adb("install", "-r", "-t", str(ROOT / "android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk")), flush=True)
+                app_apk, test_apk = apks(args.build_mode)
+                print(adb("install", "-r", str(app_apk)), flush=True)
+                print(adb("install", "-r", "-t", str(test_apk)), flush=True)
             assert host.poll() is None, "Native video host exited"
             result = adb("shell", "am", "instrument", "-w", "-r", "-e", "usbVideo", "true",
+                         "-e", "appBuildMode", args.build_mode,
                          "-e", "videoWidth", str(width), "-e", "videoHeight", str(height),
                          "-e", "videoFps", str(args.fps),
                          "-e", "videoSeconds", str(args.seconds), "-e", "class",
@@ -83,9 +91,13 @@ def main():
             except subprocess.CalledProcessError:
                 pass
             else:
-                (output / "video-metrics.json").write_bytes(metrics_bytes)
-                metrics = json.loads(metrics_bytes)
-                print(json.dumps(metrics, indent=2), flush=True)
+                try:
+                    metrics = json.loads(metrics_bytes)
+                except (json.JSONDecodeError, UnicodeDecodeError):
+                    (output / "metrics-read.txt").write_bytes(metrics_bytes)
+                else:
+                    (output / "video-metrics.json").write_bytes(metrics_bytes)
+                    print(json.dumps(metrics, indent=2), flush=True)
             if "OK (1 test)" not in result or "FAILURES!!!" in result:
                 print((output / "host.log").read_text(encoding="utf-8", errors="replace"))
                 raise RuntimeError("USB video device test failed")
@@ -94,6 +106,7 @@ def main():
             assert metrics is not None, "Video instrumentation did not write its measurements"
             assert (metrics["width"], metrics["height"]) == (width, height)
             assert metrics["targetFps"] == args.fps
+            assert metrics["appBuildMode"] == args.build_mode
             trace = (output / "input-trace.txt").read_text(encoding="utf-8")
             for lane in range(1, 7):
                 assert trace.count(f"DOWN {lane}\n") == trace.count(f"UP {lane}\n") == 1, f"Lane {lane} hold/release mismatch"

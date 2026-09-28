@@ -120,6 +120,8 @@ The automated video test covers a Direct3D color pattern, WGC, hardware H.264,
 real USB, MediaCodec output pixels, seven synthetic pointers and reconnect. It
 does not substitute for the following checks with In Falsus:
 
+- Use an AOT profile build for performance measurements and record the app build
+  mode with the video profile. Debug/JIT measurements are a separate baseline.
 - Play varied, visually busy charts for at least 15 minutes at 720p60. Record
   receive/decode/present FPS, phone drops, queue depth, input RTT and thermals.
 - Confirm long holds and rapid chords remain reliable while video is busy.

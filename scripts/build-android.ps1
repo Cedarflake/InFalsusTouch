@@ -1,5 +1,11 @@
-param([switch]$SkipLint, [switch]$DeviceTests, [switch]$SkipFlutterChecks)
+param(
+  [switch]$SkipLint,
+  [switch]$DeviceTests,
+  [switch]$SkipFlutterChecks,
+  [ValidateSet('debug', 'profile')][string]$Mode = 'debug'
+)
 $ErrorActionPreference = 'Stop'
+$Mode = $Mode.ToLowerInvariant()
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $flutterCommand = Get-Command flutter -ErrorAction Stop
 $flutterSdk = Split-Path -Parent (Split-Path -Parent $flutterCommand.Source)
@@ -26,21 +32,23 @@ try {
 $env:JAVA_TOOL_OPTIONS = "$env:JAVA_TOOL_OPTIONS `"-Djdk.net.unixdomain.tmpdir=$javaSocketDir`"".Trim()
 $gradle = Join-Path $repoRoot '.tools\gradle-8.11.1\bin\gradle.bat'
 if (-not (Test-Path -LiteralPath $gradle)) { $gradle = Join-Path $repoRoot 'android\gradlew.bat' }
-$tasks = @(':settings:test', ':touch:test', ':transport:test', ':video:testDebugUnitTest', ':app:assembleDebug')
+$variant = if ($Mode -eq 'profile') { 'Profile' } else { 'Debug' }
+$tasks = @(':settings:test', ':touch:test', ':transport:test', ':video:testDebugUnitTest', ":app:assemble$variant")
 $hostExecutable = Join-Path $repoRoot 'build\windows\windows\Release\InFalsusTouchHost.exe'
 if (Test-Path -LiteralPath $hostExecutable) { $env:IFT_HOST_EXE = $hostExecutable }
-if (-not $SkipLint) { $tasks += ':app:lintDebug' }
-if ($DeviceTests) { $tasks += ':app:assembleDebugAndroidTest' }
+if (-not $SkipLint) { $tasks += ":app:lint$variant" }
+if ($DeviceTests) { $tasks += ":app:assemble${variant}AndroidTest" }
 Push-Location (Join-Path $repoRoot 'android')
 try {
   $ErrorActionPreference = 'Continue'
-  & $gradle --no-daemon --console=plain @tasks
+  & $gradle --no-daemon --console=plain "-PiftTestBuildType=$Mode" @tasks
   $buildExit = $LASTEXITCODE
   $ErrorActionPreference = 'Stop'
   if ($buildExit -ne 0) { throw 'Android build or verification failed' }
   $dist = Join-Path $repoRoot 'dist'
   New-Item -ItemType Directory -Force -Path $dist | Out-Null
-  Copy-Item -LiteralPath 'app\build\outputs\apk\debug\app-debug.apk' -Destination (Join-Path $dist 'InFalsusTouch.apk')
+  $apkName = if ($Mode -eq 'profile') { 'InFalsusTouch-profile.apk' } else { 'InFalsusTouch.apk' }
+  Copy-Item -LiteralPath "app\build\outputs\apk\$Mode\app-$Mode.apk" -Destination (Join-Path $dist $apkName)
 } finally {
   Pop-Location
 }

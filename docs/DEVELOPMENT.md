@@ -33,6 +33,20 @@ Android 脚本运行 Flutter 分析、界面测试、Kotlin 测试和 lint，然
 APK 使用开发签名。SDK、依赖缓存与构建输出不提交到 Git。
 Java 临时套接字目录由脚本设在项目内，只对当前进程生效。
 
+性能测量使用 Flutter AOT 的 profile 构建，避免将调试模式的 JIT 和额外检查
+混入发布性能结论，见 [Flutter 性能测量指南](https://docs.flutter.dev/perf/ui-performance)。
+它保留开发签名和诊断能力，不是正式发布包：
+
+```powershell
+.\scripts\build-android.ps1 -Mode profile -DeviceTests
+uv run --python 3.13 tests/video-device.py --build-mode profile
+uv run --python 3.13 tests/video-composition.py --build-mode profile --probe surface-hints --fps 120 --skip-install
+```
+
+产物 `dist/InFalsusTouch-profile.apk` 与调试 APK 分开保存。两个包使用相同应用 ID，
+可以覆盖安装并保留设置。视频测试会安装对应的应用与测试包，核对实际构建模式，
+并在结果中记录模式；`--skip-install` 同样要求手机上的包与所选模式一致。
+
 ## 测试
 
 ```powershell
@@ -59,6 +73,8 @@ uv run --python 3.13 tests/multiplayer-video.py
 视频测试使用与目标分辨率一致的原生 Direct3D 窗口，并核对接收端分辨率。
 每次结果保存在 `build/video-test/` 或 `build/video-device-test/` 下带分辨率与时间的子目录。
 `--skip-install` 仅用于手机已经安装本次构建的应用与测试 APK 时。
+PC 视频测试另存 `frame-timestamps.csv`，并统计采集、发送、接收的帧间隔；
+这些间隔用于检查送帧是否均匀，不代表端到端延迟。
 
 `video-recovery.py` 需要 `ffmpeg`，使用独立 PC 端口和自己的后台测试窗口验证
 缩放、比例变化、最小化恢复及视频重连。它检查实际解码颜色、居中留边、画面运动

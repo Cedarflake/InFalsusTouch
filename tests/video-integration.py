@@ -1,8 +1,10 @@
 """Real WGC/GPU/H.264 smoke test against a project-owned window, with dry-run input."""
 
 import argparse
+import csv
 from datetime import datetime, timezone
 import json
+import math
 import pathlib
 import re
 import socket
@@ -119,6 +121,7 @@ def main():
                 keyframes = 0
                 encoded_ms = []
                 frame_age_ms = []
+                timestamps = []
                 total_bytes = 0
                 with (output / "sample.h264").open("wb") as bitstream:
                     while started is None or time.monotonic() - started < args.seconds:
@@ -127,6 +130,7 @@ def main():
                         assert magic == b"IFV1" and version == 1 and reserved == tail == 0
                         assert 0 < size <= 4 * 1024 * 1024
                         payload = read_exact(video, size)
+                        received = time.perf_counter_ns()
                         if kind == 3:
                             raise RuntimeError(payload.decode("utf-8"))
                         assert (width, height, fps) == (*dimensions, args.fps)
@@ -148,12 +152,21 @@ def main():
                         total_bytes += size
                         encoded_ms.append((encoded - capture) / 1e6)
                         frame_age_ms.append((sent - capture) / 1e6)
+                        timestamps.append((seq, capture, encoded, sent, received))
                 heartbeat_stop.set()
                 heartbeat_thread.join(timeout=2)
                 assert not heartbeat_errors, heartbeat_errors
                 with control_lock:
                     send_input(6)
                 elapsed = time.monotonic() - started
+                def intervals(column):
+                    values = sorted((current[column] - previous[column]) / 1e6
+                                    for previous, current in zip(timestamps, timestamps[1:]))
+                    return {"samples": len(values), "mean": statistics.mean(values),
+                            "p05": values[math.ceil(len(values) * 0.05) - 1],
+                            "p95": values[math.ceil(len(values) * 0.95) - 1],
+                            "min": values[0], "max": values[-1]}
+
                 result = {
                     "width": dimensions[0], "height": dimensions[1], "targetFps": args.fps,
                     "frames": count, "seconds": elapsed, "fps": count / elapsed,
@@ -163,7 +176,14 @@ def main():
                     "captureToSendMeanMs": statistics.mean(frame_age_ms),
                     "inputRttMedianMs": statistics.median(rtts),
                     "inputRttMaxMs": max(rtts),
+                    "captureIntervalsMs": intervals(1),
+                    "sendIntervalsMs": intervals(3),
+                    "receiveIntervalsMs": intervals(4),
                 }
+                with (output / "frame-timestamps.csv").open("w", newline="", encoding="utf-8") as records:
+                    writer = csv.writer(records)
+                    writer.writerow(("sequence", "captureNs", "encodeNs", "sendNs", "receiveNs"))
+                    writer.writerows(timestamps)
                 (output / "metrics.json").write_text(json.dumps(result, indent=2), encoding="utf-8")
                 print(json.dumps(result, indent=2))
                 assert count > 60 and keyframes >= 2, "Insufficient real encoded frames/keyframes"

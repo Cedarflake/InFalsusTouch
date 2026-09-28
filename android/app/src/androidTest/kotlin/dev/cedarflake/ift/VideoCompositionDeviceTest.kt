@@ -71,8 +71,11 @@ class VideoCompositionDeviceTest {
       val file = File(instrumentation.targetContext.filesDir, name)
       check(!file.exists() || file.delete()) { "Cannot clear previous composition evidence" }
     }
+    val buildMode = DeviceBuild.mode()
+    assertEquals(InstrumentationRegistry.getArguments().getString("appBuildMode", "debug"), buildMode)
     val samples = JSONArray()
     val result = JSONObject().put("streamFps", fps).put("inputInjection", false).put("phases", samples)
+      .put("appBuildMode", buildMode)
     DeviceSettings { it.copy(controlsMask = 127, autoConnect = false, autoHideControls = false,
       showStatistics = false, highRefreshDisplay = true, layoutMode = LayoutMode.OVERLAY,
       videoScale = VideoScale.FIT) }.use {

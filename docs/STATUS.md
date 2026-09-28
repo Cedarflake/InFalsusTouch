@@ -351,6 +351,67 @@ mean decode-to-callback timestamp delay. All four compositor samples matched;
 the inspected video-only screenshot confirms both control layers were hidden.
 Evidence: `build/video-composition-test/60fps-20260928T225217138490Z/`.
 
+### AOT baseline, decoder operating rate and Host cadence, 2026-09-29
+
+The Android build script now supports a separate `-Mode profile` APK. Archive
+inspection confirmed AOT `libapp.so` files and no Dart kernel blob; the debug APK
+contained `kernel_blob.bin`. The same app ID/development signature preserves
+settings through installation. Earlier Flutter measurements above used debug
+builds and do not establish release performance. Video tests now identify the
+installed app's build type at runtime, including when installation is skipped.
+
+The AOT 720p60 interaction test passed decoded colors, seven synthetic pointers,
+Field deltas, settings/calibration isolation and reconnection. Over 21.03 seconds
+it received/decoded 60.00 FPS and reported 59.33 presentation callbacks/s. The
+last 240-frame receive-to-callback window was 31.41 ms mean / 38.37 ms P95,
+including 5.34 ms decode and 24.18 ms post-decode. This did not establish a video
+latency improvement over the debug build. Evidence:
+`build/video-device-test/720p60-profile-20260928T230742830570Z/`.
+
+The AOT 120 FPS Surface-hint comparison also failed: 34.40–89.73 presentation
+callbacks/s across its five phases, despite reception near 120 FPS. Decode rates
+varied from 48.74 to 120.18 FPS; per-phase software drops ranged from 0 to 571.
+Evidence: `build/video-surface-hints-test/120fps-profile-20260928T230505312033Z/`.
+These ordered runs do not prove that AOT makes presentation slower; they show
+that changing build mode alone did not resolve the observed failures.
+
+Two additional candidates were tested and **reverted**, not enabled for users:
+
+- On this SM8250/Qualcomm OMX decoder, requesting operating rate 32767 without
+  realtime priority, as used on selected devices by
+  [Moonlight](https://github.com/moonlight-stream/moonlight-android/blob/master/app/src/main/java/com/limelight/binding/video/MediaCodecHelper.java),
+  produced 31.43 / 38.24 ms receive-to-callback mean/P95 at 60 FPS. The 120 FPS
+  interaction run timed out before its required frame count; it has a final
+  snapshot in `instrumentation.txt`, not a completed steady measurement. There
+  was no demonstrated benefit. Evidence: `build/video-device-test/720p60-profile-20260928T231223647442Z/`
+  and `720p120-profile-20260928T231432933791Z/` under the same parent.
+- Taking the latest capture only at fixed Host deadlines narrowed PC send
+  interval P5/P95 from 4.63/13.10 ms to 6.36/10.24 ms at 120 FPS. However, mean
+  capture-available-to-send time increased from 2.81 to 5.16 ms. The phone still
+  failed: 119.99 receive / 93.61 decode / 73.27 presentation callbacks/s over
+  34.08 seconds, with 30.82 / 37.33 ms receive-to-callback mean/P95. PC evidence:
+  `build/video-test/720p120-20260928T231722805771Z/` and
+  `720p120-20260928T232136138560Z/`; phone evidence:
+  `build/video-device-test/720p120-profile-20260928T232254725601Z/`.
+
+The PC test retains per-frame capture/encode/send/receive timestamps in CSV and
+reports frame-interval distributions, separately from latency. A failed Android
+test that never wrote JSON no longer has its original failure masked by parsing
+the shell's missing-file message as JSON. Default playback stays at 60 FPS;
+system scheduling traces and physical Late-judgment verification remain open.
+
+Final verification rebuilt both debug/profile APKs and their instrumentation
+packages, with lint and 48 Kotlin tests passing. The restored Windows source
+passed all six CTest cases. Running the profile test against an installed debug
+app correctly failed with a build-mode mismatch, retaining that failure rather
+than a JSON parsing error. After restoring the profile app, the 720p60 test
+passed again: 60.00 receive/decode FPS and 59.45 presentation callbacks/s over
+11.02 seconds; the last 240-frame receive-to-callback window was 31.46 ms mean /
+36.45 ms P95. Preferences were compared byte-for-byte before and after the test;
+normal playback and the original ADB mappings were restored. Evidence:
+`build/video-device-test/720p60-profile-20260928T233719189760Z/` and
+`build/profile-mode-mismatch-run.log`.
+
 ### PC window recovery, 2026-09-29
 
 `tests/video-recovery.py` controls only its own background D3D test window and

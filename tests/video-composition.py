@@ -19,6 +19,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--host", type=pathlib.Path, default=ROOT / "dist/InFalsusTouchHost.exe")
     parser.add_argument("--skip-install", action="store_true")
+    parser.add_argument("--build-mode", choices=("debug", "profile"), default="debug")
     parser.add_argument("--probe", choices=("overlays", "surface-hints"), default="overlays")
     parser.add_argument("--fps", type=int, choices=(60, 90, 120), default=60)
     args = parser.parse_args()
@@ -35,7 +36,7 @@ def main():
         argument = "videoSurfaceHints"
         method = "comparesSurfaceFrameRateHintsWithinOneVideoSession"
     run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
-    output = ROOT / f"build/video-{probe}-test" / f"{args.fps}fps-{run_id}"
+    output = ROOT / f"build/video-{probe}-test" / f"{args.fps}fps-{args.build_mode}-{run_id}"
     serial = device.adb("get-serialno").strip()
     if not serial or serial == "unknown":
         raise RuntimeError("Connect exactly one authorized USB phone")
@@ -60,10 +61,12 @@ def main():
             for local, remote in assigned.items():
                 device.adb("reverse", local, remote)
             if not args.skip_install:
-                print(device.adb("install", "-r", str(ROOT / "dist/InFalsusTouch.apk")), flush=True)
-                print(device.adb("install", "-r", "-t", str(ROOT / "android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk")), flush=True)
+                app_apk, test_apk = device.apks(args.build_mode)
+                print(device.adb("install", "-r", str(app_apk)), flush=True)
+                print(device.adb("install", "-r", "-t", str(test_apk)), flush=True)
             assert host.poll() is None, "Native video host exited"
             result = device.adb("shell", "am", "instrument", "-w", "-r", "-e", argument, "true",
+                                "-e", "appBuildMode", args.build_mode,
                                 "-e", "videoFps", str(args.fps),
                                 "-e", "class", f"dev.cedarflake.ift.VideoCompositionDeviceTest#{method}",
                                 f"{device.APP}.test/androidx.test.runner.AndroidJUnitRunner")
@@ -82,6 +85,7 @@ def main():
             metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
             assert tuple(sample["name"] for sample in metrics["phases"]) == phases
             assert metrics["streamFps"] == args.fps
+            assert metrics["appBuildMode"] == args.build_mode
             print(f"PASS: {args.probe} comparison; evidence: {output}")
     finally:
         try:

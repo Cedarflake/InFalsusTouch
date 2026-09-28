@@ -16,6 +16,10 @@ android {
     versionName = "0.5.0-prototype"
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
+  testBuildType = providers.gradleProperty("iftTestBuildType").getOrElse("debug").also {
+    require(it in setOf("debug", "profile"))
+  }
+  buildFeatures { buildConfig = true }
   compileOptions {
     sourceCompatibility = JavaVersion.VERSION_17
     targetCompatibility = JavaVersion.VERSION_17
