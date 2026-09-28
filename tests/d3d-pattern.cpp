@@ -3,11 +3,65 @@
 #include <dxgi.h>
 #include <winrt/base.h>
 
+#include <algorithm>
 #include <chrono>
 #include <iostream>
+#include <sstream>
+#include <stdexcept>
+#include <string>
 #include <string_view>
 
 namespace {
+
+constexpr DWORD windowStyle = WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX;
+
+bool processCommands(HWND window, std::string& pending) {
+  const auto input = GetStdHandle(STD_INPUT_HANDLE);
+  DWORD available = 0;
+  if (!PeekNamedPipe(input, nullptr, 0, nullptr, &available, nullptr)) {
+    if (GetLastError() == ERROR_BROKEN_PIPE) return false;
+    throw std::runtime_error("Controlled pattern requires a stdin pipe");
+  }
+  if (available == 0) return true;
+  char bytes[256];
+  DWORD count = 0;
+  if (!ReadFile(input, bytes, std::min<DWORD>(available, sizeof(bytes)), &count, nullptr)) {
+    throw std::runtime_error("Cannot read pattern command");
+  }
+  pending.append(bytes, count);
+  if (pending.size() > 1024) throw std::runtime_error("Pattern command is too long");
+  for (auto end = pending.find('\n'); end != std::string::npos; end = pending.find('\n')) {
+    const auto line = pending.substr(0, end);
+    pending.erase(0, end + 1);
+    std::istringstream command(line);
+    std::string action;
+    command >> action;
+    if (action == "resize") {
+      LONG width = 0;
+      LONG height = 0;
+      if (!(command >> width >> height) || width < 128 || width > 1920 || height < 128 || height > 1080) {
+        throw std::runtime_error("Invalid pattern client size");
+      }
+      RECT rect{0, 0, width, height};
+      winrt::check_bool(AdjustWindowRect(&rect, windowStyle, FALSE));
+      winrt::check_bool(SetWindowPos(window, nullptr, 0, 0, rect.right - rect.left, rect.bottom - rect.top,
+        SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE));
+    } else if (action == "minimize") {
+      ShowWindow(window, SW_SHOWMINNOACTIVE);
+    } else if (action == "restore") {
+      ShowWindow(window, SW_SHOWNOACTIVATE);
+    } else {
+      throw std::runtime_error("Unknown pattern command");
+    }
+    std::string extra;
+    if (command >> extra) throw std::runtime_error("Unexpected pattern command argument");
+    RECT client{};
+    winrt::check_bool(GetClientRect(window, &client));
+    std::cout << "Pattern state: " << action << ' ' << client.right << ' ' << client.bottom
+      << ' ' << (IsIconic(window) ? "minimized" : "visible") << std::endl;
+  }
+  return true;
+}
 
 LRESULT CALLBACK windowProcedure(HWND window, UINT message, WPARAM parameter, LPARAM data) {
   if (message == WM_DESTROY) { PostQuitMessage(0); return 0; }
@@ -20,7 +74,7 @@ LRESULT CALLBACK windowProcedure(HWND window, UINT message, WPARAM parameter, LP
   return DefWindowProcW(window, message, parameter, data);
 }
 
-void render(HWND window, LONG width, LONG height) {
+void render(HWND window, LONG width, LONG height, bool controlled) {
   DXGI_SWAP_CHAIN_DESC swap{};
   swap.BufferDesc.Width = width;
   swap.BufferDesc.Height = height;
@@ -49,6 +103,7 @@ void render(HWND window, LONG width, LONG height) {
   };
   const float white[]{1, 1, 1, 1};
   unsigned frames = 0;
+  std::string pending;
   const auto started = std::chrono::steady_clock::now();
   MSG message{};
   for (;;) {
@@ -56,6 +111,22 @@ void render(HWND window, LONG width, LONG height) {
       if (message.message == WM_QUIT) return;
       TranslateMessage(&message);
       DispatchMessageW(&message);
+    }
+    if (controlled && !processCommands(window, pending)) return;
+    if (IsIconic(window)) {
+      Sleep(10);
+      continue;
+    }
+    RECT client{};
+    winrt::check_bool(GetClientRect(window, &client));
+    if (client.right != width || client.bottom != height) {
+      target = nullptr;
+      buffer = nullptr;
+      winrt::check_hresult(chain->ResizeBuffers(0, client.right, client.bottom, DXGI_FORMAT_UNKNOWN, 0));
+      winrt::check_hresult(chain->GetBuffer(0, IID_PPV_ARGS(buffer.put())));
+      winrt::check_hresult(device->CreateRenderTargetView(buffer.get(), nullptr, target.put()));
+      width = client.right;
+      height = client.bottom;
     }
     for (LONG lane = 0; lane < 6; ++lane) {
       const D3D11_RECT rectangle{lane * width / 6, 0, (lane + 1) * width / 6, height};
@@ -76,9 +147,10 @@ void render(HWND window, LONG width, LONG height) {
 
 int main(int argc, char** argv) {
   try {
-    const std::string_view resolution = argc == 2 ? argv[1] : "720p";
-    if (argc > 2 || (resolution != "720p" && resolution != "1080p")) {
-      std::cerr << "Usage: ift_video_pattern.exe [720p|1080p]\n";
+    const std::string_view resolution = argc >= 2 ? argv[1] : "720p";
+    const bool controlled = argc == 3 && std::string_view(argv[2]) == "--controlled";
+    if (argc > 3 || (argc == 3 && !controlled) || (resolution != "720p" && resolution != "1080p")) {
+      std::cerr << "Usage: ift_video_pattern.exe [720p|1080p] [--controlled]\n";
       return 1;
     }
     const LONG width = resolution == "1080p" ? 1920 : 1280;
@@ -90,21 +162,27 @@ int main(int argc, char** argv) {
     windowClass.lpfnWndProc = windowProcedure;
     windowClass.lpszClassName = L"InFalsusTouchVideoTest";
     if (!RegisterClassW(&windowClass)) return 1;
-    constexpr DWORD style = WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX;
     RECT rect{0, 0, width, height};
-    AdjustWindowRect(&rect, style, FALSE);
+    AdjustWindowRect(&rect, windowStyle, FALSE);
     const auto window = CreateWindowExW(0, windowClass.lpszClassName, L"InFalsusTouch Direct3D video test",
-      style, 30, 30, rect.right - rect.left, rect.bottom - rect.top, nullptr, nullptr, instance, nullptr);
+      windowStyle, 30, 30, rect.right - rect.left, rect.bottom - rect.top, nullptr, nullptr, instance, nullptr);
     if (!window) return 1;
     ShowWindow(window, SW_SHOWNOACTIVATE);
+    if (controlled) {
+      winrt::check_bool(SetWindowPos(window, HWND_BOTTOM, 0, 0, 0, 0,
+        SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE));
+    }
     RECT client{};
     if (!GetClientRect(window, &client) || client.right != width || client.bottom != height) return 1;
     std::cout << "0x" << std::hex << reinterpret_cast<std::uintptr_t>(window) << std::dec << std::endl;
     std::cout << "Pattern client: " << client.right << 'x' << client.bottom << std::endl;
-    render(window, width, height);
+    render(window, width, height, controlled);
     return 0;
   } catch (const winrt::hresult_error& error) {
     std::cerr << winrt::to_string(error.message()) << '\n';
+    return 1;
+  } catch (const std::exception& error) {
+    std::cerr << error.what() << '\n';
     return 1;
   }
 }

@@ -49,6 +49,7 @@ uv run --python 3.13 tests/profile-integration.py
 # 使用项目自己的 Direct3D 测试窗口验证视频，不注入游戏输入。
 uv run --python 3.13 tests/video-integration.py
 uv run --python 3.13 tests/video-integration.py --resolution 1080p --seconds 10 --min-fps 58
+uv run --python 3.13 tests/video-recovery.py
 .\scripts\build-android.ps1 -DeviceTests
 uv run --python 3.13 tests/video-device.py
 uv run --python 3.13 tests/video-device.py --resolution 1080p --skip-install
@@ -58,6 +59,10 @@ uv run --python 3.13 tests/multiplayer-video.py
 视频测试使用与目标分辨率一致的原生 Direct3D 窗口，并核对接收端分辨率。
 每次结果保存在 `build/video-test/` 或 `build/video-device-test/` 下带分辨率与时间的子目录。
 `--skip-install` 仅用于手机已经安装本次构建的应用与测试 APK 时。
+
+`video-recovery.py` 需要 `ffmpeg`，使用独立 PC 端口和自己的后台测试窗口验证
+缩放、比例变化、最小化恢复及视频重连。它检查实际解码颜色、居中留边、画面运动
+和持续输入心跳，不修改手机 USB 转发，也不向游戏发送输入。
 
 常规自动化使用 dry-run 输入接收端。`native-input`、`game-input` 和 `game-field`
 验收工具会向指定前台窗口发送实际输入，运行前应核对目标窗口。

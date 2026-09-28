@@ -55,6 +55,7 @@ InFalsusTouchTool, Moonlight and Sunshine.
 | OS native scan codes, Field mapping, EOF/watchdog/focus release | Passed against project-owned Win32 target; game cursor mapping is separate |
 | Phone display and centered Fit | Panel/app mode 120 Hz; complete image displayed in a 1920 x 1080 rectangle at (240, 0) on 2400 x 1080 |
 | WGC / GPU conversion / hardware H.264 / TCP | Passed, including Baseline SPS and >=58 FPS gate |
+| PC source resize / aspect changes / minimize and restore | 720p decoded color, centered bars, animation and independent input passed; minimize triggered a stream restart which the test receiver recovered |
 | Android hardware decode / output colors / seven-pointer input / settings and calibration isolation / reconnect | Passed at both 720p and 1080p with relative Field movement and restored device settings |
 | 720p60 short-run throughput | Latest USB phone steady receive and present callbacks both 59.96 FPS |
 | 1080p60 short-run throughput | PC 60.13 FPS; USB phone steady receive 60.04 FPS, present callbacks 59.86 FPS; native source and received dimensions verified |
@@ -73,6 +74,7 @@ uv run --python 3.13 tests\profile-integration.py
 .\scripts\test-device.ps1 -SkipBuild -InputOnly
 uv run --python 3.13 tests\video-integration.py --seconds 8 --min-fps 58
 uv run --python 3.13 tests\video-integration.py --resolution 1080p --seconds 10 --min-fps 58
+uv run --python 3.13 tests\video-recovery.py
 uv run --python 3.13 tests\video-device.py
 uv run --python 3.13 tests\video-device.py --resolution 1080p --skip-install
 uv run --python 3.13 tests\multiplayer-video.py
@@ -108,6 +110,24 @@ Local artifacts and evidence (ignored by Git):
 - `build/video-device-test/calibration-screen.png` — full-screen Field calibration with video still playing, inspected.
 
 ## Video measurements
+
+### PC window recovery, 2026-09-29
+
+`tests/video-recovery.py` controls only its own background D3D test window and
+uses isolated PC ports without changing ADB mappings. At 720p output, resizing
+the source from 1280 x 720 to 960 x 540, 900 x 900 and 1280 x 480, minimizing
+for 2.07 seconds, restoring and returning to the original size all passed.
+Fourteen decoded frames retained six correct colors, centered black bars and
+a moving marker. Each visible phase received 61 frames in its final second.
+
+Minimization triggered the existing encoder-stall restart. The test receiver
+reconnected with fresh SPS/PPS and an IDR; this is recovery through reconnection,
+not proof that the original socket remained open. A second deliberate video
+disconnect also recovered. Concurrent input retained all six holds until explicit
+release: 257 ACKs, median/max local RTT 0.143/0.669 ms and maximum ACK gap 95.70 ms.
+Evidence: `build/video-recovery-test/720p-20260928T191058477482Z/`.
+This run used a PC software decoder for pixel inspection. Android recovery,
+actual-game resizing, 1080p recovery and GPU device loss remain separate checks.
 
 ### Current Flutter build, 2026-09-29
 
