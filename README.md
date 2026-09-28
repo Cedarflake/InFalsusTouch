@@ -3,21 +3,23 @@
 通过 USB 数据线把 Android 手机变成专用于 PC 音游 **In Falsus** 的横屏触控控制器。
 Windows 使用 C++20 / Win32，Android 使用 Kotlin / 原生 `MotionEvent`。
 
-**当前里程碑：Phase 1 输入原型。** 已实现 6K、多指 Hold、Field 绝对/相对控制、
-ADB reverse 双端口脚本与独立 TCP 输入通道。视频属于下一阶段，目前手机不显示游戏画面，
-游玩时仍需观看 PC 屏幕。实际验证记录见 [STATUS](docs/STATUS.md)。
+**当前里程碑：输入与 USB 硬件视频原型。** 已实现 6K、多指 Hold、Field 绝对/相对控制、
+独立输入通道，以及 WGC → GPU NV12 → 硬件 H.264 → Android MediaCodec / SurfaceView。
+真机验证覆盖了视频像素、同时输入和断开重连；In Falsus 实际游玩仍待验收。
+完整状态和性能测量边界见 [STATUS](docs/STATUS.md)。
 
 最终交付为 `InFalsusTouchHost.exe` 和 `InFalsusTouch.apk`。输入优先级高于视频；
-后续视频固定沿 Windows Graphics Capture → Media Foundation H.264 → MediaCodec 路线实现。
+视频与控制分别使用独立线程和 TCP 端口，背压不会让输入等待编码完成。
 
 ## Requirements
 
 运行端：
 
-- Windows 11；视频阶段要求 Windows Graphics Capture 与可用 H.264 编码器。
+- Windows 11、Windows Graphics Capture、同一 GPU 上支持 D3D11 的硬件 H.264 编码器。
 - Android 8.0 / API 26 以上，支持多点触控的手机。六押加 Field 需要至少七个同时触点；
   实际触点上限取决于硬件。
-- USB 数据线、USB Debugging、已授权的 ADB。Phase 1 使用 ADB reverse，经 USB 承载 localhost TCP。
+- USB 数据线、USB Debugging、已授权的 ADB，经 USB 承载 localhost TCP。
+- Android 硬件 H.264 解码器需支持所选分辨率和帧率；不静默切换到软件编解码。
 - In Falsus 的六轨键位为 Left Shift / A / S / D / F / Space。
 - Host 与游戏应以相同权限等级运行；Windows 的输入隔离可能阻止低权限进程向高权限游戏注入。
 
@@ -43,6 +45,11 @@ uv run --python 3.13 tests\tcp-integration.py --host dist\InFalsusTouchHost.exe
 
 # 可选真机验证：安装本项目 app 和测试 APK，使用 dry-run Host，不注入桌面按键。
 .\scripts\test-device.ps1
+
+# 可选视频验证：短暂显示项目自己的 Direct3D 测试窗口，不调用 SendInput。
+uv run --python 3.13 tests\video-integration.py
+.\scripts\build-android.ps1 -DeviceTests
+uv run --python 3.13 tests\video-device.py
 ```
 
 Windows 脚本构建 Release 并运行 CTest。Android 脚本运行 Kotlin 测试、构建 debug APK
@@ -70,12 +77,26 @@ Windows 脚本构建 Release 并运行 CTest。Android 脚本运行 Kotlin 测�
 脚本建立：
 
 ```text
-adb reverse tcp:27183 tcp:27183    Video（Phase 2 预留）
+adb reverse tcp:27183 tcp:27183    Video
 adb reverse tcp:27184 tcp:27184    Control/Input
 ```
 
-Phase 1 仅监听 `127.0.0.1:27184`。设备重新插拔或 ADB 重启后重新执行脚本。
+Host 默认监听两个 loopback 端口。设备重新插拔或 ADB 重启后重新执行脚本。
 Android 固定连接 `127.0.0.1`，不提供 Wi-Fi Host 地址设置。
+
+视频默认 720p60 / 8 Mbps / H.264 Baseline / 半秒 GOP。只捕获所选窗口客户区，
+按原比例缩放并补黑边；手机默认 Fit 与半透明 Overlay。
+
+```powershell
+.\dist\InFalsusTouchHost.exe --video-diagnostics
+.\dist\InFalsusTouchHost.exe --resolution 1080p --fps 60 --bitrate 12000000
+.\dist\InFalsusTouchHost.exe --no-video
+```
+
+Host 显示实际 WGC / GPU / 编码器诊断。支持 `MinUpdateInterval` 的 Windows 会由 Host
+统一控制取帧节奏，避免 165 Hz 屏幕被 WGC 的默认间隔限制到约 55 FPS。
+旧版系统、源窗口刷新率和 GPU 负载仍可能影响实际 FPS。视频断连会单独重试；
+输入断连需要重新 Connect，不重放旧 Hold。
 
 ## Window and Field calibration
 
@@ -97,10 +118,10 @@ Host 仅在目标窗口处于前台时接受游戏输入。切换到其他窗口
 
 ```mermaid
 flowchart TD
-  Game[In Falsus] -. Phase 2 .-> WGC[Windows Graphics Capture]
-  WGC -.-> H264[Media Foundation H.264 Encoder]
-  H264 -. USB / TCP 27183 .-> Codec[Android MediaCodec]
-  Codec -.-> Video[SurfaceView / Game Video]
+  Game[In Falsus] --> WGC[Windows Graphics Capture]
+  WGC --> H264[Media Foundation H.264 Encoder]
+  H264 -- USB / TCP 27183 --> Codec[Android MediaCodec]
+  Codec --> Video[SurfaceView / Game Video]
   Touch[Android MultiTouch: Field + 6K] --> Input[USB / TCP 27184]
   Input --> Host[Windows Host]
   Host --> SendInput[SendInput + selected-window mapping]
@@ -109,14 +130,17 @@ flowchart TD
 
 - [ARCHITECTURE.md](ARCHITECTURE.md)：模块职责、线程边界、资源生命周期与阶段门槛。
 - [INPUT_PROTOCOL.md](protocol/INPUT_PROTOCOL.md)：32 字节输入协议、握手、ACK、超时与重连。
+- [VIDEO_PROTOCOL.md](protocol/VIDEO_PROTOCOL.md)：视频分帧、时间戳、队列上限与 IDR 恢复。
 - [requirements.md](docs/requirements.md)：原始完整需求。
 - [manual-acceptance.md](tests/manual-acceptance.md)：真机和游戏验收清单。
 
 ## Validation boundaries
 
 自动化测试使用 dry-run sink，验证输入决策和网络行为，不向桌面注入实际按键。
-真机触点数量、USB 时延、游戏对 SendInput 的接受情况和硬件视频编解码需要单独验收。
+真机测试中的 MotionEvent 是合成事件；物理触点数量、游戏对 SendInput 的接受情况仍需游玩验收。
 手机显示的 RTT 是控制协议往返测量，不是玻璃到玻璃延迟。
+视频统计分别显示接收/解码/呈现 FPS、码率、丢帧、队列，以及 PC 和手机的局部阶段耗时。
+两端时钟未经同步，不能把它们直接相减。呈现回调也不能证明物理屏幕的发光时刻。
 
 正常断开连接会立即清理被 Host 记录为按下的键。USB 拔线但 TCP 未及时报告 EOF 时，
 Host 最多等待约 500 ms 心跳超时加系统调度开销后释放。强制杀进程或系统崩溃不保证执行清理。

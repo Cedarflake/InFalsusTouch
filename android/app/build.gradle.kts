@@ -26,6 +26,7 @@ dependencies {
   implementation(project(":touch"))
   implementation(project(":transport"))
   implementation(project(":settings"))
+  implementation(project(":video"))
   androidTestImplementation("androidx.test:runner:1.6.2")
   androidTestImplementation("androidx.test:core:1.6.1")
   androidTestImplementation("androidx.test.ext:junit:1.2.1")

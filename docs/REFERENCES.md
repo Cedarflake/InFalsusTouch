@@ -7,3 +7,10 @@
 - [ADB](https://developer.android.com/tools/adb): authorized USB debugging, device selection and reverse forwarding.
 - [AGP 8.9 compatibility](https://developer.android.com/build/releases/agp-8-9-0-release-notes): Gradle 8.11.1, SDK 35 and JDK requirements.
 - [AndroidX Test releases](https://developer.android.com/jetpack/androidx/releases/test): pinned device-test dependencies.
+- [WGC window capture interop](https://learn.microsoft.com/en-us/windows/win32/api/windows.graphics.capture.interop/nf-windows-graphics-capture-interop-igraphicscaptureiteminterop-createforwindow): explicit HWND capture.
+- [WGC minimum update interval](https://learn.microsoft.com/en-us/uwp/api/windows.graphics.capture.graphicscapturesession.minupdateinterval?view=winrt-26100): optional OS pacing control.
+- [MFTEnum2](https://learn.microsoft.com/en-us/windows/win32/api/mfapi/nf-mfapi-mftenum2): hardware encoder enumeration with adapter LUID stored as a blob.
+- [Asynchronous MFTs](https://learn.microsoft.com/en-us/windows/win32/medfound/asynchronous-mfts): event credits, input/output rules and shutdown.
+- [H.264 encoder](https://learn.microsoft.com/en-us/windows/win32/medfound/h-264-video-encoder): media types and codec controls.
+- [MediaCodec](https://developer.android.com/reference/android/media/MediaCodec): codec-specific data, Surface decoding, flush and presentation callbacks.
+- [Android low-latency decoding](https://developer.android.com/about/versions/11/features): feature detection and codec configuration.

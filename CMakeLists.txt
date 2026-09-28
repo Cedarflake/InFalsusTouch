@@ -13,17 +13,19 @@ endif()
 
 add_library(ift_core
   protocol/cpp/packet.cpp
+  protocol/cpp/video-packet.cpp
+  protocol/cpp/h264.cpp
   windows/input/field-mapper.cpp
   windows/input/input-state.cpp
   windows/input/input-session.cpp
 )
 target_include_directories(ift_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
+option(IFT_BUILD_HOST "Build the Windows host" ${WIN32})
 include(CTest)
 if(BUILD_TESTING)
   add_subdirectory(tests)
 endif()
-option(IFT_BUILD_HOST "Build the Windows host" ${WIN32})
 if(IFT_BUILD_HOST AND WIN32)
   add_subdirectory(windows)
 endif()

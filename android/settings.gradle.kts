@@ -15,4 +15,4 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "InFalsusTouch"
-include(":app", ":touch", ":transport", ":settings")
+include(":app", ":touch", ":transport", ":settings", ":video")

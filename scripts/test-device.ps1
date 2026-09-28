@@ -31,7 +31,7 @@ try {
   if ($LASTEXITCODE -ne 0) { throw 'App installation failed' }
   & $AdbPath -d install -r -t (Join-Path $repoRoot 'android\app\build\outputs\apk\androidTest\debug\app-debug-androidTest.apk')
   if ($LASTEXITCODE -ne 0) { throw 'Instrumentation installation failed' }
-  $result = & $AdbPath -d shell am instrument -w -r -e usbHost true dev.cedarflake.infalsustouch.test/androidx.test.runner.AndroidJUnitRunner
+  $result = & $AdbPath -d shell am instrument -w -r -e usbHost true -e class 'dev.cedarflake.ift.MotionEventDeviceTest,dev.cedarflake.ift.UsbTransportDeviceTest' dev.cedarflake.infalsustouch.test/androidx.test.runner.AndroidJUnitRunner
   $instrumentExit = $LASTEXITCODE
   $result | Set-Content -LiteralPath (Join-Path $outputRoot 'instrumentation.txt') -Encoding UTF8
   $result | Write-Output

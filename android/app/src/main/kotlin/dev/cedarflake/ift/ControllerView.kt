@@ -24,6 +24,7 @@ class ControllerView(context: Context, private val sink: TouchSink) : View(conte
   private val fieldLabel = context.getString(R.string.field_label)
   private val phaseLabel = context.getString(R.string.phase_label)
   private var isInputAllowed = false
+  private var isVideoVisible = false
 
   init {
     isClickable = true
@@ -40,6 +41,12 @@ class ControllerView(context: Context, private val sink: TouchSink) : View(conte
   fun setSettings(value: ControlSettings) {
     settings = value
     updateGeometry()
+  }
+
+  fun setVideoVisible(visible: Boolean) {
+    if (isVideoVisible == visible) return
+    isVideoVisible = visible
+    invalidate()
   }
 
   fun releaseTouches() {
@@ -94,13 +101,13 @@ class ControllerView(context: Context, private val sink: TouchSink) : View(conte
 
   override fun onDraw(canvas: Canvas) {
     super.onDraw(canvas)
-    canvas.drawColor(Color.rgb(16, 21, 28))
+    if (!isVideoVisible) canvas.drawColor(Color.rgb(16, 21, 28))
     paint.color = Color.rgb(148, 162, 181)
     paint.textSize = 14f * density
     paint.textAlign = Paint.Align.CENTER
-    canvas.drawText(phaseLabel, width / 2f, 30f * density, paint)
+    if (!isVideoVisible) canvas.drawText(phaseLabel, width / 2f, 80f * density, paint)
     paint.color = Color.rgb(97, 211, 197)
-    canvas.drawText(fieldLabel, width / 2f, (geometry.fieldTop + geometry.laneTop) / 2, paint)
+    if (!isVideoVisible && settings.showLabels) canvas.drawText(fieldLabel, width / 2f, (geometry.fieldTop + geometry.laneTop) / 2, paint)
     val laneWidth = width / 6f
     val gap = settings.laneGapDp * density / 2
     for (lane in 0..5) {

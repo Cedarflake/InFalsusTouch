@@ -6,8 +6,9 @@
   <string name="relative">Field: Relative</string>
   <string name="field_label">FIELD · slide horizontally</string>
   <string name="input_accessibility">Six rhythm lanes and a horizontal Field touch controller</string>
-  <string name="status_idle">USB input prototype · Connect through ADB reverse</string>
+  <string name="status_idle">USB controller · Connect through ADB reverse</string>
   <string name="status_waiting">USB connected · Focus the selected game window</string>
   <string name="status_ready">USB ready · Input RTT %1$.1f ms</string>
-  <string name="phase_label">Phase 1 · Input only · Video is not implemented yet</string>
+  <string name="phase_label">InFalsusTouch · USB rhythm controller</string>
+  <string name="video_idle">Video waiting for USB connection</string>
 </resources>

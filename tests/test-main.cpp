@@ -2,6 +2,8 @@
 
 #include <iostream>
 
+void videoTests();
+
 int main(int argc, char** argv) {
   try {
     const std::string suite = argc > 1 ? argv[1] : "all";
@@ -14,6 +16,7 @@ int main(int argc, char** argv) {
     if (suite == "mapping" || suite == "all") {
       mappingTests();
     }
+    if (suite == "video" || suite == "all") videoTests();
     std::cout << suite << " tests passed\n";
     return 0;
   } catch (const std::exception& error) {

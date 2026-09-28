@@ -1,4 +1,4 @@
-# Phase 1 physical-device acceptance
+# Physical-device and game acceptance
 
 Status: physical gameplay checklist not executed. Android 14 device instrumentation
 and real USB transport to a dry-run Windows host passed on 2026-09-28; see
@@ -48,4 +48,23 @@ and real USB transport to a dry-run Windows host passed on 2026-09-28; see
 | Real SendInput accepted by game | Not tested |
 | Measured control RTT (method/sample count) | Not tested |
 
-Video, FPS stability and physical touch-to-photon latency are Phase 2/3 gates.
+## Video and sustained gameplay
+
+The automated video test covers a Direct3D color pattern, WGC, hardware H.264,
+real USB, MediaCodec output pixels, seven synthetic pointers and reconnect. It
+does not substitute for the following checks with In Falsus:
+
+- Play varied, visually busy charts for at least 15 minutes at 720p60. Record
+  receive/decode/present FPS, phone drops, queue depth, input RTT and thermals.
+- Confirm long holds and rapid chords remain reliable while video is busy.
+- Minimize, restore, resize and move the game between monitors; the capture must
+  recover and Field coordinates must continue matching the selected client area.
+- Disconnect/reconnect USB with both video and keys active; re-run ADB setup if
+  the reverse mapping is gone. No held input may be replayed.
+- Background/resume, rotate and recreate the phone Surface repeatedly. Confirm
+  codec resources and socket counts stay bounded.
+- Test 1080p60 and bitrate/FPS alternatives on devices supporting those formats.
+- Test unsupported codecs and GPU/device-loss failures: video errors should be
+  explicit and must not block input cleanup.
+- Use high-speed external recording for physical touch-to-photon latency. Do not
+  infer it by adding timestamps from unsynchronized PC and phone clocks.

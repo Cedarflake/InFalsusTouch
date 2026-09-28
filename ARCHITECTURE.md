@@ -15,10 +15,10 @@ flowchart LR
   Session --> Target[Selected window client-area mapping]
   Target --> Inject[Win32 SendInput]
   Inject --> Game[In Falsus]
-  Game -. Phase 2 .-> Capture[Windows Graphics Capture]
-  Capture -.-> Encoder[Media Foundation H.264]
-  Encoder -. TCP 27183 .-> Decoder[Android MediaCodec]
-  Decoder -.-> Surface[SurfaceView]
+  Game --> Capture[Windows Graphics Capture]
+  Capture --> Encoder[Media Foundation H.264]
+  Encoder -- TCP 27183 --> Decoder[Android MediaCodec]
+  Decoder --> Surface[SurfaceView]
 ```
 
 | Directory | Responsibility |
@@ -27,13 +27,13 @@ flowchart LR
 | `android/touch` | Pure Kotlin pointer ownership, hit testing and lane counts |
 | `android/transport` | Pure JVM protocol codec, bounded queue, TCP connection |
 | `android/settings` | Layout and Field configuration, later persistence UI |
-| `android/video` | Phase 2 MediaCodec / Surface lifecycle boundary |
+| `android/video` | MediaCodec hardware decoding, Surface lifecycle and local statistics |
 | `windows/input` | Portable input state machine, mapping, Win32 input sink |
 | `windows/transport` | Loopback listener, framing, deadlines and replies |
 | `windows/target` | Window discovery, explicit selection, client coordinates |
 | `windows/config` | Validated host configuration and command-line options |
-| `windows/capture` | Phase 2 window-only WGC capture boundary |
-| `windows/encoder` | Phase 2 Media Foundation hardware encoding boundary |
+| `windows/capture` | Window-only WGC, client cropping, GPU NV12 scaling |
+| `windows/encoder` | Async Media Foundation hardware encoding with bounded samples |
 | `protocol` | Wire specification, C++ codec and shared golden vectors |
 | `tests` | Native unit tests, TCP integration tests and manual acceptance |
 | `scripts` | Reproducible builds, verification and USB setup |
@@ -72,21 +72,31 @@ injected-key state and releases it before destroying the sink. Its polling budge
 is short enough to check window focus without waiting for another touch packet.
 Normal input has no synchronous file/console logging. Test tracing is opt-in.
 
-Future video capture, encoding, sending and decoding must use separate workers
-and sockets. Keep a latest-frame slot before encoding, bound packet sizes and
-decoder queues. H.264 dependent frames cannot be dropped arbitrarily: after a
-compressed-frame discontinuity, discard through the next IDR and request one.
-Video backpressure must never share a mutex or queue with input injection.
+Video capture, encoding, sending and decoding use separate workers and sockets.
+The capture callback owns a latest-frame slot, and a video worker drives the GPU,
+async encoder events and a nonblocking sender. Encoding is limited to three
+samples; each sample owns its NV12 texture. The Android receiver holds two
+compressed frames; its decoder allows two submitted samples plus one current
+packet. H.264 dependent frames cannot be dropped arbitrarily: after overflow,
+discard through the next IDR, then flush and resend parameter sets. A half-second
+GOP bounds the usual recovery wait. Input has no video mutex or queue dependency.
+
+WGC's default 16 ms minimum update interval produces about 55 FPS on the tested
+165 Hz display. When the OS exposes MinUpdateInterval, capture updates are
+uncapped and the host selects frames at the configured cadence before encoding.
+A dedicated high-resolution waitable timer wakes only the video worker.
+See [VIDEO_PROTOCOL.md](protocol/VIDEO_PROTOCOL.md) for all deadlines and clocks.
 
 ## Video and layout contract (Phase 2 onward)
 
-Capture only the selected window with Windows Graphics Capture. Prefer a hardware
-H.264 Media Foundation MFT at 720p60, no B frames, low latency and short GOP.
-Encoder absence must produce an explicit diagnostic or an opt-in software fallback.
-Android decodes directly to a Surface with MediaCodec. Preserve normal game aspect
-ratio and expose Fit, Fill and Crop; Overlay is the default and Reserved dedicates
-a bottom lane strip. Lane height, Field height/range, opacity and labels are local
-configuration, independent of hit testing feedback.
+Capture only the selected window with Windows Graphics Capture. The encoder is a
+hardware, D3D11-aware async H.264 MFT on the capture GPU. It requests Baseline
+(no B slices), low latency, CBR and a short GOP. Unsupported optional codec controls
+are reported. Encoder absence is explicit; there is no automatic software fallback.
+Android selects a hardware decoder, prefers reported low-latency support, and
+decodes directly to a Surface. Default Fit and Overlay preserve the game aspect.
+The layout model supports Fill, Crop and Reserved; exposing and persisting all
+settings and calibration remains the UX milestone.
 
 Capture/encode/send times use a PC monotonic clock. Receive/decode/present times
 use an Android monotonic clock. Cross-device timestamp subtraction is invalid
