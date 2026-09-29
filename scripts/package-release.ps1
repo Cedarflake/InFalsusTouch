@@ -64,6 +64,7 @@ $readme = [IO.File]::ReadAllText((Join-Path $repoRoot 'README.md'))
 foreach ($relative in @('docs/SETTINGS.md', 'docs/DEVELOPMENT.md', 'ARCHITECTURE.md')) {
   $readme = $readme.Replace("($relative)", "(https://github.com/Cedarflake/InFalsusTouch/blob/v$version/$relative)")
 }
+$readme = $readme.Replace('(docs/assets/gameplay.gif)', "(https://raw.githubusercontent.com/Cedarflake/InFalsusTouch/v$version/docs/assets/gameplay.gif)")
 [IO.File]::WriteAllText((Join-Path $stage 'README.md'), $readme, [Text.UTF8Encoding]::new($false))
 $apkName = "InFalsusTouch-v$version-android.apk"
 $zipName = "InFalsusTouch-v$version-windows-x64.zip"

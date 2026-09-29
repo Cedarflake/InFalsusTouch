@@ -1,7 +1,7 @@
 name: infalsus_touch
 description: USB touch controller UI for In Falsus.
 publish_to: none
-version: 0.5.0-preview.1+6
+version: 0.5.0-preview.2+7
 
 environment:
   sdk: ^3.12.2
