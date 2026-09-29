@@ -107,7 +107,7 @@ HWND chooseWindow(const HostOptions& options) {
   }
   if (matches.empty()) {
     throw std::runtime_error(lowercase(options.title) == L"in falsus" ?
-      "In Falsus game window not found; start the game first. Use --list / --window for manual selection" :
+      "未找到正在运行的 In Falsus 游戏窗口。\n请先打开游戏，再重新启动 Host。" :
       "No window matches the requested title; use --list / --window for manual selection");
   }
   printWindows(matches);

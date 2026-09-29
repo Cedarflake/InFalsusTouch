@@ -4,6 +4,8 @@
 #include <clocale>
 #include <iostream>
 #include <memory>
+#include <sstream>
+#include <string>
 #include <thread>
 
 #include "windows/config/host-options.h"
@@ -21,6 +23,14 @@ namespace {
 std::atomic_bool stopping{false};
 HANDLE shutdownComplete = nullptr;
 
+bool ownsInteractiveConsole() {
+  DWORD mode = 0;
+  DWORD processes[2]{};
+  return GetConsoleMode(GetStdHandle(STD_INPUT_HANDLE), &mode) &&
+    GetConsoleMode(GetStdHandle(STD_ERROR_HANDLE), &mode) &&
+    GetConsoleProcessList(processes, 2) == 1 && processes[0] == GetCurrentProcessId();
+}
+
 BOOL WINAPI handleConsoleSignal(DWORD signal) {
   if (signal == CTRL_C_EVENT || signal == CTRL_BREAK_EVENT || signal == CTRL_CLOSE_EVENT ||
       signal == CTRL_LOGOFF_EVENT || signal == CTRL_SHUTDOWN_EVENT) {
@@ -36,6 +46,7 @@ BOOL WINAPI handleConsoleSignal(DWORD signal) {
 }
 
 int wmain(int argc, wchar_t** argv) {
+  const bool showErrorDialog = ownsInteractiveConsole();
   std::setlocale(LC_CTYPE, ".UTF8");
   SetConsoleOutputCP(CP_UTF8);
   DWORD consoleMode = 0;
@@ -44,6 +55,7 @@ int wmain(int argc, wchar_t** argv) {
     SetConsoleMode(consoleInput, (consoleMode | ENABLE_EXTENDED_FLAGS) & ~ENABLE_QUICK_EDIT_MODE);
   }
   int result = 0;
+  std::wstring failureMessage;
   try {
     auto options = ift::parseOptions(argc, argv);
     if (options.help) {
@@ -88,11 +100,13 @@ int wmain(int argc, wchar_t** argv) {
     if (options.usb) usb = std::jthread([&](std::stop_token token) { ift::maintainUsb(options, stopping, token); });
     ift::runControlServer(options, target, *sink, stopping);
   } catch (const winrt::hresult_error& error) {
-    std::wcerr << L"InFalsusTouchHost: " << error.message().c_str() << L" (0x"
-      << std::hex << static_cast<unsigned long>(error.code()) << L")\n";
+    std::wostringstream detail;
+    detail << error.message().c_str() << L" (0x"
+      << std::hex << static_cast<unsigned long>(error.code()) << L")";
+    failureMessage = detail.str();
     result = 1;
   } catch (const std::exception& error) {
-    std::cerr << "InFalsusTouchHost: " << error.what() << '\n';
+    failureMessage = winrt::to_hstring(error.what()).c_str();
     result = 1;
   }
   if (shutdownComplete) {
@@ -100,6 +114,12 @@ int wmain(int argc, wchar_t** argv) {
     SetConsoleCtrlHandler(handleConsoleSignal, FALSE);
     CloseHandle(shutdownComplete);
     shutdownComplete = nullptr;
+  }
+  if (result != 0) {
+    std::wcerr << L"InFalsusTouchHost: " << failureMessage << L'\n';
+    if (showErrorDialog) {
+      MessageBoxW(nullptr, failureMessage.c_str(), L"InFalsusTouchHost - 启动失败", MB_OK | MB_ICONERROR);
+    }
   }
   return result;
 }
