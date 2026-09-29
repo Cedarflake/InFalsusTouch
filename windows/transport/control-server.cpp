@@ -16,6 +16,23 @@ namespace {
 using Clock = std::chrono::steady_clock;
 using namespace std::chrono_literals;
 
+void bindControlPort(const Socket& listener, std::uint16_t port) {
+  const BOOL exclusive = TRUE;
+  if (setsockopt(listener.get(), SOL_SOCKET, SO_EXCLUSIVEADDRUSE,
+      reinterpret_cast<const char*>(&exclusive), sizeof(exclusive)) != 0) throw socketError("SO_EXCLUSIVEADDRUSE");
+  sockaddr_in address{};
+  address.sin_family = AF_INET;
+  address.sin_port = htons(port);
+  address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+  if (bind(listener.get(), reinterpret_cast<sockaddr*>(&address), sizeof(address)) == 0) return;
+  const auto error = WSAGetLastError();
+  if (error == WSAEADDRINUSE || error == WSAEACCES) {
+    throw std::runtime_error("Control port " + std::to_string(port) +
+      " is unavailable. An InFalsusTouchHost may already be running; do not start a second copy.");
+  }
+  throw socketError("bind control listener");
+}
+
 struct PendingWrite {
   PacketBytes bytes;
   std::size_t offset = 0;
@@ -61,19 +78,18 @@ struct Controller {
 
 }
 
+void checkControlPort(std::uint16_t port) {
+  Winsock winsock;
+  Socket listener(socket(AF_INET, SOCK_STREAM, IPPROTO_TCP));
+  bindControlPort(listener, port);
+}
+
 void runControlServer(const HostOptions& options, const GameWindow& target,
                       InputSink& sink, const std::atomic_bool& stopping) {
   Winsock winsock;
   Socket listener(socket(AF_INET, SOCK_STREAM, IPPROTO_TCP));
-  const BOOL exclusive = TRUE;
-  if (setsockopt(listener.get(), SOL_SOCKET, SO_EXCLUSIVEADDRUSE,
-      reinterpret_cast<const char*>(&exclusive), sizeof(exclusive)) != 0) throw socketError("SO_EXCLUSIVEADDRUSE");
-  sockaddr_in address{};
-  address.sin_family = AF_INET;
-  address.sin_port = htons(options.port);
-  address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-  if (bind(listener.get(), reinterpret_cast<sockaddr*>(&address), sizeof(address)) != 0 ||
-      listen(listener.get(), static_cast<int>(maxControllers)) != 0) throw socketError("bind/listen; is another host using the port?");
+  bindControlPort(listener, options.port);
+  if (listen(listener.get(), static_cast<int>(maxControllers)) != 0) throw socketError("listen controllers");
   listener.nonblocking();
   GameBindings bindings(!options.syncBindings ? std::filesystem::path{} :
     options.bindingsPath.empty() ? defaultGamePreferences() : std::filesystem::path(options.bindingsPath));

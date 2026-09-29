@@ -1,6 +1,7 @@
 #include <Windows.h>
 
 #include <atomic>
+#include <clocale>
 #include <iostream>
 #include <memory>
 #include <thread>
@@ -34,6 +35,8 @@ BOOL WINAPI handleConsoleSignal(DWORD signal) {
 }
 
 int wmain(int argc, wchar_t** argv) {
+  std::setlocale(LC_CTYPE, ".UTF8");
+  SetConsoleOutputCP(CP_UTF8);
   int result = 0;
   try {
     auto options = ift::parseOptions(argc, argv);
@@ -55,6 +58,7 @@ int wmain(int argc, wchar_t** argv) {
       std::wcout << L"Saved profile: " << options.profilePath << L"\nStart Host again to use these settings.\n";
       return 0;
     }
+    ift::checkControlPort(options.port);
     const auto window = options.dryRun && !options.video.enabled ? nullptr : ift::chooseWindow(options);
     if (window && !options.dryRun) ift::printTargetKeyboard(window);
     ift::GameWindow target(options.dryRun ? nullptr : window);

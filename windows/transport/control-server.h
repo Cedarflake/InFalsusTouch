@@ -8,6 +8,7 @@
 
 namespace ift {
 
+void checkControlPort(std::uint16_t port);
 void runControlServer(const HostOptions& options, const GameWindow& target,
                       InputSink& sink, const std::atomic_bool& stopping);
 

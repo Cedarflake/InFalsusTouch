@@ -153,7 +153,7 @@ void printHelp() {
     "  --list                  List selectable windows and handles\n"
     "  --video-diagnostics     Check WGC, capture GPU and hardware H.264 MFT\n"
     "  --window 0xHANDLE       Select an exact window\n"
-    "  --title TEXT            Match title (default: In Falsus)\n"
+    "  --title TEXT            Match a custom title; default detects infalsus.exe\n"
     "  --port 27184            Control listener on 127.0.0.1 only\n"
     "  Up to 7 USB controllers choose their own visible keys and Field.\n"
     "  --bindings PATH         Override In Falsus userV2.prefs path (read only)\n"
