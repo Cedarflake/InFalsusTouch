@@ -97,8 +97,10 @@ judgment line. It is available only as an explicit choice.
 
 Display refresh and video FPS are independent. The high-refresh preference
 requests 120 Hz for touch feedback; the video Surface still reports the source
-FPS. The statistics overlay reports the actual panel mode separately from
-received/decoded/presented video frames. Turning the preference off returns the
+FPS. Gameplay statistics use one right-aligned, translucent line for presented
+video FPS, actual panel Hz and input RTT. The Picture settings page retains the
+detailed statistics and shows the PC source resolution and configured video FPS
+from the received stream. Turning the preference off returns the
 window to system selection, not a forced 60 Hz mode. Device policy and power
 saving may override the request; no global display settings are changed.
 

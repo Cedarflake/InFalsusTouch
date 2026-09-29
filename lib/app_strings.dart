@@ -112,12 +112,14 @@ class AppStrings {
   String get framingHint => zh
       ? "建议完整显示。宽屏两侧留白，不裁掉音符与判定线；裁切会隐藏上下画面。"
       : "Fit preserves the chart with side bars. Crop can hide notes and judgment lines.";
-  String get highRefresh => zh ? "优先使用 120 Hz" : "Prefer 120 Hz";
+  String get highRefresh =>
+      zh ? "屏幕优先使用 120 Hz" : "Prefer 120 Hz screen refresh";
   String get highRefreshHint => zh
-      ? "让本地触控反馈更流畅；视频帧率独立，实际刷新率由系统决定。"
-      : "Smoother local feedback on supported screens. Video FPS is separate; the system controls the actual refresh rate.";
+      ? "让本地触控反馈更流畅，实际刷新率由系统决定。游戏视频帧率由电脑端设置，下方显示当前视频源。"
+      : "Smoother local touch feedback, subject to system refresh limits. Game video FPS is set on the PC; the current source is shown below.";
   String get statistics => zh ? "显示性能统计" : "Show performance statistics";
   String get display => zh ? "屏幕" : "Display";
+  String get videoSource => zh ? "电脑视频源" : "PC video source";
   String get received => zh ? "接收" : "Receive";
   String get presented => zh ? "呈现" : "Present";
   String get queue => zh ? "队列" : "Queue";

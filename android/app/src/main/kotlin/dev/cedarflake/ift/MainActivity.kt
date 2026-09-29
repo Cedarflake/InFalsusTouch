@@ -363,6 +363,7 @@ class MainActivity : FlutterActivity(), SurfaceHolder.Callback {
         "left" to it.left, "top" to it.top, "width" to it.width, "height" to it.height, "clipHeight" to it.clipHeight,
       ) } else null,
       "video" to videoSnapshot?.let { mapOf(
+        "width" to it.width, "height" to it.height, "targetFps" to it.targetFps,
         "receiveFps" to it.receiveFps, "presentFps" to it.presentFps, "decoderMs" to it.decoderMs,
         "receiveToPresentMs" to it.receiveToPresentMs, "captureToEncodeMs" to it.captureToEncodeMs,
         "megabitsPerSecond" to it.megabitsPerSecond, "queueDepth" to it.queueDepth, "droppedFrames" to it.droppedFrames,

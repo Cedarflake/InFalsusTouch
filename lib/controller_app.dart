@@ -1,5 +1,4 @@
 import "dart:async";
-import "dart:math" as math;
 
 import "package:flutter/material.dart";
 import "package:flutter_localizations/flutter_localizations.dart";
@@ -195,24 +194,46 @@ class _ControllerShellState extends State<_ControllerShell> {
                   ),
                   if (state.settings.flag("showStatistics"))
                     Positioned(
-                      right: safe.right + 8,
+                      left:
+                          entry.top == 8 &&
+                              entry.center.dx < constraints.maxWidth / 2
+                          ? entry.right + 8
+                          : safe.left + 8,
+                      right:
+                          entry.top == 8 &&
+                              entry.center.dx > constraints.maxWidth / 2
+                          ? constraints.maxWidth - entry.left + 8
+                          : safe.right + 8,
                       top: safe.top + 8,
-                      width: math.min(
-                        300.0,
-                        constraints.maxWidth - safe.left - safe.right - 16,
-                      ),
                       child: IgnorePointer(
-                        child: Card(
-                          child: Padding(
-                            padding: const EdgeInsets.all(12),
-                            child: Text(
-                              "${strings.display} ${state.displayHz.round()} Hz\n${metricsText(state, strings)}",
-                              style: Theme.of(context).textTheme.labelSmall
-                                  ?.copyWith(
-                                    fontFeatures: [
-                                      const FontFeature.tabularFigures(),
-                                    ],
-                                  ),
+                        child: Align(
+                          alignment: Alignment.topRight,
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.3),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 3,
+                              ),
+                              child: Text(
+                                compactMetricsText(state),
+                                maxLines: 1,
+                                softWrap: false,
+                                overflow: TextOverflow.fade,
+                                textAlign: TextAlign.right,
+                                style: Theme.of(context).textTheme.labelSmall
+                                    ?.copyWith(
+                                      color: Colors.white.withValues(
+                                        alpha: 0.85,
+                                      ),
+                                      fontFeatures: [
+                                        const FontFeature.tabularFigures(),
+                                      ],
+                                    ),
+                              ),
                             ),
                           ),
                         ),

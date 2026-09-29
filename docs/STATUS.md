@@ -76,6 +76,16 @@ selected-button drawing and hit testing. The first full device run missed the in
 DOWN in the existing held-key test; that test passed alone and in the full rerun.
 The cause of that single test failure is not established.
 
+Gameplay statistics now occupy one translucent, right-aligned line showing video
+FPS, panel Hz and input RTT. Detailed timings remain in Picture settings alongside
+the source resolution and target FPS read from the received video stream. Flutter
+analysis, all 20 UI tests and the profile build/lint passed; both views were checked
+on the phone. The existing 120 Hz preference only requests display refresh; Host
+still defaults to 60 FPS. A manual 720p120 game-stream check showed 81 FPS on the
+gameplay overlay, then 119.7 received / 82.8 presented FPS in settings. A separate
+127-frame compositor-history tail measured 48.92 unique presents/s over 2.58 seconds.
+These different sample intervals do not establish steady 120 FPS presentation.
+
 ## Acceptance gates
 
 | Gate | Status |
