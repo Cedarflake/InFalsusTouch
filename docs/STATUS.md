@@ -77,8 +77,8 @@ DOWN in the existing held-key test; that test passed alone and in the full rerun
 The cause of that single test failure is not established.
 
 Gameplay statistics now occupy one translucent, right-aligned line showing video
-FPS, panel Hz and input RTT. Detailed timings remain in Picture settings alongside
-the source resolution and target FPS read from the received video stream. Flutter
+FPS, panel Hz and input RTT. Detailed timings use a separate card and aligned metric
+grid in Picture settings, with the source resolution and target FPS from the stream. Flutter
 analysis, all 20 UI tests and the profile build/lint passed; both views were checked
 on the phone. The existing 120 Hz preference only requests display refresh; Host
 still defaults to 60 FPS. A manual 720p120 game-stream check showed 81 FPS on the

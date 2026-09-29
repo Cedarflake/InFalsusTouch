@@ -4,8 +4,8 @@ import "package:flutter/material.dart";
 
 import "app_strings.dart";
 import "connection_controls.dart";
-import "controller_metrics.dart";
 import "native_controller.dart";
+import "performance_details.dart";
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({
@@ -340,17 +340,14 @@ class _SettingsPageState extends State<SettingsPage> {
           subtitle: s.highRefreshHint,
         ),
         toggle(s.statistics, "showStatistics"),
-        if (widget.state.hasVideo) ...[
-          const Divider(),
-          Text(
-            metricsText(widget.state, s),
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
-          const SizedBox(height: 8),
-          Text(s.metricsHint, style: Theme.of(context).textTheme.bodySmall),
-        ],
       ],
     ),
+    if (widget.state.hasVideo)
+      _Section(
+        title: s.performanceDetails,
+        subtitle: "${s.videoSource} · ${videoSourceText(widget.state)}",
+        children: [PerformanceDetails(state: widget.state, strings: s)],
+      ),
   ];
 
   List<Widget> connectionSections() => [

@@ -118,6 +118,9 @@ class AppStrings {
       ? "让本地触控反馈更流畅，实际刷新率由系统决定。游戏视频帧率由电脑端设置，下方显示当前视频源。"
       : "Smoother local touch feedback, subject to system refresh limits. Game video FPS is set on the PC; the current source is shown below.";
   String get statistics => zh ? "显示性能统计" : "Show performance statistics";
+  String get performanceDetails => zh ? "性能详情" : "Performance details";
+  String get inputRoundTrip => zh ? "输入往返" : "Input round trip";
+  String get sessionDrops => zh ? "本次累计丢帧" : "Dropped this session";
   String get display => zh ? "屏幕" : "Display";
   String get videoSource => zh ? "电脑视频源" : "PC video source";
   String get received => zh ? "接收" : "Receive";
