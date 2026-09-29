@@ -5,6 +5,13 @@ remain on the PC; neither side uploads configuration to a service.
 
 ## Phone
 
+On the tested Xiaomi phone, **three-finger swipe to screenshot** cancels all held
+game controls when a third finger slides. The user confirmed that turning off
+that system shortcut restores two held ground keys plus Field sliding. A screenshot
+does not have to appear for the gesture to intercept touches. Keeping this shortcut
+enabled still causes cancellation on the tested phone; the controller does not change
+the user's system preference.
+
 Tap the small **Settings** entry twice within two seconds. The first tap uses an
 Android system Toast for “Tap again to open settings”; expiration resets the guard.
 The return control stays at the top left; **Defaults** is at the top right.

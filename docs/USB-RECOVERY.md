@@ -92,10 +92,20 @@ Read-only inspection of this phone's `miui-services.jar` showed that
 as a three-finger gesture enters `DETECTING`, before its final action succeeds.
 Therefore the absence of a screenshot or split-screen UI does not exclude system
 gesture interception. This path exposes no ordinary application-window opt-out.
-The exact enabled system gesture has not been isolated by a settings comparison;
-the user requested that system settings remain unchanged. Physical cancellation
-remains unresolved. Ignoring `ACTION_CANCEL` would risk stuck keys and cannot
-restore events that the system stops delivering.
+The user then isolated **three-finger swipe to screenshot** and confirmed that
+turning it off restores normal two- and three-finger operation, including two held
+ground keys plus Field sliding. A read-only check afterward returned `none` for
+`three_gesture_down`. The user made the system-setting change; the tools did not.
+This confirms the gesture conflict but does not meet the user's preference to keep
+the screenshot shortcut enabled. Genuine `ACTION_CANCEL` continues to release input.
+
+An experimental ADB touch relay initially failed to connect over a local socket.
+An authenticated loopback revision subsequently opened the physical touchscreen
+and passed 12 device tests, but the user still reproduced cancellation with the
+screenshot shortcut enabled. The experiment was withdrawn at the user's request.
+The Host and phone were restored to the prior versions, retaining the tested
+two-finger fix. The restored APK has SHA-256
+`EFC4E7D583210145B04D1D4D157AF28ACBB509F9A66E24B969C5AC3223548564`.
 
 Opt-in diagnostics compare Activity-entry and native gameplay pointer transitions,
 throttle multi-pointer moves and record input cancellation reasons. Activity-entry
@@ -109,5 +119,5 @@ adb shell setprop log.tag.InFalsusTouchInput INFO
 ```
 
 Physical trace evidence is in `build/input-trace/`; the input source and system
-framework were only read. No screenshot, split-screen or other gesture setting was
-modified.
+framework were only read. The tools did not modify screenshot, split-screen or
+other gesture settings.

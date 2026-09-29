@@ -50,17 +50,31 @@ ADB server restart passed phone ACK/input checks. This machine also had spontane
 USB read failures with ADB 37.0.1's new Windows backend; its native compatibility
 backend is now used when Host starts an ADB server. A short observation without
 further read failures is not long-term reliability acceptance.
-The exact ground-ground-Field pointer order now passes the native regression test,
-but physical three-finger input still receives Android cancellation while hardware
-touch points remain active. System gesture settings were not changed. Evidence and
-remaining limits are in [USB-RECOVERY.md](USB-RECOVERY.md).
+The exact ground-ground-Field pointer order passes the native regression test.
+Physical three-finger cancellation was isolated to the phone's three-finger swipe
+to screenshot shortcut. The user disabled that shortcut and confirmed that holding
+two ground keys while sliding Field now works. The tools did not change system
+gesture settings. Evidence and remaining limits are in [USB-RECOVERY.md](USB-RECOVERY.md).
+Keeping the screenshot shortcut enabled still fails the physical reproduction.
+An experimental touch relay passed automated checks but failed the user's real
+test and was withdrawn at their request; it is not included in the restored build.
 
 The later two-finger reproduction was isolated to MIUI's long-press text picker:
 it extracted the controller's accessibility label and rewrote one pointer's UP to
 CANCEL. A localized accessibility input hint excludes this input surface from that
 picker while preserving the label. The actual-phone-window regression failed on
 the old APK and passed with the fix, alongside all seven native touch tests.
-This result does not establish that the separate three-finger interception is fixed.
+The user confirmed normal physical two-finger input with this fix. The separate
+three-finger system-gesture conflict requires the user's shortcut preference above.
+
+Aligned layouts now retain each selected button's calibrated video-track position;
+hidden lanes leave gaps. Drawing, hit testing and the Field boundary share the same
+regions. Overlay and Reserved layouts retain centered partial selections. All 21
+touch unit tests passed, covering all 64 masks across three screen sizes and three
+video transforms. The eight native device tests passed on the final run, including
+selected-button drawing and hit testing. The first full device run missed the initial
+DOWN in the existing held-key test; that test passed alone and in the full rerun.
+The cause of that single test failure is not established.
 
 ## Acceptance gates
 
@@ -79,6 +93,7 @@ This result does not establish that the separate three-finger interception is fi
 | Shared hardware video broadcast | Six healthy simulated viewers plus one stalled viewer passed; one shared encoding verified |
 | Android 14 device MotionEvent / USB / settings persistence and migration | Latest 8/8 input checks passed, including final-up sample, 2400-pixel swipes and vibration preference persistence; earlier 12/12 UI suite and 2/2 focused Toast/entry checks passed |
 | Android Activity launch and landscape screen inspection | Passed at 2400 x 1080 |
+| Physical held-key multitouch regression | User confirmed normal two-finger hold/tap after the app fix, and two ground keys plus Field after disabling three-finger swipe to screenshot |
 | Physical finger tracking and full In Falsus chart gameplay | User reports improved hand feel after the input update; systematic full-chart and alignment acceptance remains open |
 | Actual In Falsus USB SendInput | Shift+Space starts the 1.0.4b tutorial; full chart input remains open |
 | Actual-chart absolute Field mapping | Replacement passed repeated targets and 120-event/s sweep with read-only game feedback; largest settled normalized error 0.000317; physical screen alignment remains open. Earlier OS-absolute failure remains documented in [FIELD-MAPPING.md](FIELD-MAPPING.md) |
@@ -757,8 +772,9 @@ color pattern. These short runs are not measurements of In Falsus under load.
   reduced motion is requested; empty metrics no longer reserve space. Defaults
   requires an explicit dialog confirmation; Cancel and system Back preserve settings.
 - USB logs are integrated into the USB status/action card; automatic discovery is
-  separate. Partial key selections pack in lane order at the center without resizing
-  their shapes. Hit testing uses the translated regions and original lane IDs.
+  separate. Partial key selections remain on their calibrated video tracks in Aligned
+  mode; Overlay and Reserved modes center the selected group without resizing its
+  shapes. Hit testing shares the displayed regions and preserves original lane IDs.
 - Each phone may select any control subset, including none. There is no required
   assignment sum. Shared-key holders are reference counted; one disconnect or
   watchdog timeout cannot release another phone's hold. Field ownership is queued.
