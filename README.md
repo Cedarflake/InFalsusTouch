@@ -42,3 +42,11 @@
 曾安装开发签名 APK 的设备无法直接覆盖安装此发布签名版本；请先记录设置，再自行卸载旧包并安装。卸载会清除应用设置。后续发行版将沿用同一发布签名。
 
 使用与校准见 [设置说明](docs/SETTINGS.md)。参与开发可从 [开发指南](docs/DEVELOPMENT.md) 和 [架构说明](ARCHITECTURE.md) 开始。
+
+## 许可证
+
+本项目采用 [Apache License 2.0](LICENSE)。
+
+Copyright © 2026 InFalsusTouch contributors.
+
+演示中的 In Falsus 游戏画面和素材不在此授权范围内；第三方依赖遵循各自的许可证。

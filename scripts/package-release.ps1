@@ -7,13 +7,14 @@ $version = $Matches[1]
 $versionCode = $Matches[2]
 $apk = Join-Path $repoRoot 'dist\InFalsusTouch-release.apk'
 $hostBinary = Join-Path $repoRoot 'build\windows\windows\Release\InFalsusTouchHost.exe'
+$license = Join-Path $repoRoot 'LICENSE'
 $sdkLine = Get-Content -LiteralPath (Join-Path $repoRoot 'android\local.properties') | Where-Object { $_ -match '^sdk.dir=' }
 if (-not $sdkLine) { throw 'Configure sdk.dir in android/local.properties' }
 $sdkRoot = $sdkLine.Substring(8).Replace('\\', '\').Replace('\:', ':')
 $buildTools = Join-Path $sdkRoot 'build-tools\35.0.0'
 if (-not $AdbDirectory) { $AdbDirectory = Join-Path $sdkRoot 'platform-tools' }
 $adbFiles = @('adb.exe', 'AdbWinApi.dll', 'AdbWinUsbApi.dll', 'NOTICE.txt')
-foreach ($path in @($apk, $hostBinary, (Join-Path $buildTools 'apksigner.bat'), (Join-Path $buildTools 'aapt.exe'))) {
+foreach ($path in @($apk, $hostBinary, $license, (Join-Path $buildTools 'apksigner.bat'), (Join-Path $buildTools 'aapt.exe'))) {
   if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Required build artifact or tool is missing: $path" }
 }
 foreach ($name in $adbFiles) {
@@ -57,6 +58,7 @@ if (Test-Path -LiteralPath $output) { throw "Release output already exists: $out
 $stage = Join-Path $repoRoot ("build\release-package-" + [Guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $output, $stage, (Join-Path $stage 'platform-tools') -Force | Out-Null
 Copy-Item -LiteralPath $hostBinary -Destination (Join-Path $stage 'InFalsusTouchHost.exe')
+Copy-Item -LiteralPath $license -Destination (Join-Path $stage 'LICENSE')
 foreach ($name in $adbFiles) {
   Copy-Item -LiteralPath (Join-Path $AdbDirectory $name) -Destination (Join-Path $stage 'platform-tools')
 }
@@ -71,7 +73,7 @@ $zipName = "InFalsusTouch-v$version-windows-x64.zip"
 Copy-Item -LiteralPath $apk -Destination (Join-Path $output $apkName)
 $bundle = [IO.Compression.ZipFile]::Open((Join-Path $output $zipName), [IO.Compression.ZipArchiveMode]::Create)
 try {
-  $bundleFiles = @('InFalsusTouchHost.exe', 'README.md') + @($adbFiles | ForEach-Object { "platform-tools/$_" })
+  $bundleFiles = @('InFalsusTouchHost.exe', 'README.md', 'LICENSE') + @($adbFiles | ForEach-Object { "platform-tools/$_" })
   foreach ($relative in $bundleFiles) {
     [IO.Compression.ZipFileExtensions]::CreateEntryFromFile($bundle, (Join-Path $stage $relative), $relative,
       [IO.Compression.CompressionLevel]::Optimal) | Out-Null
