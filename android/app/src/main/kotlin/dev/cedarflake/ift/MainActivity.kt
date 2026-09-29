@@ -6,6 +6,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.graphics.RectF
+import android.view.MotionEvent
 import android.view.SurfaceHolder
 import android.view.View
 import android.view.ViewGroup
@@ -81,6 +82,11 @@ class MainActivity : FlutterActivity(), SurfaceHolder.Callback {
 
   override fun getRenderMode() = RenderMode.texture
   override fun getTransparencyMode() = TransparencyMode.transparent
+
+  override fun dispatchTouchEvent(event: MotionEvent): Boolean {
+    if (::root.isInitialized && !isConfiguring) InputTrace.motion(event, "activity")
+    return super.dispatchTouchEvent(event)
+  }
 
   override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
     super.configureFlutterEngine(flutterEngine)

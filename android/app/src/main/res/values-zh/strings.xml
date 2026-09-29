@@ -1,6 +1,7 @@
 <resources>
   <string name="field_label">FIELD · 水平滑动</string>
   <string name="input_accessibility">六个音游按键和水平滑动的 Field 触控区</string>
+  <string name="input_hint">按住数字按键，在 Field 区域水平滑动。</string>
   <string name="video_required">请先连接 USB，等待游戏画面显示后再校准。</string>
   <string name="settings_recovered">保存的设置无效，已使用默认值。</string>
   <string name="settings_save_failed">设置未能保存，当前修改已保留，可重试。</string>

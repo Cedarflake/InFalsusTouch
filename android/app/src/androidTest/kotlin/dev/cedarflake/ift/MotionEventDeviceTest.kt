@@ -13,6 +13,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import dev.cedarflake.ift.touch.TouchSink
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -47,7 +48,7 @@ class MotionEventDeviceTest {
     }
   }
 
-  private fun dispatch(view: View, action: Int, fingers: List<Finger>) {
+  private fun dispatch(view: View?, action: Int, fingers: List<Finger>) {
     val properties = fingers.map { finger ->
       MotionEvent.PointerProperties().apply { id = finger.id; toolType = MotionEvent.TOOL_TYPE_FINGER }
     }.toTypedArray()
@@ -58,7 +59,62 @@ class MotionEventDeviceTest {
     if (action == MotionEvent.ACTION_DOWN) gestureStart = now
     val event = MotionEvent.obtain(gestureStart, now, action, fingers.size, properties, coordinates,
       0, 0, 1f, 1f, 0, 0, InputDevice.SOURCE_TOUCHSCREEN, 0)
-    try { view.dispatchTouchEvent(event) } finally { event.recycle() }
+    try {
+      if (view == null) InstrumentationRegistry.getInstrumentation().sendPointerSync(event)
+      else view.dispatchTouchEvent(event)
+    } finally { event.recycle() }
+  }
+
+  @Test fun heldGroundKeySurvivesShortTapsThroughThePhoneWindow() {
+    val instrumentation = InstrumentationRegistry.getInstrumentation()
+    DeviceSettings { it.copy(autoConnect = false) }.use {
+      DeviceActivity.launch().use { scenario ->
+        val sink = RecordingSink()
+        lateinit var view: ControllerView
+        scenario.onActivity { activity ->
+          val original = activity.findViewById<View>(android.R.id.content).findViewWithTag<ControllerView>("controller")
+          val root = original.parent as ControllerRoot
+          view = ControllerView(activity, sink)
+          root.addView(view, root.indexOfChild(original), FrameLayout.LayoutParams(-1, -1))
+          root.removeView(original)
+          root.gameplay = view
+          view.setInputAllowed(true)
+        }
+        instrumentation.waitForIdleSync()
+        SystemClock.sleep(700)
+        val origin = IntArray(2)
+        var width = 0
+        var height = 0
+        scenario.onActivity {
+          view.getLocationOnScreen(origin)
+          width = view.width
+          height = view.height
+          sink.events.clear()
+        }
+        val held = Finger(0, origin[0] + width * 0.4f, origin[1] + height * 0.9f)
+        val tapped = Finger(1, origin[0] + width * 0.6f, held.y)
+        val pointerDown = MotionEvent.ACTION_POINTER_DOWN or (1 shl MotionEvent.ACTION_POINTER_INDEX_SHIFT)
+        val pointerUp = MotionEvent.ACTION_POINTER_UP or (1 shl MotionEvent.ACTION_POINTER_INDEX_SHIFT)
+        try {
+          dispatch(null, MotionEvent.ACTION_DOWN, listOf(held))
+          SystemClock.sleep(900)
+          repeat(3) {
+            dispatch(null, pointerDown, listOf(held, tapped))
+            SystemClock.sleep(65)
+            dispatch(null, pointerUp, listOf(held, tapped))
+            SystemClock.sleep(100)
+          }
+          scenario.onActivity {
+            assertEquals(listOf("D3", "D4", "U4", "D4", "U4", "D4", "U4"), sink.events)
+            assertTrue(view.createAccessibilityNodeInfo().contentDescription.isNotBlank())
+          }
+          dispatch(null, MotionEvent.ACTION_UP, listOf(held))
+          scenario.onActivity { assertEquals("U3", sink.events.last()) }
+        } finally {
+          dispatch(null, MotionEvent.ACTION_CANCEL, listOf(held))
+        }
+      }
+    }
   }
 
   @Test fun twoGroundKeysStayHeldWhileThirdFingerSlidesAndRetouchesField() {

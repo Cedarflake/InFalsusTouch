@@ -2,6 +2,7 @@
   <string name="app_name" translatable="false">InFalsusTouch</string>
   <string name="field_label">FIELD · slide horizontally</string>
   <string name="input_accessibility">Six rhythm lanes and a horizontal Field touch controller</string>
+  <string name="input_hint">Hold the numbered keys and slide horizontally in Field.</string>
   <string name="video_required">Connect USB and wait for the game picture before calibrating.</string>
   <string name="settings_recovered">Saved settings were invalid. Defaults are in use.</string>
   <string name="settings_save_failed">Settings could not be saved. Your changes are kept for retry.</string>

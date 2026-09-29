@@ -55,6 +55,13 @@ but physical three-finger input still receives Android cancellation while hardwa
 touch points remain active. System gesture settings were not changed. Evidence and
 remaining limits are in [USB-RECOVERY.md](USB-RECOVERY.md).
 
+The later two-finger reproduction was isolated to MIUI's long-press text picker:
+it extracted the controller's accessibility label and rewrote one pointer's UP to
+CANCEL. A localized accessibility input hint excludes this input surface from that
+picker while preserving the label. The actual-phone-window regression failed on
+the old APK and passed with the fix, alongside all seven native touch tests.
+This result does not establish that the separate three-finger interception is fixed.
+
 ## Acceptance gates
 
 | Gate | Status |

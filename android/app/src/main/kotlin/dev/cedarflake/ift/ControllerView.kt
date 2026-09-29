@@ -2,6 +2,7 @@ package dev.cedarflake.ift
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.content.res.Configuration
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
@@ -10,11 +11,13 @@ import android.graphics.Typeface
 import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.View
+import android.view.accessibility.AccessibilityNodeInfo
 import dev.cedarflake.ift.settings.ControlSettings
 import dev.cedarflake.ift.settings.VideoPlacement
 import dev.cedarflake.ift.touch.TouchController
 import dev.cedarflake.ift.touch.TouchGeometry
 import dev.cedarflake.ift.touch.TouchSink
+import java.util.Locale
 
 // Constructed by the Activity with a required input sink; never inflated from XML.
 @SuppressLint("ViewConstructor")
@@ -42,6 +45,7 @@ class ControllerView(context: Context, private val sink: TouchSink) : View(conte
   private var labelHeight = 0f
   private val density = resources.displayMetrics.density
   private var fieldLabel = context.getString(R.string.field_label)
+  private var inputHint = context.getString(R.string.input_hint)
   private var isInputAllowed = false
   private var isVideoVisible = false
   private var isFieldBusy = false
@@ -69,9 +73,20 @@ class ControllerView(context: Context, private val sink: TouchSink) : View(conte
   fun setSettings(value: ControlSettings) {
     settings = value
     val language = if (value.language == "system") resources.configuration.locales[0].language else value.language
-    fieldLabel = if (language == "zh") "FIELD · 水平滑动" else "FIELD · slide horizontally"
-    contentDescription = if (language == "zh") "六轨按键与水平 Field 触控区" else context.getString(R.string.input_accessibility)
+    val localized = context.createConfigurationContext(Configuration(resources.configuration).apply {
+      setLocale(Locale.forLanguageTag(language))
+    })
+    fieldLabel = localized.getString(R.string.field_label)
+    contentDescription = localized.getString(R.string.input_accessibility)
+    inputHint = localized.getString(R.string.input_hint)
     updateGeometry()
+  }
+
+  override fun onInitializeAccessibilityNodeInfo(info: AccessibilityNodeInfo) {
+    super.onInitializeAccessibilityNodeInfo(info)
+    // MIUI's text picker skips input hints; otherwise it cancels a pointer-up after
+    // extracting this surface's accessibility label during a held ground key.
+    info.hintText = inputHint
   }
 
   fun setVideoVisible(visible: Boolean) {

@@ -48,6 +48,31 @@ Local evidence is in `build/usb-recovery-test/results.json`,
 `build/usb-legacy-host-out.txt`. Generated evidence and device system files are not
 committed.
 
+## Two-finger cancellation after holding a key
+
+The user's later reproduction exposed a separate fault: hold one ground key, tap
+another ground key, and the held key releases when the tapping finger lifts.
+Six physical reproductions showed Android's window receiver logging
+`ACTION_POINTER_UP(1)`, followed by MIUI `CatcherInputEventListener` extracting the
+controller's accessibility label and changing that event to `ACTION_CANCEL` before
+it reached the Activity. The remaining finger's later `ACTION_UP` still arrived.
+This was not a USB disconnect or a pointer-index/reference-count error.
+
+`ControllerView` now supplies a localized accessibility input hint while retaining
+its accessibility label. Read-only inspection of this phone's
+`ViewContentFetcher.fetchNativeViewContent` confirmed that MIUI skips nodes with
+input hints. No content-picker or gesture setting is changed, and genuine
+`ACTION_CANCEL` still releases input.
+
+The regression injects a 900 ms hold and three short taps through the actual phone
+window into a recording sink, without sending game input to the PC. Before the
+fix, it failed with `D3, D4, CLEAR`; after the fix, all three `D4, U4` pairs arrive
+and key 3 releases only on its own UP. All seven native touch tests passed.
+The user confirmed that physical two-finger input is now normal; the separate
+three-finger cancellation still reproduced on the repaired APK.
+Evidence: `build/input-trace/two-finger-before.txt`, `touch-after.txt`,
+`activity-app.txt`, `activity-kernel.txt` and `activity-all-app-log.txt`.
+
 ## Three-finger cancellation
 
 The profile APK, 20 touch unit tests, Android lint and six native MotionEvent tests
@@ -72,8 +97,9 @@ the user requested that system settings remain unchanged. Physical cancellation
 remains unresolved. Ignoring `ACTION_CANCEL` would risk stuck keys and cannot
 restore events that the system stops delivering.
 
-Opt-in diagnostics record gameplay pointer transitions, throttled multi-pointer
-moves and input cancellation reasons without logging Flutter/settings touches:
+Opt-in diagnostics compare Activity-entry and native gameplay pointer transitions,
+throttle multi-pointer moves and record input cancellation reasons. Activity-entry
+logging is disabled while a settings or calibration page is open:
 
 ```powershell
 adb shell setprop log.tag.InFalsusTouchInput DEBUG

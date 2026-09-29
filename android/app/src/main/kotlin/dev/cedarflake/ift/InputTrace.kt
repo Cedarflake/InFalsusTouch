@@ -12,7 +12,7 @@ internal object InputTrace {
     if (enabled) Log.d(TAG, message)
   }
 
-  fun motion(event: MotionEvent) {
+  fun motion(event: MotionEvent, source: String = "touch") {
     if (!enabled) return
     if (event.actionMasked == MotionEvent.ACTION_MOVE) {
       if (event.pointerCount < 3 || event.eventTime - lastMoveTime < 100) return
@@ -21,6 +21,6 @@ internal object InputTrace {
     val pointers = (0 until event.pointerCount).joinToString { index ->
       "${event.getPointerId(index)}:${event.getX(index).toInt()},${event.getY(index).toInt()}"
     }
-    write("touch ${MotionEvent.actionToString(event.action)} time=${event.eventTime} pointers=[$pointers] flags=${event.flags}")
+    write("$source ${MotionEvent.actionToString(event.action)} time=${event.eventTime} pointers=[$pointers] flags=${event.flags}")
   }
 }
