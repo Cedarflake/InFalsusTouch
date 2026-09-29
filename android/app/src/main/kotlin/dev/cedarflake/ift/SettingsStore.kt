@@ -45,7 +45,8 @@ class SettingsStore(context: Context, name: String = "controller-settings") : Cl
         showFieldGuide = preferences.getBoolean("showFieldGuide", defaults.showFieldGuide),
         autoConnect = preferences.getBoolean("autoConnect", defaults.autoConnect),
         autoHideControls = preferences.getBoolean("autoHideControls", defaults.autoHideControls),
-        highRefreshDisplay = preferences.getBoolean("highRefreshDisplay", defaults.highRefreshDisplay),
+        videoFps = if (preferences.contains("videoFps")) preferences.getInt("videoFps", defaults.videoFps)
+          else if (preferences.getBoolean("highRefreshDisplay", true)) 120 else 60,
         judgment = JudgmentLayout(
           fieldLeft = preferences.getFloat("judgment.fieldLeft", defaults.judgment.fieldLeft),
           fieldRight = preferences.getFloat("judgment.fieldRight", defaults.judgment.fieldRight),
@@ -91,7 +92,8 @@ class SettingsStore(context: Context, name: String = "controller-settings") : Cl
         .putBoolean("showFieldGuide", value.showFieldGuide)
         .putBoolean("autoConnect", value.autoConnect)
         .putBoolean("autoHideControls", value.autoHideControls)
-        .putBoolean("highRefreshDisplay", value.highRefreshDisplay)
+        .putInt("videoFps", value.videoFps)
+        .remove("highRefreshDisplay")
         .putFloat("judgment.fieldLeft", value.judgment.fieldLeft)
         .putFloat("judgment.fieldRight", value.judgment.fieldRight)
         .putFloat("judgment.fieldY", value.judgment.fieldY)

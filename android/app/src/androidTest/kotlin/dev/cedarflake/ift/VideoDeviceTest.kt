@@ -36,7 +36,7 @@ class VideoDeviceTest {
     assumeTrue(InstrumentationRegistry.getArguments().getString("usbVideo") == "true")
     DeviceSettings { it.copy(controlsMask = 127, layoutMode = LayoutMode.OVERLAY, autoConnect = false, autoHideControls = true,
       fieldMode = FieldMode.RELATIVE, fieldLeft = 0f, fieldRight = 1f, fieldHeight = 0.65f, laneHeight = 0.4f,
-      videoScale = VideoScale.FIT, highRefreshDisplay = true) }.use { verifyVideo() }
+      videoScale = VideoScale.FIT, videoFps = InstrumentationRegistry.getArguments().getString("videoFps", "60").toInt()) }.use { verifyVideo() }
   }
 
   private fun verifyVideo() {

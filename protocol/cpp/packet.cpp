@@ -40,7 +40,7 @@ void validatePacket(const Packet& packet) {
     return;
   }
   const auto type = static_cast<std::uint8_t>(packet.type);
-  if ((type < 1 || type > 10) && packet.type != MessageType::ack) {
+  if ((type < 1 || type > 11) && packet.type != MessageType::ack) {
     throw ProtocolError("Unknown message type");
   }
   const bool isLane = packet.type == MessageType::laneDown ||
@@ -66,6 +66,8 @@ void validatePacket(const Packet& packet) {
     }
   } else if (packet.type == MessageType::assignControls) {
     if (packet.value < 0 || packet.value > 127 || std::floor(packet.value) != packet.value) throw ProtocolError("Invalid assignment mask");
+  } else if (packet.type == MessageType::videoFrameRate || (packet.type == MessageType::hello && packet.value != 0)) {
+    if (packet.value < 24 || packet.value > 120 || std::floor(packet.value) != packet.value) throw ProtocolError("Invalid video frame rate");
   } else if (packet.value != 0) {
     throw ProtocolError("Unexpected value");
   }
@@ -75,7 +77,7 @@ PacketBytes encodePacket(const Packet& packet) {
   validatePacket(packet);
   PacketBytes bytes{};
   std::copy(magic.begin(), magic.end(), bytes.begin());
-  bytes[4] = 2;
+  bytes[4] = 3;
   bytes[5] = static_cast<std::uint8_t>(packet.type);
   bytes[6] = packet.lane;
   bytes[7] = packet.status;
@@ -89,8 +91,8 @@ Packet decodePacket(std::span<const std::uint8_t> bytes) {
   if (bytes.size() != packetSize) {
     throw ProtocolError("Incorrect packet size");
   }
-  if (!std::equal(magic.begin(), magic.end(), bytes.begin()) || bytes[4] != 2) {
-    throw ProtocolError("Unsupported magic/version");
+  if (!std::equal(magic.begin(), magic.end(), bytes.begin()) || bytes[4] != 3) {
+    throw ProtocolError("Unsupported magic/version; update both Host and app");
   }
   if (readInteger(bytes, 24, 8) != 0) {
     throw ProtocolError("Reserved bytes must be zero");

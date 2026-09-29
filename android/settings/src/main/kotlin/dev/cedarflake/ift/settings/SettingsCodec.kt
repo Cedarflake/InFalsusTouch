@@ -8,7 +8,7 @@ object SettingsCodec {
     "laneOpacity" to laneOpacity.toDouble(), "laneGapDp" to laneGapDp.toDouble(), "brightness" to brightness.toDouble(),
     "showLabels" to showLabels, "buttonHaptics" to buttonHaptics,
     "showStatistics" to showStatistics, "showFieldGuide" to showFieldGuide,
-    "autoConnect" to autoConnect, "autoHideControls" to autoHideControls, "highRefreshDisplay" to highRefreshDisplay,
+    "autoConnect" to autoConnect, "autoHideControls" to autoHideControls, "videoFps" to videoFps,
     "judgment" to with(judgment) { mapOf(
       "fieldLeft" to fieldLeft.toDouble(), "fieldRight" to fieldRight.toDouble(), "fieldY" to fieldY.toDouble(),
       "floorLeft" to floorLeft.toDouble(), "floorRight" to floorRight.toDouble(), "floorY" to floorY.toDouble(),
@@ -48,7 +48,8 @@ object SettingsCodec {
       buttonHaptics = boolean("buttonHaptics", base.buttonHaptics),
       showStatistics = boolean("showStatistics", base.showStatistics), showFieldGuide = boolean("showFieldGuide", base.showFieldGuide),
       autoConnect = boolean("autoConnect", base.autoConnect), autoHideControls = boolean("autoHideControls", base.autoHideControls),
-      highRefreshDisplay = boolean("highRefreshDisplay", base.highRefreshDisplay), judgment = judgment,
+      videoFps = if ("videoFps" in patch) requireNotNull(patch["videoFps"] as? Int) else base.videoFps,
+      judgment = judgment,
     )
   }
 }

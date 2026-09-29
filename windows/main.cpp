@@ -90,15 +90,16 @@ int wmain(int argc, wchar_t** argv) {
     if (!shutdownComplete || !SetConsoleCtrlHandler(handleConsoleSignal, TRUE)) {
       throw std::runtime_error("Could not register clean shutdown handler");
     }
+    ift::VideoFrameRate frameRate(options.video.fps);
     std::jthread video;
     if (options.video.enabled) {
       video = std::jthread([&](std::stop_token token) {
-        ift::runVideoServer(options.video, window, stopping, token);
+        ift::runVideoServer(options.video, window, frameRate, stopping, token);
       });
     }
     std::jthread usb;
     if (options.usb) usb = std::jthread([&](std::stop_token token) { ift::maintainUsb(options, stopping, token); });
-    ift::runControlServer(options, target, *sink, stopping);
+    ift::runControlServer(options, target, *sink, frameRate, stopping);
   } catch (const winrt::hresult_error& error) {
     std::wostringstream detail;
     detail << error.message().c_str() << L" (0x"

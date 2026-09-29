@@ -40,11 +40,10 @@ class GameVideoDeviceTest {
   @Test fun selectedGameWindowReachesThePhoneWithAlignedLocalFeedback() {
     assumeTrue(InstrumentationRegistry.getArguments().getString("gameVideo") == "true")
     val instrumentation = InstrumentationRegistry.getInstrumentation()
-    val highRefresh = InstrumentationRegistry.getArguments().getString("highRefresh") != "false"
     val fps = InstrumentationRegistry.getArguments().getString("videoFps", "60").toInt()
     require(fps in 24..120)
     DeviceSettings { it.copy(controlsMask = 127, showStatistics = false, autoConnect = false, autoHideControls = true,
-      highRefreshDisplay = highRefresh, layoutMode = LayoutMode.ALIGNED, laneHeight = 0.4f, videoScale = VideoScale.FIT,
+      videoFps = fps, layoutMode = LayoutMode.ALIGNED, laneHeight = 0.4f, videoScale = VideoScale.FIT,
       fieldMode = FieldMode.RELATIVE, judgment = JudgmentLayout()) }.use {
       DeviceActivity.launch().use { scenario ->
         scenario.onActivity { it.toggleConnection() }

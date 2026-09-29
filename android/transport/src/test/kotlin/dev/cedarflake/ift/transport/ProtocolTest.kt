@@ -21,7 +21,22 @@ class ProtocolTest {
         count++
       }
     }
-    assertEquals(12, count)
+    assertEquals(14, count)
+  }
+
+  @Test fun phoneFrameRatesAreValidatedAndOldVersionsRejected() {
+    val codec = PacketCodec()
+    for (type in listOf(MessageType.HELLO, MessageType.VIDEO_FRAME_RATE)) {
+      for (fps in listOf(24f, 60f, 90f, 120f)) {
+        assertEquals(fps, codec.decode(codec.encode(Packet(type, value = fps))).value)
+      }
+      for (fps in listOf(23f, 121f, 60.5f, Float.NaN)) {
+        assertFailsWith<ProtocolException> { codec.encode(Packet(type, value = fps)) }
+      }
+    }
+    assertFailsWith<ProtocolException> { codec.encode(Packet(MessageType.VIDEO_FRAME_RATE)) }
+    val old = codec.encode(Packet(MessageType.HELLO)).copyOf().apply { this[4] = 2 }
+    assertFailsWith<ProtocolException> { codec.decode(old) }
   }
 
   @Test fun malformedFramesFailClosed() {

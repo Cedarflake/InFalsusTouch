@@ -105,7 +105,7 @@ struct Stream {
   }
 };
 
-void serve(VideoOptions options, HWND window, const Shutdown& shutdown) {
+void serve(VideoOptions options, HWND window, const VideoFrameRate& frameRate, const Shutdown& shutdown) {
   MediaRuntime runtime;
   const auto graphics = createGraphicsDevice();
   Winsock winsock;
@@ -126,6 +126,13 @@ void serve(VideoOptions options, HWND window, const Shutdown& shutdown) {
   std::unique_ptr<Stream> stream;
   FrameWait wake;
   while (!shutdown.requested()) {
+    const auto requestedFps = frameRate.current();
+    if (requestedFps != options.fps) {
+      options.fps = requestedFps;
+      for (auto& viewer : viewers) viewer.reset();
+      stream.reset();
+      std::cout << "Video frame rate: " << options.fps << " FPS (controller settings)" << std::endl;
+    }
     const SOCKET accepted = accept(listener.get(), nullptr, nullptr);
     if (accepted != INVALID_SOCKET) {
       std::size_t slot = 0;
@@ -230,9 +237,9 @@ void serve(VideoOptions options, HWND window, const Shutdown& shutdown) {
 
 }
 
-void runVideoServer(VideoOptions options, HWND window, const std::atomic_bool& stopping,
+void runVideoServer(VideoOptions options, HWND window, const VideoFrameRate& frameRate, const std::atomic_bool& stopping,
                     std::stop_token token) noexcept {
-  try { serve(options, window, {stopping, token}); }
+  try { serve(options, window, frameRate, {stopping, token}); }
   catch (const winrt::hresult_error& error) { std::cerr << "Video unavailable: " << winrt::to_string(error.message()) << std::endl; }
   catch (const std::exception& error) { std::cerr << "Video unavailable: " << error.what() << std::endl; }
 }

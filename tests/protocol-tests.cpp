@@ -34,9 +34,21 @@ void protocolTests() {
     }
     ++count;
   }
-  check(count == 12, "Missing protocol vectors");
+  check(count == 14, "Missing protocol vectors");
 
   const auto good = encodePacket({MessageType::hello});
+  auto oldVersion = good;
+  oldVersion[4] = 2;
+  expectError<ProtocolError>([&] { decodePacket(oldVersion); });
+  for (const auto type : {MessageType::hello, MessageType::videoFrameRate}) {
+    for (const float value : {24.f, 60.f, 90.f, 120.f}) {
+      check(decodePacket(encodePacket({type, 0, 0, 1, value})).value == value, "Phone frame rate was lost");
+    }
+    for (const float value : {23.f, 121.f, 60.5f, std::numeric_limits<float>::quiet_NaN()}) {
+      expectError<ProtocolError>([&] { encodePacket({type, 0, 0, 1, value}); });
+    }
+  }
+  expectError<ProtocolError>([] { encodePacket({MessageType::videoFrameRate, 0, 0, 1, 0}); });
   for (std::size_t size = 0; size < packetSize; ++size) {
     expectError<ProtocolError>([&] { decodePacket(std::span(good).first(size)); });
   }

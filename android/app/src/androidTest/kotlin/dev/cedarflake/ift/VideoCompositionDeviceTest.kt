@@ -77,7 +77,7 @@ class VideoCompositionDeviceTest {
     val result = JSONObject().put("streamFps", fps).put("inputInjection", false).put("phases", samples)
       .put("appBuildMode", buildMode)
     DeviceSettings { it.copy(controlsMask = 127, autoConnect = false, autoHideControls = false,
-      showStatistics = false, highRefreshDisplay = true, layoutMode = LayoutMode.OVERLAY,
+      showStatistics = false, videoFps = fps, layoutMode = LayoutMode.OVERLAY,
       videoScale = VideoScale.FIT) }.use {
       DeviceActivity.launch().use { scenario ->
         lateinit var flutter: FlutterView

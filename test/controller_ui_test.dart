@@ -29,7 +29,7 @@ Map<String, Object?> settingsFixture() => {
   "showFieldGuide": false,
   "autoConnect": false,
   "autoHideControls": true,
-  "highRefreshDisplay": true,
+  "videoFps": 120,
   "judgment": {
     "fieldLeft": 0.07,
     "fieldRight": 0.93,
@@ -118,6 +118,27 @@ class UiHost {
 }
 
 void main() {
+  testWidgets("video frame rate is selected and saved on the phone", (
+    tester,
+  ) async {
+    final host = UiHost();
+    await host.mount(tester);
+    await tester.tap(find.text("Picture"));
+    await tester.pumpAndSettle();
+    for (final fps in [60, 90, 120]) {
+      await tester.scrollUntilVisible(
+        find.text("$fps FPS"),
+        150,
+        scrollable: find.byType(Scrollable).last,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text("$fps FPS"));
+      await tester.pumpAndSettle();
+      expect(objectMap(host.state["settings"])["videoFps"], fps);
+    }
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
     "settings content fills the display without whole-page safe padding",
     (tester) async {
@@ -546,6 +567,12 @@ void main() {
         await host.controller.flushSettings();
         await tester.pumpAndSettle();
         await tester.tap(find.text(language == "en" ? "Picture" : "画面"));
+        await tester.pumpAndSettle();
+        await tester.scrollUntilVisible(
+          find.text(language == "en" ? "Fit" : "完整显示"),
+          150,
+          scrollable: find.byType(Scrollable).last,
+        );
         await tester.pumpAndSettle();
         expect(find.text(language == "en" ? "Fit" : "完整显示"), findsOneWidget);
         await tester.tap(

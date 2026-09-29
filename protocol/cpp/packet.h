@@ -21,6 +21,7 @@ enum class MessageType : std::uint8_t {
   fieldBegin = 8,
   fieldEnd = 9,
   assignControls = 10,
+  videoFrameRate = 11,
   ack = 128,
   configuration = 129,
 };

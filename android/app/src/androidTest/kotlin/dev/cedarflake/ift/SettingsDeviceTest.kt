@@ -27,6 +27,9 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.junit.Assume.assumeTrue
+import org.json.JSONArray
+import org.json.JSONObject
 
 import java.io.File
 import java.util.concurrent.CountDownLatch
@@ -35,6 +38,80 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 @RunWith(AndroidJUnit4::class)
 class SettingsDeviceTest {
+  @Test fun legacyRefreshPreferenceMigratesToVideoFrameRate() {
+    val context = InstrumentationRegistry.getInstrumentation().targetContext
+    val name = "video-fps-migration-test"
+    val preferences = context.getSharedPreferences(name, Context.MODE_PRIVATE)
+    try {
+      for ((enabled, fps) in listOf(true to 120, false to 60)) {
+        assertTrue(preferences.edit().clear().putBoolean("highRefreshDisplay", enabled)
+          .putString("language", "zh").putFloat("laneHeight", 0.35f).commit())
+        SettingsStore(context, name).use { store ->
+          val loaded = store.load()
+          assertTrue(!loaded.recovered)
+          assertEquals(fps, loaded.value.videoFps)
+          assertEquals("zh", loaded.value.language)
+          assertEquals(0.35f, loaded.value.laneHeight)
+        }
+      }
+      assertTrue(preferences.edit().putInt("videoFps", 90).commit())
+      SettingsStore(context, name).use { assertEquals(90, it.load().value.videoFps) }
+    } finally { context.deleteSharedPreferences(name) }
+  }
+
+  @Test fun phoneSelectionChangesHostVideoAndSurvivesRelaunch() {
+    assumeTrue(InstrumentationRegistry.getArguments().getString("videoFrameRateTest") == "true")
+    val context = InstrumentationRegistry.getInstrumentation().targetContext
+    val phases = JSONArray()
+    DeviceSettings { it.copy(language = "en", autoConnect = false, videoFps = 120) }.use {
+      DeviceActivity.launch().use { scenario ->
+        fun measure(fps: Int, name: String) {
+          var start: dev.cedarflake.ift.video.VideoSnapshot? = null
+          val deadline = SystemClock.uptimeMillis() + 20000
+          while (SystemClock.uptimeMillis() < deadline) {
+            scenario.onActivity { activity -> start = activity.videoSnapshot?.takeIf { it.targetFps == fps && it.presentedFrames >= fps * 2 } }
+            if (start != null) break
+            SystemClock.sleep(100)
+          }
+          val first = requireNotNull(start) { "Host did not apply phone FPS $fps" }
+          var last = first
+          while (SystemClock.uptimeMillis() < deadline && last.sampleTimestamp - first.sampleTimestamp < 4_000_000_000L) {
+            SystemClock.sleep(100)
+            scenario.onActivity { activity -> activity.videoSnapshot?.let { last = it } }
+          }
+          val seconds = (last.sampleTimestamp - first.sampleTimestamp) / 1e9
+          assertTrue("Video did not make sustained progress", seconds >= 4)
+          assertEquals(fps, last.targetFps)
+          val presentFps = (last.presentedFrames - first.presentedFrames) / seconds
+          assertTrue("Phone presentation below target: $presentFps / $fps", presentFps >= fps * 0.9)
+          SettingsStore(context).use { store -> assertEquals(fps, store.load().value.videoFps) }
+          phases.put(JSONObject().put("phase", name).put("targetFps", fps).put("presentFps", presentFps))
+        }
+        scenario.onActivity { it.toggleConnection() }
+        measure(120, "initial-phone-setting")
+        openSettings()
+        click("Picture")
+        scrollContent()
+        click("60 FPS")
+        measure(60, "live-switch-to-60")
+        scenario.recreate()
+        scenario.onActivity { it.toggleConnection() }
+        measure(60, "saved-setting-after-relaunch")
+        openSettings()
+        click("Picture")
+        scrollContent()
+        click("120 FPS")
+        measure(120, "live-switch-to-120")
+        screenshot("video-frame-rate-settings.png")
+        scenario.onActivity { it.toggleConnection() }
+        SystemClock.sleep(500)
+        scenario.onActivity { it.toggleConnection() }
+        measure(120, "reconnect-uses-phone-setting")
+      }
+    }
+    File(context.filesDir, "video-frame-rate.json").writeText(JSONObject().put("phases", phases).toString(2))
+  }
+
   @Test fun legacyFieldModeMigratesWithoutResettingOtherPreferences() {
     val context = InstrumentationRegistry.getInstrumentation().targetContext
     val name = "field-migration-test"
@@ -69,7 +146,7 @@ class SettingsDeviceTest {
     val value = ControlSettings(language = "zh", theme = "light", controlsMask = 73, fieldMode = FieldMode.RELATIVE, layoutMode = LayoutMode.RESERVED,
       videoScale = VideoScale.CROP, laneHeight = 0.35f, fieldHeight = 0.5f, fieldLeft = 0.1f, fieldRight = 0.9f,
       laneOpacity = 0.6f, laneGapDp = 5f, brightness = 0.7f, showLabels = false, buttonHaptics = true,
-      showStatistics = true, showFieldGuide = true, autoConnect = true, autoHideControls = false, highRefreshDisplay = false,
+      showStatistics = true, showFieldGuide = true, autoConnect = true, autoHideControls = false, videoFps = 60,
       judgment = JudgmentLayout(fieldLeft = 0.08f, fieldRight = 0.92f, floorY = 0.88f, sideY = 0.74f))
     try {
       SettingsStore(context, name).use { store ->

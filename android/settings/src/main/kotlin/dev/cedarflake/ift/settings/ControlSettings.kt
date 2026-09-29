@@ -24,13 +24,14 @@ data class ControlSettings(
   val showFieldGuide: Boolean = false,
   val autoConnect: Boolean = false,
   val autoHideControls: Boolean = true,
-  val highRefreshDisplay: Boolean = true,
+  val videoFps: Int = 120,
   val judgment: JudgmentLayout = JudgmentLayout(),
 ) {
   init {
     require(language in setOf("system", "en", "zh"))
     require(theme in setOf("system", "light", "dark"))
     require(controlsMask in 0..127)
+    require(videoFps in 24..120)
     require(laneHeight in 0.1f..0.5f)
     require(fieldHeight in 0.1f..1f)
     require(fieldLeft in 0f..1f && fieldRight in 0f..1f && fieldLeft < fieldRight)

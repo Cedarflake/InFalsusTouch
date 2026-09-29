@@ -105,23 +105,22 @@ class AppStrings {
   String get calibrationHint => zh
       ? "设置自动保存，校准期间暂停游戏输入。"
       : "Settings save automatically. Game input pauses while calibrating.";
-  String get framing => zh ? "完整画面，居中显示" : "Keep the whole chart in view";
+  String get pictureAndStatistics => zh ? "画面与统计" : "Picture and statistics";
   String get fit => zh ? "完整显示" : "Fit";
   String get stretch => zh ? "拉伸铺满" : "Stretch";
   String get crop => zh ? "裁切铺满" : "Crop";
-  String get framingHint => zh
-      ? "建议完整显示。宽屏两侧留白，不裁掉音符与判定线；裁切会隐藏上下画面。"
-      : "Fit preserves the chart with side bars. Crop can hide notes and judgment lines.";
-  String get highRefresh =>
-      zh ? "屏幕优先使用 120 Hz" : "Prefer 120 Hz screen refresh";
-  String get highRefreshHint => zh
-      ? "让本地触控反馈更流畅，实际刷新率由系统决定。游戏视频帧率由电脑端设置，下方显示当前视频源。"
-      : "Smoother local touch feedback, subject to system refresh limits. Game video FPS is set on the PC; the current source is shown below.";
-  String get statistics => zh ? "显示性能统计" : "Show performance statistics";
+  String get pictureScaleHint => zh
+      ? "完整显示保留全部画面；拉伸改变比例，裁切可能遮住音符与判定线。"
+      : "Fit keeps the entire picture. Stretch changes its proportions; Crop may hide notes and judgment lines.";
+  String get videoFrameRate => zh ? "视频帧率" : "Video frame rate";
+  String get videoFrameRateHint => zh
+      ? "自动同步到电脑，同时请求对应的屏幕刷新率。多设备共用各自所选的最低帧率。"
+      : "Syncs to the PC and requests matching screen refresh. Multiple devices share the lowest selected frame rate.";
+  String get statistics => zh ? "游玩时显示性能统计" : "Show statistics while playing";
   String get performanceDetails => zh ? "性能详情" : "Performance details";
   String get inputRoundTrip => zh ? "输入往返" : "Input round trip";
   String get sessionDrops => zh ? "本次累计丢帧" : "Dropped this session";
-  String get display => zh ? "屏幕" : "Display";
+  String get display => zh ? "屏幕刷新率" : "Screen refresh rate";
   String get videoSource => zh ? "电脑视频源" : "PC video source";
   String get received => zh ? "接收" : "Receive";
   String get presented => zh ? "呈现" : "Present";

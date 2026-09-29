@@ -28,7 +28,7 @@ class VideoCadenceDeviceTest {
     require(fps in 24..120 && seconds in 10..120)
     val output = File(InstrumentationRegistry.getInstrumentation().targetContext.filesDir, "video-cadence.json")
     output.delete()
-    DeviceSettings { it.copy(autoConnect = false, highRefreshDisplay = true) }.use {
+    DeviceSettings { it.copy(autoConnect = false, videoFps = fps) }.use {
       DeviceActivity.launch().use { scenario ->
         scenario.onActivity { it.toggleConnection() }
         val current = AtomicReference<VideoSnapshot?>()

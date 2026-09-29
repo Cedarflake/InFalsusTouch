@@ -1,9 +1,33 @@
 #include "tests/test-support.h"
 #include "protocol/cpp/video-packet.h"
 #include "windows/video/frame-pacer.h"
+#include "windows/video/video-frame-rate.h"
 
 void videoTests() {
   using namespace ift::video;
+  {
+    ift::VideoFrameRate rate(30);
+    check(rate.current() == 30, "Video fallback missing before a phone connects");
+    rate.request(0, 120);
+    check(rate.current() == 120, "Host fallback capped the phone's requested frame rate");
+    rate.request(1, 60);
+    rate.request(6, 90);
+    check(rate.current() == 60, "Shared stream exceeded a phone's selected frame rate");
+    rate.request(1, 120);
+    check(rate.current() == 90, "Connected phone frame-rate changes were ignored");
+    rate.clear(6);
+    check(rate.current() == 120, "Disconnected phone continued limiting the stream");
+    rate.clear(0);
+    check(rate.current() == 120, "Disconnecting one phone lost another phone's request");
+    rate.clear(1);
+    check(rate.current() == 30, "Final disconnect did not restore the diagnostic fallback");
+    rate.request(0, 60);
+    for (const auto fps : {0, 23, 121}) {
+      expectError<std::invalid_argument>([&] { rate.request(0, static_cast<std::uint16_t>(fps)); });
+    }
+    check(rate.current() == 60, "Invalid rate changed the active stream");
+    expectError<std::out_of_range>([&] { rate.request(7, 120); });
+  }
   {
     ift::FramePacer pacing(120);
     constexpr std::uint64_t start = 1'000'000'000;

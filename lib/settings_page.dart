@@ -324,30 +324,45 @@ class _SettingsPageState extends State<SettingsPage> {
   ];
 
   List<Widget> pictureSections() => [
-    _Section(
-      title: s.framing,
-      subtitle: s.framingHint,
-      children: [
-        choice("videoScale", {"FIT": s.fit, "FILL": s.stretch, "CROP": s.crop}),
-      ],
-    ),
-    _Section(
-      title: "${s.display} · ${widget.state.displayHz.round()} Hz",
-      children: [
-        toggle(
-          s.highRefresh,
-          "highRefreshDisplay",
-          subtitle: s.highRefreshHint,
-        ),
-        toggle(s.statistics, "showStatistics"),
-      ],
-    ),
     if (widget.state.hasVideo)
       _Section(
         title: s.performanceDetails,
         subtitle: "${s.videoSource} · ${videoSourceText(widget.state)}",
         children: [PerformanceDetails(state: widget.state, strings: s)],
       ),
+    _Section(
+      title: s.videoFrameRate,
+      subtitle: s.videoFrameRateHint,
+      children: [
+        SegmentedButton<int>(
+          showSelectedIcon: false,
+          segments: [
+            for (final fps in {
+              60,
+              90,
+              120,
+              draft.number("videoFps").round(),
+            }.toList()..sort())
+              ButtonSegment(value: fps, label: Text("$fps FPS")),
+          ],
+          selected: {draft.number("videoFps").round()},
+          onSelectionChanged: (values) => change("videoFps", values.single),
+        ),
+      ],
+    ),
+    _Section(
+      title: s.pictureAndStatistics,
+      subtitle: s.pictureScaleHint,
+      children: [
+        choice("videoScale", {"FIT": s.fit, "FILL": s.stretch, "CROP": s.crop}),
+        const SizedBox(height: 8),
+        toggle(
+          s.statistics,
+          "showStatistics",
+          subtitle: "${s.display} · ${widget.state.displayHz.round()} Hz",
+        ),
+      ],
+    ),
   ];
 
   List<Widget> connectionSections() => [

@@ -49,9 +49,12 @@ uv run --python 3.13 tests/video-recovery.py
 uv run --python 3.13 tests/video-device.py --build-mode profile
 uv run --python 3.13 tests/video-device.py --build-mode profile --lifecycle-cycles 3 --skip-install
 uv run --python 3.13 tests/multiplayer-video.py
+uv run --python 3.13 tests/video-frame-rate.py --device
 ```
 
 恢复测试需要 ffmpeg。`--skip-install` 仅在设备已安装对应应用和测试 APK 时使用。设备测试可能重建 Activity、切换后台及重建 Surface，不应在正在游玩时运行。结果保存在忽略的 `build/` 目录。
+
+帧率测试将 Host 后备值设为 30，验证手机覆盖它、在线切换、多设备取最低请求及断线解除限制。`--device` 还会通过手机设置界面切换 60／120 FPS，检查实际呈现和重启保存；测试后恢复应用设置及 USB 转发。
 
 检查间歇性卡顿时，使用帧间隔采样；默认采集测试窗口，`--window` 可指定 `InFalsusTouchHost.exe --list` 列出的游戏窗口句柄：
 

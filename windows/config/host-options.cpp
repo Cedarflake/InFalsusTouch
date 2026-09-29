@@ -90,6 +90,7 @@ HostOptions parseOptions(int argc, wchar_t** argv) {
     if (!explicitProfile) options.profilePath = defaultProfilePath().wstring();
     if (std::filesystem::exists(options.profilePath)) {
       const auto profile = readProfileFile(options.profilePath);
+      std::wcout << L"Profile: " << options.profilePath << L" (loaded, " << profile.video.fps << L" FPS)\n";
       if (profile.hasLegacyRelativeSettings) {
         std::cerr << "Legacy relative tuning ignored; adjust mouse sensitivity in In Falsus.\n";
       }
@@ -99,6 +100,8 @@ HostOptions parseOptions(int argc, wchar_t** argv) {
       options.video.enabled = enabled;
     } else if (explicitProfile && !options.saveProfile && !options.calibrate) {
       throw std::invalid_argument("Profile does not exist; create it with --save-profile or --calibrate");
+    } else {
+      std::wcout << L"Profile: " << options.profilePath << L" (not found; using defaults)\n";
     }
   }
   for (const auto& [option, value] : values) {
@@ -171,7 +174,8 @@ void printHelp() {
     "  --no-video              Input only (video is enabled by default)\n"
     "  --video-port 27183      Independent loopback video listener\n"
     "  --resolution 720p       720p or 1080p, client aspect preserved\n"
-    "  --fps 60 --bitrate 8000000  FPS range: 24-120; default 60\n"
+    "  --fps 60 --bitrate 8000000  Fallback FPS: 24-120; default 60\n"
+    "  Phone FPS settings override the fallback; multiple phones share the lowest request.\n"
     "Relative Field preserves horizontal touch pixels; tune sensitivity in In Falsus.\n"
     "Experimental absolute mapping only:\n"
     "  --field-left 0.05 --field-right 0.95 --field-y 0.5\n"

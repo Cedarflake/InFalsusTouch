@@ -6,7 +6,7 @@ import java.nio.ByteOrder
 
 enum class MessageType(val wireValue: Int) {
   HELLO(1), LANE_DOWN(2), LANE_UP(3), FIELD_ABSOLUTE(4), FIELD_RELATIVE(5),
-  RELEASE_ALL(6), PING(7), FIELD_BEGIN(8), FIELD_END(9), ASSIGN_CONTROLS(10), ACK(128), CONFIGURATION(129),
+  RELEASE_ALL(6), PING(7), FIELD_BEGIN(8), FIELD_END(9), ASSIGN_CONTROLS(10), VIDEO_FRAME_RATE(11), ACK(128), CONFIGURATION(129),
 }
 
 data class Packet(
@@ -32,7 +32,7 @@ class PacketCodec {
     validate(type, lane, status, value)
     buffer.clear()
     buffer.putInt(MAGIC)
-    buffer.put(2)
+    buffer.put(3)
     buffer.put(type.wireValue.toByte())
     buffer.put(lane.toByte())
     buffer.put(status.toByte())
@@ -48,7 +48,7 @@ class PacketCodec {
     buffer.clear()
     buffer.put(bytes)
     buffer.flip()
-    if (buffer.int != MAGIC || buffer.get().toInt() != 2) throw ProtocolException("Unsupported magic/version; update both Host and app")
+    if (buffer.int != MAGIC || buffer.get().toInt() != 3) throw ProtocolException("Unsupported magic/version; update both Host and app")
     val code = buffer.get().toInt() and 0xff
     val type = MessageType.entries.firstOrNull { it.wireValue == code }
       ?: throw ProtocolException("Unknown message type")
@@ -78,6 +78,8 @@ class PacketCodec {
       MessageType.FIELD_ABSOLUTE -> value in 0f..1f
       MessageType.FIELD_RELATIVE -> value in -1f..1f
       MessageType.ASSIGN_CONTROLS -> value in 0f..127f && value == value.toInt().toFloat()
+      MessageType.HELLO -> value == 0f || value in 24f..120f && value == value.toInt().toFloat()
+      MessageType.VIDEO_FRAME_RATE -> value in 24f..120f && value == value.toInt().toFloat()
       else -> value == 0f
     }
     if (!value.isFinite() || !validValue) throw ProtocolException("Invalid Field value")

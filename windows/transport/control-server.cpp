@@ -85,7 +85,7 @@ void checkControlPort(std::uint16_t port) {
 }
 
 void runControlServer(const HostOptions& options, const GameWindow& target,
-                      InputSink& sink, const std::atomic_bool& stopping) {
+                      InputSink& sink, VideoFrameRate& frameRate, const std::atomic_bool& stopping) {
   Winsock winsock;
   Socket listener(socket(AF_INET, SOCK_STREAM, IPPROTO_TCP));
   bindControlPort(listener, options.port);
@@ -167,6 +167,9 @@ void runControlServer(const HostOptions& options, const GameWindow& target,
         if (controller->received != packetSize) continue;
         const auto packet = decodePacket(controller->incoming);
         auto reply = controller->session.process(packet);
+        if (packet.type == MessageType::videoFrameRate || (packet.type == MessageType::hello && packet.value != 0)) {
+          frameRate.request(index, static_cast<std::uint16_t>(packet.value));
+        }
         if (!controller->joined) {
           group.join(index);
           controller->joined = true;
@@ -187,6 +190,7 @@ void runControlServer(const HostOptions& options, const GameWindow& target,
       if (!failure.empty()) {
         if (!controller->state.releaseAll()) throw std::runtime_error("Key release failed; host stopped to prevent further injection");
         if (controller->joined) group.leave(index);
+        frameRate.clear(index);
         controllers[index].reset();
         publish(false);
         std::cerr << "Controller " << index + 1 << " disconnected: " << failure << std::endl;

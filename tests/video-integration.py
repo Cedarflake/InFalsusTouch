@@ -92,7 +92,7 @@ def main():
                     nonlocal sequence
                     sequence += 1
                     sent = time.perf_counter_ns()
-                    packet = INPUT.pack(b"IFT1", 2, message, lane, 0, sequence, 0.0, sent, 0)
+                    packet = INPUT.pack(b"IFT1", 3, message, lane, 0, sequence, 0.0, sent, 0)
                     control.sendall(packet)
                     ack = INPUT.unpack(read_exact(control, 32))
                     while ack[2] == 129:

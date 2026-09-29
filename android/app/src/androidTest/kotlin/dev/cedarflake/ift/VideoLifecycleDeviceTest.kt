@@ -36,7 +36,7 @@ class VideoLifecycleDeviceTest {
     assumeTrue(InstrumentationRegistry.getArguments().getString("usbVideoLifecycle") == "true")
     DeviceSettings { it.copy(controlsMask = 127, layoutMode = LayoutMode.OVERLAY, autoConnect = false,
       buttonHaptics = false, fieldMode = FieldMode.RELATIVE, fieldLeft = 0f, fieldRight = 1f,
-      fieldHeight = 0.65f, laneHeight = 0.4f, videoScale = VideoScale.FIT, highRefreshDisplay = true) }.use {
+      fieldHeight = 0.65f, laneHeight = 0.4f, videoScale = VideoScale.FIT, videoFps = 60) }.use {
       verifyLifecycles()
     }
   }

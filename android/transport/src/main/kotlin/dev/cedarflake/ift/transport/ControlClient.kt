@@ -39,6 +39,12 @@ class ControlClient(
   private val current = AtomicReference<Session?>()
   private val generation = AtomicLong()
   private val desiredControls = AtomicInteger(127)
+  private val desiredVideoFps = AtomicInteger(0)
+
+  fun setVideoFrameRate(fps: Int) {
+    require(fps in 24..120)
+    desiredVideoFps.set(fps)
+  }
 
   fun setControls(mask: Int) {
     require(mask in 0..127)
@@ -69,7 +75,8 @@ class ControlClient(
   }
 
   fun send(type: MessageType, lane: Int = 0, value: Float = 0f) {
-    require(type != MessageType.HELLO && type != MessageType.ACK && type != MessageType.CONFIGURATION && type != MessageType.PING)
+    require(type != MessageType.HELLO && type != MessageType.ACK && type != MessageType.CONFIGURATION &&
+      type != MessageType.PING && type != MessageType.VIDEO_FRAME_RATE)
     val session = current.get() ?: return
     if (!session.ready.get() && type != MessageType.RELEASE_ALL && type != MessageType.ASSIGN_CONTROLS) return
     if (!session.queue.offer(type, lane, value)) end(session, "Input queue overflow; reconnect required")
@@ -88,13 +95,21 @@ class ControlClient(
     val codec = PacketCodec()
     val event = OutboundEvent()
     var sequence = 1
+    var sentVideoFps = desiredVideoFps.get()
     val helloTime = System.nanoTime()
     session.pending.register(sequence, helloTime)
-    output.write(codec.encode(MessageType.HELLO, 0, 0, sequence++, 0f, helloTime))
+    output.write(codec.encode(MessageType.HELLO, 0, 0, sequence++, sentVideoFps.toFloat(), helloTime))
     session.queue.offer(MessageType.RELEASE_ALL)
     while (session.running.get()) {
       val hasEvent = session.queue.takeInto(event, 100)
       if (!session.running.get()) break
+      val videoFps = desiredVideoFps.get()
+      if (videoFps != sentVideoFps) {
+        val timestamp = System.nanoTime()
+        session.pending.register(sequence, timestamp)
+        output.write(codec.encode(MessageType.VIDEO_FRAME_RATE, 0, 0, sequence++, videoFps.toFloat(), timestamp))
+        sentVideoFps = videoFps
+      }
       if (!hasEvent) {
         event.type = if (session.ready.get()) MessageType.PING else MessageType.RELEASE_ALL
         event.lane = 0

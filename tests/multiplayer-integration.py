@@ -30,7 +30,7 @@ def await_condition(predicate, timeout=3):
 
 
 class Peer:
-    def __init__(self, port):
+    def __init__(self, port, fps=0):
         self.socket = socket.create_connection(("127.0.0.1", port), timeout=2)
         self.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         self.sequence = 0
@@ -38,7 +38,7 @@ class Peer:
         self.stop = threading.Event()
         self.configuration = None
         self.failure = None
-        self.request(1)
+        self.request(1, value=fps)
         self.arm()
         self.thread = threading.Thread(target=self.heartbeat, daemon=True)
         self.thread.start()
@@ -47,7 +47,7 @@ class Peer:
         with self.lock:
             self.sequence += 1
             stamp = time.monotonic_ns()
-            self.socket.sendall(WIRE.pack(b"IFT1", 2, kind, lane, 0, self.sequence, value, stamp, 0))
+            self.socket.sendall(WIRE.pack(b"IFT1", 3, kind, lane, 0, self.sequence, value, stamp, 0))
             while True:
                 data = bytearray()
                 while len(data) < WIRE.size:
@@ -56,7 +56,7 @@ class Peer:
                         raise EOFError("Controller closed")
                     data.extend(chunk)
                 packet = WIRE.unpack(data)
-                assert packet[:2] == (b"IFT1", 2), packet
+                assert packet[:2] == (b"IFT1", 3), packet
                 if packet[2] == 129:
                     self.configuration = {
                         "controls": packet[3], "bindingStatus": packet[4], "peers": int(packet[6]),

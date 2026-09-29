@@ -13,7 +13,7 @@ WIRE = struct.Struct(">4sBBBBIfQQ")
 
 
 def packet(kind, sequence, lane=0, value=0.0):
-    return WIRE.pack(b"IFT1", 2, kind, lane, 0, sequence, value, time.monotonic_ns(), 0)
+    return WIRE.pack(b"IFT1", 3, kind, lane, 0, sequence, value, time.monotonic_ns(), 0)
 
 
 def read_ack(connection, request):
@@ -26,7 +26,7 @@ def read_ack(connection, request):
     if ack[2] == 129:
         return read_ack(connection, request)
     sent = WIRE.unpack(request)
-    assert ack[:4] == (b"IFT1", 2, 128, 0), ack
+    assert ack[:4] == (b"IFT1", 3, 128, 0), ack
     assert ack[5] == sent[5] and ack[7] == sent[7], "ACK did not echo sequence/timestamp"
     return ack
 
