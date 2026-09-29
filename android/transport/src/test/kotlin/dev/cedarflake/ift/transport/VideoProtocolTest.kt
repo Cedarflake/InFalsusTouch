@@ -95,4 +95,35 @@ class VideoProtocolTest {
     assertFailsWith<IllegalArgumentException> { queue.offer(packet(true).copy(bytes = predicted)) }
     assertFailsWith<IllegalArgumentException> { VideoProtocol.hasIdr(byteArrayOf(0, 0, 1)) }
   }
+
+  @Test fun shortHighRateBurstPreservesTheReferenceChain() {
+    val queue = VideoFrameQueue()
+    val origin = packet(true)
+    repeat(6) { index ->
+      val next = packet(index == 0)
+      queue.offer(next.copy(header = next.header.copy(sequence = index,
+        captureTimestamp = origin.header.captureTimestamp + index * 8_333_333L),
+        receiveTimestamp = origin.receiveTimestamp + index * 100_000L))
+    }
+    repeat(6) { index ->
+      val frame = assertNotNull(queue.poll())
+      assertEquals(index, frame.packet.header.sequence)
+      assertFalse(frame.needsFlush)
+    }
+    assertEquals(0, queue.dropped)
+  }
+
+  @Test fun staleBurstStillHasABoundedRecovery() {
+    val queue = VideoFrameQueue()
+    val first = packet(true)
+    queue.offer(first)
+    val late = packet(false).copy(receiveTimestamp = first.receiveTimestamp + 51_000_000)
+    queue.offer(late)
+    assertNull(queue.poll())
+    assertEquals(2, queue.dropped)
+    queue.offer(packet(false))
+    assertNull(queue.poll())
+    queue.offer(packet(true))
+    assertTrue(assertNotNull(queue.poll()).needsFlush)
+  }
 }

@@ -10,6 +10,7 @@
 #include "windows/capture/frame-converter.h"
 #include "windows/encoder/hardware-encoder.h"
 #include "windows/input/control-group.h"
+#include "windows/video/frame-pacer.h"
 #include "windows/video/frame-wait.h"
 
 namespace ift {
@@ -86,12 +87,12 @@ struct Viewer {
 
 struct Stream {
   Stream(HWND window, const GraphicsDevice& graphics, const VideoOptions& options)
-    : encoder(graphics, options), converter(graphics, options), capture(window, graphics) {}
+    : encoder(graphics, options), converter(graphics, options), capture(window, graphics), pacing(options.fps) {}
   HardwareEncoder encoder;
   FrameConverter converter;
   WindowCapture capture;
+  FramePacer pacing;
   Payload parameters;
-  std::uint64_t nextCapture = 0;
   std::uint64_t lastEncoded = 0;
   std::uint64_t frames = 0;
   bool warmed = false;
@@ -192,16 +193,13 @@ void serve(VideoOptions options, HWND window, const Shutdown& shutdown) {
         ++stream->frames;
         stream->lastOutput = Clock::now();
       }
-      if (stream->encoder.canAccept()) {
+      const auto now = performanceNanoseconds();
+      if (stream->encoder.canAccept() && stream->pacing.ready(now)) {
         auto frame = stream->capture.takeLatest();
         if (frame.owner) {
-          const auto interval = 1'000'000'000ULL / options.fps;
-          if (stream->nextCapture == 0 || frame.timestamp + interval / 4 >= stream->nextCapture) {
-            const auto texture = stream->converter.convert(frame);
-            stream->encoder.submit(texture.get(), frame.timestamp);
-            stream->nextCapture = stream->nextCapture == 0 || frame.timestamp > stream->nextCapture + interval
-              ? frame.timestamp + interval : stream->nextCapture + interval;
-          }
+          const auto texture = stream->converter.convert(frame);
+          stream->encoder.submit(texture.get(), frame.timestamp);
+          stream->pacing.submitted(now);
           frame.owner.Close();
         }
       }

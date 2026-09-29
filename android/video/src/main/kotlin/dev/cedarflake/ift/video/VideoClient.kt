@@ -100,7 +100,7 @@ class VideoClient(private val listener: VideoListener, private val executor: Exe
       try {
         while (session.running.get() && receiving.get()) {
           val progressed = decoder.step(queue)
-          statistics.snapshot(queue.dropped + decoder.dropped, queue.depth() + decoder.pendingCount())?.let { snapshot ->
+          statistics.snapshot(queue.dropped + decoder.dropped, queue.depth() + decoder.pendingCount(), queue.recoveries)?.let { snapshot ->
             emit(session) { listener.onStatistics(snapshot) }
           }
           if (!progressed) decoder.awaitProgress()

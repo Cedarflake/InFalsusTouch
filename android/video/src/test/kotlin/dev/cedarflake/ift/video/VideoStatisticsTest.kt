@@ -5,6 +5,18 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 
 class VideoStatisticsTest {
+  @Test fun cadenceRetainsGapsAcrossReportBoundariesAndIgnoresOldCallbacks() {
+    val cadence = FrameCadence()
+    cadence.record(1_000_000_000)
+    cadence.record(1_008_333_333)
+    assertEquals(8.333333, cadence.takeMaxGapMs())
+    cadence.record(1_508_333_333)
+    cadence.record(1_005_000_000)
+    assertEquals(500.0, cadence.takeMaxGapMs())
+    cadence.record(1_516_666_666)
+    assertEquals(8.333333, cadence.takeMaxGapMs())
+  }
+
   @Test fun expiredTimingDoesNotDiscardAPresentationCallback() {
     var now = 1_000_000_000L
     val statistics = VideoStatistics { now }

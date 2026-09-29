@@ -32,6 +32,7 @@ internal class SurfaceDecoder(
   private val callbackHandler: Handler
   private val pending = HashMap<Long, FrameTiming>()
   private val rendering = RenderTimings()
+  private val releaseClock = FrameReleaseClock(config.header.fps)
   private val codec: MediaCodec
   private val parameters = config.bytes
   private var current: QueuedVideoFrame? = null
@@ -106,6 +107,7 @@ internal class SurfaceDecoder(
         dropped += pending.size
         pending.clear()
         rendering.clear()
+        releaseClock.reset()
         needsParameters = true
         current = frame.copy(needsFlush = false)
         progressed = true
@@ -150,8 +152,8 @@ internal class SurfaceDecoder(
         statistics.decoded(timing)
       }
       if (timing != null && now - timing.receiveTimestamp <= 120_000_000) {
-        // Preserve the exact local deadline for correlation with SurfaceFlinger frame history.
-        timing.releaseTimestamp = System.nanoTime()
+        // Spread a decoded burst across display deadlines without growing an unbounded backlog.
+        timing.releaseTimestamp = releaseClock.next(System.nanoTime())
         rendering.add(output.presentationUs, timing)
         codec.releaseOutputBuffer(index, timing.releaseTimestamp)
       } else {

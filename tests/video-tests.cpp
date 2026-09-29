@@ -1,8 +1,40 @@
 #include "tests/test-support.h"
 #include "protocol/cpp/video-packet.h"
+#include "windows/video/frame-pacer.h"
 
 void videoTests() {
   using namespace ift::video;
+  {
+    ift::FramePacer pacing(120);
+    constexpr std::uint64_t start = 1'000'000'000;
+    auto nextSource = start;
+    bool available = false;
+    std::vector<std::uint64_t> submissions;
+    for (auto now = start; now < start + 1'000'000'000; now += 1'000'000) {
+      if (now >= nextSource) {
+        available = true;
+        nextSource += 1'000'000'000 / 165;
+      }
+      if (available && pacing.ready(now)) {
+        submissions.push_back(now);
+        pacing.submitted(now);
+        available = false;
+      }
+    }
+    check(submissions.size() == 120, "Source refresh changed the requested output rate");
+    for (std::size_t index = 1; index < submissions.size(); ++index) {
+      const auto interval = submissions[index] - submissions[index - 1];
+      check(interval >= 8'000'000 && interval <= 9'000'000, "Source arrivals leaked into the output cadence");
+    }
+    const auto resumed = start + 2'000'000'000;
+    check(pacing.ready(resumed), "Pacing failed to resume after a stall");
+    pacing.submitted(resumed);
+    check(!pacing.ready(resumed + 1'000'000), "Pacing replayed missed frames in a burst");
+    check(pacing.ready(resumed + 8'333'333), "Pacing failed to establish a new deadline");
+    for (const auto fps : {0, 23, 121}) {
+      expectError<std::invalid_argument>([&] { ift::FramePacer invalid(static_cast<std::uint16_t>(fps)); });
+    }
+  }
   Header header;
   header.keyFrame = true;
   header.payloadSize = 512;

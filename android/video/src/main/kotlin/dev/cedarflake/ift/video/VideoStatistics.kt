@@ -33,6 +33,10 @@ data class VideoSnapshot(
   val latency: VideoLatencySnapshot?,
   val targetFps: Int,
   val untrackedPresentedFrames: Long,
+  val maxReceiveGapMs: Double,
+  val maxDecodeGapMs: Double,
+  val maxPresentGapMs: Double,
+  val recoveries: Long,
 )
 
 internal class VideoStatistics(private val nanoTime: () -> Long = System::nanoTime) {
@@ -54,10 +58,14 @@ internal class VideoStatistics(private val nanoTime: () -> Long = System::nanoTi
   private var height = 0
   private var targetFps = 0
   private val latency = VideoLatencyWindow()
+  private val receiveCadence = FrameCadence()
+  private val decodeCadence = FrameCadence()
+  private val presentCadence = FrameCadence()
 
   @Synchronized
   fun received(packet: VideoPacket) {
     received++
+    receiveCadence.record(packet.receiveTimestamp)
     bytes += packet.bytes.size
     width = packet.header.width
     height = packet.header.height
@@ -68,12 +76,14 @@ internal class VideoStatistics(private val nanoTime: () -> Long = System::nanoTi
   @Synchronized
   fun decoded(timing: FrameTiming) {
     decoded++
+    decodeCadence.record(timing.decodeTimestamp)
     decodeMs = (timing.decodeTimestamp - timing.submitTimestamp) / 1e6
   }
 
   @Synchronized
   fun presented(timing: FrameTiming?) {
     presented++
+    if (timing != null) presentCadence.record(timing.presentTimestamp)
     if (timing == null) {
       untrackedPresented++
       return
@@ -84,7 +94,7 @@ internal class VideoStatistics(private val nanoTime: () -> Long = System::nanoTi
   }
 
   @Synchronized
-  fun snapshot(dropped: Long, queued: Int): VideoSnapshot? {
+  fun snapshot(dropped: Long, queued: Int, recoveries: Long = 0): VideoSnapshot? {
     val now = nanoTime()
     val seconds = (now - lastReport) / 1e9
     if (seconds < 1.0) return null
@@ -93,6 +103,7 @@ internal class VideoStatistics(private val nanoTime: () -> Long = System::nanoTi
       (presented - previousPresented) / seconds, (bytes - previousBytes) * 8 / seconds / 1e6,
       dropped, queued, received, decoded, presented, encodeMs, decodeMs, presentMs, lastTiming, now, width, height, latency.snapshot(), targetFps,
       untrackedPresented,
+      receiveCadence.takeMaxGapMs(), decodeCadence.takeMaxGapMs(), presentCadence.takeMaxGapMs(), recoveries,
     )
     previousReceived = received
     previousDecoded = decoded
@@ -100,5 +111,22 @@ internal class VideoStatistics(private val nanoTime: () -> Long = System::nanoTi
     previousBytes = bytes
     lastReport = now
     return snapshot
+  }
+}
+
+internal class FrameCadence {
+  private var previous = 0L
+  private var maxGap = 0L
+
+  fun record(timestamp: Long) {
+    if (timestamp <= previous) return
+    if (previous != 0L) maxGap = maxOf(maxGap, timestamp - previous)
+    previous = timestamp
+  }
+
+  fun takeMaxGapMs(): Double {
+    val result = maxGap / 1e6
+    maxGap = 0L
+    return result
   }
 }
