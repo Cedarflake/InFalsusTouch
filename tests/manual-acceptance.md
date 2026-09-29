@@ -130,7 +130,12 @@ does not substitute for the following checks with In Falsus:
 - Disconnect/reconnect USB with both video and keys active; re-run ADB setup if
   the reverse mapping is gone. No held input may be replayed.
 - Background/resume, rotate and recreate the phone Surface repeatedly. Confirm
-  codec resources and socket counts stay bounded.
+  codec resources and socket counts stay bounded. The 2026-09-29 profile
+  instrumentation passed three rounds each of Activity recreation, task
+  background/resume and Surface destruction/recreation during 720p60 playback,
+  including six held keys and no stale gesture replay. Scoped I/O workers cleaned
+  up and socket counts were stable by phase; physical rotation and long-session
+  memory behavior remain untested.
 - Test 1080p60 and bitrate/FPS alternatives during actual charts. Short 720p60 and
   1080p60 pattern runs passed on the connected Android 14 phone on 2026-09-29.
 - Host accepts experimental rates up to 120 FPS, but this phone's corrected

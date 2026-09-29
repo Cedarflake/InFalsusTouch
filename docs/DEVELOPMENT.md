@@ -40,6 +40,7 @@ Java 临时套接字目录由脚本设在项目内，只对当前进程生效。
 ```powershell
 .\scripts\build-android.ps1 -Mode profile -DeviceTests
 uv run --python 3.13 tests/video-device.py --build-mode profile
+uv run --python 3.13 tests/video-device.py --build-mode profile --lifecycle-cycles 3 --skip-install
 uv run --python 3.13 tests/video-composition.py --build-mode profile --probe surface-hints --fps 120 --skip-install
 ```
 
@@ -75,6 +76,12 @@ uv run --python 3.13 tests/multiplayer-video.py
 `--skip-install` 仅用于手机已经安装本次构建的应用与测试 APK 时。
 PC 视频测试另存 `frame-timestamps.csv`，并统计采集、发送、接收的帧间隔；
 这些间隔用于检查送帧是否均匀，不代表端到端延迟。
+
+`--lifecycle-cycles 3` 使用 720p60，重复三轮 Activity 重建、后台返回和视频 Surface 重建。
+每次持有六键及 Field，恢复后发送旧触点的移动和抬起，再由 Host 核对按键释放与无旧输入重放。
+结果保存各阶段的恢复时间、输入与视频工作线程数，以及进程套接字、文件描述符和编解码线程快照。
+工作线程会检查清理及重复创建；其余资源计数用于对照分析，不代表完整内存泄漏检测。
+测试结束会核对原设置及 ADB 映射，并重新打开应用；自动连接仍遵循原设置。
 
 进一步定位 Android 显示等待时，可在同一次 USB 测试中采集 Perfetto：
 

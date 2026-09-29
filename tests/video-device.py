@@ -14,9 +14,9 @@ ADB = ROOT / ".tools" / "android-sdk" / "platform-tools" / "adb.exe"
 APP = "dev.cedarflake.infalsustouch"
 
 
-def adb(*args, binary=False):
+def adb(*args, binary=False, timeout=150):
     result = subprocess.run([str(ADB), "-d", *args], capture_output=True, check=True,
-                            creationflags=subprocess.CREATE_NO_WINDOW, timeout=150)
+                            creationflags=subprocess.CREATE_NO_WINDOW, timeout=timeout)
     return result.stdout if binary else result.stdout.decode("utf-8", errors="replace")
 
 
@@ -45,10 +45,14 @@ def main():
     parser.add_argument("--skip-install", action="store_true")
     parser.add_argument("--build-mode", choices=("debug", "profile"), default="debug")
     parser.add_argument("--output", type=pathlib.Path)
+    parser.add_argument("--lifecycle-cycles", type=int, choices=range(1, 11))
     args = parser.parse_args()
+    if args.lifecycle_cycles and (args.fps != 60 or args.resolution != "720p"):
+        parser.error("Lifecycle acceptance currently uses the 720p60 baseline")
     width, height = (1920, 1080) if args.resolution == "1080p" else (1280, 720)
     run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
-    output = args.output or ROOT / "build" / "video-device-test" / f"{args.resolution}{args.fps}-{args.build_mode}-{run_id}"
+    probe = "lifecycle-" if args.lifecycle_cycles else ""
+    output = args.output or ROOT / "build" / "video-device-test" / f"{probe}{args.resolution}{args.fps}-{args.build_mode}-{run_id}"
     serial = adb("get-serialno").strip()
     if not serial or serial == "unknown":
         raise RuntimeError("Connect exactly one authorized USB phone")
@@ -60,6 +64,7 @@ def main():
     pattern = subprocess.Popen([str(ROOT / "build/windows/tests/Release/ift_video_pattern.exe"), args.resolution],
                                stdout=subprocess.PIPE, text=True, creationflags=subprocess.CREATE_NO_WINDOW)
     host = None
+    preferences = None
     try:
         window = pattern.stdout.readline().strip()
         assert re.fullmatch(r"0x[0-9a-f]+", window), "Test window did not start"
@@ -77,17 +82,25 @@ def main():
                 print(adb("install", "-r", str(app_apk)), flush=True)
                 print(adb("install", "-r", "-t", str(test_apk)), flush=True)
             assert host.poll() is None, "Native video host exited"
-            result = adb("shell", "am", "instrument", "-w", "-r", "-e", "usbVideo", "true",
+            if args.lifecycle_cycles:
+                preferences = adb("exec-out", "run-as", APP, "cat", "shared_prefs/controller-settings.xml", binary=True)
+                (output / "preferences-before.xml").write_bytes(preferences)
+            test_class = "VideoLifecycleDeviceTest" if args.lifecycle_cycles else "VideoDeviceTest"
+            metrics_name = "video-lifecycle-metrics.json" if args.lifecycle_cycles else "video-metrics.json"
+            result = adb("shell", "am", "instrument", "-w", "-r", "-e",
+                         "usbVideoLifecycle" if args.lifecycle_cycles else "usbVideo", "true",
                          "-e", "appBuildMode", args.build_mode,
                          "-e", "videoWidth", str(width), "-e", "videoHeight", str(height),
                          "-e", "videoFps", str(args.fps),
-                         "-e", "videoSeconds", str(args.seconds), "-e", "class",
-                         "dev.cedarflake.ift.VideoDeviceTest", f"{APP}.test/androidx.test.runner.AndroidJUnitRunner")
+                         "-e", "videoSeconds", str(args.seconds),
+                         "-e", "lifecycleCycles", str(args.lifecycle_cycles or 3), "-e", "class",
+                         f"dev.cedarflake.ift.{test_class}", f"{APP}.test/androidx.test.runner.AndroidJUnitRunner",
+                         timeout=60 + args.lifecycle_cycles * 100 if args.lifecycle_cycles else 150)
             (output / "instrumentation.txt").write_text(result, encoding="utf-8")
             print(result, flush=True)
             metrics = None
             try:
-                metrics_bytes = adb("exec-out", "run-as", APP, "cat", "files/video-metrics.json", binary=True)
+                metrics_bytes = adb("exec-out", "run-as", APP, "cat", f"files/{metrics_name}", binary=True)
             except subprocess.CalledProcessError:
                 pass
             else:
@@ -96,25 +109,38 @@ def main():
                 except (json.JSONDecodeError, UnicodeDecodeError):
                     (output / "metrics-read.txt").write_bytes(metrics_bytes)
                 else:
-                    (output / "video-metrics.json").write_bytes(metrics_bytes)
+                    (output / metrics_name).write_bytes(metrics_bytes)
                     print(json.dumps(metrics, indent=2), flush=True)
             if "OK (1 test)" not in result or "FAILURES!!!" in result:
                 print((output / "host.log").read_text(encoding="utf-8", errors="replace"))
                 raise RuntimeError("USB video device test failed")
-            for name in ("video-surface.png", "video-screen.png", "calibration-screen.png"):
-                (output / name).write_bytes(adb("exec-out", "run-as", APP, "cat", f"files/{name}", binary=True))
+            if not args.lifecycle_cycles:
+                for name in ("video-surface.png", "video-screen.png", "calibration-screen.png"):
+                    (output / name).write_bytes(adb("exec-out", "run-as", APP, "cat", f"files/{name}", binary=True))
             assert metrics is not None, "Video instrumentation did not write its measurements"
             assert (metrics["width"], metrics["height"]) == (width, height)
             assert metrics["targetFps"] == args.fps
             assert metrics["appBuildMode"] == args.build_mode
+            batches = 1
+            if args.lifecycle_cycles:
+                assert metrics["passed"] and metrics["cycles"] == args.lifecycle_cycles
+                phases = metrics["phases"]
+                assert len(phases) == args.lifecycle_cycles * 3 and all(phase["completed"] for phase in phases)
+                batches = args.lifecycle_cycles * 3 + 1
+                assert metrics["holdBatches"] == batches
             trace = (output / "input-trace.txt").read_text(encoding="utf-8")
             for lane in range(1, 7):
-                assert trace.count(f"DOWN {lane}\n") == trace.count(f"UP {lane}\n") == 1, f"Lane {lane} hold/release mismatch"
+                events = [line for line in trace.splitlines() if line in (f"DOWN {lane}", f"UP {lane}")]
+                assert events == [f"DOWN {lane}", f"UP {lane}"] * batches, f"Lane {lane} hold/release mismatch"
             movements = [int(line.split()[1]) for line in trace.splitlines() if line.startswith("REL ")]
-            expected = [metrics["touchWidth"] * 0.25, -metrics["touchWidth"] * 0.125]
-            assert len(movements) == 2 and all(abs(actual - value) <= 1 for actual, value in zip(movements, expected)), "Pixel Field movement mismatch during video playback"
+            expected = ([metrics["touchWidth"] * 0.125] * batches if args.lifecycle_cycles else
+                        [metrics["touchWidth"] * 0.25, -metrics["touchWidth"] * 0.125])
+            assert len(movements) == len(expected) and all(abs(actual - value) <= 1 for actual, value in zip(movements, expected)), "Pixel Field movement mismatch during video playback"
             assert "ABS " not in trace, "Relative Field unexpectedly used absolute input"
-            print("PASS: real USB H.264 decode, six color checks, seven pointers, release and video reconnect")
+            if args.lifecycle_cycles:
+                print(f"PASS: {len(phases)} streaming lifecycle transitions, {batches} six-key holds/releases, no stale gesture replay")
+            else:
+                print("PASS: real USB H.264 decode, six color checks, seven pointers, release and video reconnect")
             print(f"Evidence: {output.resolve()}")
     finally:
         try:
@@ -132,6 +158,16 @@ def main():
                     process.terminate()
                     process.wait(timeout=10)
             (output / "pattern.log").write_text(pattern.stdout.read(), encoding="utf-8")
+            if preferences is not None:
+                try:
+                    after = adb("exec-out", "run-as", APP, "cat", "shared_prefs/controller-settings.xml", binary=True)
+                    (output / "preferences-after.xml").write_bytes(after)
+                    restored = {"preferencesRestored": preferences == after, "mappingsRestored": previous == mappings()}
+                    (output / "restored.json").write_text(json.dumps(restored, indent=2), encoding="utf-8")
+                    assert all(restored.values()), f"Phone state was not restored: {restored}"
+                finally:
+                    adb("shell", "am", "start", "-a", "android.intent.action.MAIN", "-c", "android.intent.category.LAUNCHER",
+                        "-n", APP + "/dev.cedarflake.ift.MainActivity")
 
 
 if __name__ == "__main__":

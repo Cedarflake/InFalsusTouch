@@ -56,7 +56,7 @@ and button shapes are unchanged.
 | Flutter analysis and UI tests | No analysis issues; 20/20 tests passed, including bilingual vibration toggle and immediate saving |
 | Native profile persistence and CLI precedence integration | Passed, including legacy tuning migration, retired flags, invalid/missing profile and unchanged-file failure checks |
 | TCP disconnect / malformed / reconnect integration | 8/8 checks passed, including coalesced full-width relative movement |
-| Android lint | Passed, 0 errors; 5 advisory warnings for pinned test dependencies and KTX suggestions |
+| Android lint | Latest profile report passed, 0 errors and 2 advisory KTX suggestions |
 | Cooperative TCP input and live key sync | Seven simulated clients, seven scenarios passed; physical multi-phone run pending |
 | Shared hardware video broadcast | Six healthy simulated viewers plus one stalled viewer passed; one shared encoding verified |
 | Android 14 device MotionEvent / USB / settings persistence and migration | Latest 8/8 input checks passed, including final-up sample, 2400-pixel swipes and vibration preference persistence; earlier 12/12 UI suite and 2/2 focused Toast/entry checks passed |
@@ -71,7 +71,8 @@ and button shapes are unchanged.
 | WGC / GPU conversion / hardware H.264 / TCP | Passed, including Baseline SPS and >=58 FPS gate |
 | PC source resize / aspect changes / minimize and restore | 720p decoded color, centered bars, animation and independent input passed; minimize triggered a stream restart which the test receiver recovered |
 | Android hardware decode / output colors / seven-pointer input / settings and calibration isolation / reconnect | Passed at both 720p and 1080p with relative Field movement and restored device settings |
-| 720p60 short-run throughput | Latest callback-driven USB phone steady receive 60.02 FPS, decode 59.97 FPS, present callbacks 59.07 FPS; 21.11-second steady interval; no unmatched presentation callbacks |
+| Android streaming lifecycle and input cleanup | 9/9 transitions passed at 720p60: three Activity recreations, three background/resume cycles and three Surface recreations; 10 six-key holds/releases, no stale gesture replay or duplicate I/O workers |
+| 720p60 short-run throughput | Latest callback-driven USB phone steady receive 60.00 FPS, decode 59.91 FPS, present callbacks 59.46 FPS; 11.05-second steady interval; no unmatched presentation callbacks |
 | Experimental 720p120 throughput | PC 120.13 FPS passed; latest callback-driven phone receive 119.98 FPS, decode 116.49 FPS, present callbacks 86.89 FPS still failed the unchanged proportional presentation gate; default remains 60 FPS |
 | 1080p60 short-run throughput | Earlier PC 60.13 FPS; latest callback-driven USB phone steady receive 60.01 FPS, decode 59.97 FPS, present callbacks 59.35 FPS; native source and received dimensions verified |
 | Measured latency tuning | Bounded queues, WGC pacing, low-latency codec selection and local statistics implemented |
@@ -92,6 +93,9 @@ uv run --python 3.13 tests\video-integration.py --resolution 1080p --seconds 10 
 uv run --python 3.13 tests\video-recovery.py
 uv run --python 3.13 tests\video-device.py
 uv run --python 3.13 tests\video-device.py --resolution 1080p --skip-install
+# Build matching profile application/instrumentation first for lifecycle acceptance.
+.\scripts\build-android.ps1 -Mode profile -DeviceTests
+uv run --python 3.13 tests\video-device.py --build-mode profile --lifecycle-cycles 3
 uv run --python 3.13 tests\video-integration.py --fps 120 --seconds 10 --min-fps 116
 uv run --python 3.13 tests\video-device.py --fps 120 --seconds 20 --skip-install
 uv run --python 3.13 tests\video-composition.py
@@ -591,6 +595,47 @@ and `paced-120-20260929T005153962140Z/`. Traces under `build/video-system-trace/
 `120fps-profile-20260929T003904916026Z/` and `120fps-profile-20260929T005343760156Z/`.
 The display snapshot is `build/paced-display-state.txt`; discarded source patches
 and APKs are retained under `build/surface-sequential-*` and `build/surface-paced-*`.
+
+### Android streaming lifecycle, 2026-09-29
+
+The profile build passed three repetitions each of actual `Activity.recreate()`,
+task background/resume and SurfaceView GONE/VISIBLE transitions at 720p60.
+The helper observes Android lifecycle stages: recreation must destroy the old
+Activity and resume a different instance; returning from the background must
+resume the same instance. Surface-only teardown keeps the input connection alive.
+
+Every transition starts with six held keys and one Field owner. The independent
+Host trace contains exactly ten alternating DOWN/UP pairs per lane and ten
+300-pixel relative movements, including a fresh gesture after the last recovery.
+Old MOVE/UP events after each recovery produce no additional Host input.
+
+All nine recoveries reached 60 presented frames with the expected format and
+ready input. That milestone took 2.23-2.29 seconds after Surface/Activity recovery
+and 2.97-3.09 seconds including task resume; these values include accumulating
+60 frames and are not first-frame or input-release latency measurements.
+Each active session had one worker for each of the five input/video roles.
+Teardown removed all video workers and both observed native codec threads;
+Surface-only teardown retained exactly the two input workers.
+
+Socket snapshots were constant per phase: 16 while playing, 15 with the Surface
+hidden, 13 while backgrounded and 14 after Activity recreation/disconnection.
+Open descriptor counts varied: 251-262 while playing, with disconnected warmup
+203 and final 208. These finite snapshots establish neither a full process/GPU
+memory-leak check nor long-session stability. Physical rotation, cable removal,
+digitizer input and full charts still require separate acceptance.
+
+Evidence: `build/video-device-test/lifecycle-720p60-profile-20260929T012251966050Z/`.
+The runner preserved completed-phase metrics, verified Host traces, restored ADB
+mappings and byte-identical phone settings, then reopened the app. The profile
+build, all 51 Kotlin tests and lint passed. Production input/video code is unchanged.
+
+The existing color/seven-pointer/settings/reconnect regression also passed using
+the shared helper: 11.05 seconds steady receive/decode/present callbacks
+60.00/59.91/59.46 FPS, with zero untracked callbacks. Its last 240 local frames
+measured receive-to-codec-reported-presentation mean 31.25 ms / P95 36.81 ms;
+the end-of-run input RTT sample was 3.41 ms. This is a regression result, not a new
+latency improvement or physical touch-to-photon measurement. Evidence:
+`build/async-codec-test/lifecycle-regression-60-20260929T012421894227Z/`.
 
 ### PC window recovery, 2026-09-29
 
