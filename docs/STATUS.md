@@ -398,7 +398,7 @@ The PC test retains per-frame capture/encode/send/receive timestamps in CSV and
 reports frame-interval distributions, separately from latency. A failed Android
 test that never wrote JSON no longer has its original failure masked by parsing
 the shell's missing-file message as JSON. Default playback stays at 60 FPS;
-system scheduling traces and physical Late-judgment verification remain open.
+physical Late-judgment verification remains open.
 
 Final verification rebuilt both debug/profile APKs and their instrumentation
 packages, with lint and 48 Kotlin tests passing. The restored Windows source
@@ -411,6 +411,69 @@ passed again: 60.00 receive/decode FPS and 59.45 presentation callbacks/s over
 normal playback and the original ADB mappings were restored. Evidence:
 `build/video-device-test/720p60-profile-20260928T233719189760Z/` and
 `build/profile-mode-mismatch-run.log`.
+
+### Android buffer presentation traces, 2026-09-29
+
+`tests/video-system-trace.py` records scheduling, graphics/video annotations,
+FrameTimeline and the separate `android.surfaceflinger.frame` buffer/fence source
+around the existing dry-run USB test. It records on the phone, pulls the trace
+after stopping only its own verified Perfetto process, checks preferences and
+ADB mappings, and resumes the normal app. The original video acceptance outcome
+is retained, including a failing exit code at 120 FPS.
+
+`tests/analyze-video-trace.py` uses the app's codec thread with the most outputs,
+excludes its first three and final two seconds, and selects the busiest video
+Surface in that interval. This analysis window is distinct from the test's
+snapshot-based throughput window. It matches Queue, Latch and
+PresentFenceSignaled by exact layer name and buffer frame number. Missing fences,
+ambiguous events and invalid ordering cannot become zero-latency samples. All
+three stage distributions use the same complete frames. SQL, raw events, matched
+frame CSV, import diagnostics and JSON are retained alongside the trace.
+
+| Stream | Analysis window | Queued / complete frame chains | Queue to latch mean | Latch to present mean | Queue to present mean / P95 |
+| --- | --- | --- | --- | --- | --- |
+| 720p60, final tool verification | 9.92 s | 595 / 578 | 5.14 ms | 11.36 ms | 16.51 / 20.32 ms |
+| 720p120 | 19.34 s | 1642 / 1220 | 4.12 ms | 11.45 ms | 15.57 / 19.74 ms |
+
+An earlier complete 60 FPS trace independently matched 608 of 620 queued frames:
+5.25 ms queue-to-latch, 11.39 ms latch-to-present and 16.63 / 20.25 ms total
+mean/P95. Both analyzed final traces retained a SurfaceFlinger work-duration
+counter of 12.33 ms throughout their analysis windows. This is a configured
+budget, not measured CPU execution or a proven immutable latency floor. The
+roughly 11.4 ms after latch is nevertheless visible in matched OS frame events;
+ordinary app-thread runnable waits do not account for that whole stage.
+
+The final 60 FPS USB test passed. The 120 FPS run received 119.98 FPS, decoded
+86.18 FPS and reported 62.86 presentation callbacks/s over 20.03 seconds; it
+failed the unchanged >=110 gate. Within the separate trace window, 422 queued
+buffers had no corresponding latch/present event. This supports investigating
+delivery cadence and frame coalescing, but missing trace events alone are not a
+physical dropped-frame count. The selected 120 FPS app video thread had a 0.38 ms
+runnable-wait P95 and a 12.55 ms maximum; the receive thread had 1.09 / 13.27 ms.
+These are individual waits under tracing, not per-frame totals or proof that a
+priority change would solve the problem.
+
+Tracing adds overhead: these runs do not replace the untraced performance
+baseline. The analyzed traces reported 35 ftrace setup notices and three or four
+dropped negative timestamps; their sources have not been resolved. No buffer
+overwrite or lost-event counter was reported for these captures. An initial
+64 MiB trace did overwrite its beginning and is excluded from the table. The
+final configuration separates metadata from a 128 MiB event buffer.
+
+The buffer source follows [AOSP FrameTracer](https://android.googlesource.com/platform/frameworks/native/+/9e84f339bf/services/surfaceflinger/FrameTracer/FrameTracer.h).
+Its present fence is still an OS timestamp, not a camera measurement of the panel.
+Dequeue timestamps and the parser's derived acquire fields are not used: decoder
+output buffers may be reserved well before a frame arrives, and missing acquire
+events produced invalid derived durations in this trace. No cross-device clocks
+are subtracted, no system display properties were changed, and no runtime tuning
+or physical Late-judgment improvement is claimed.
+
+Evidence under `build/video-system-trace/`:
+`60fps-profile-20260929T000519834099Z/` (final capture/analysis flow),
+`120fps-profile-20260928T235619752235Z/`, and
+`60fps-profile-20260928T235416831692Z/` (earlier complete frame trace).
+Two frame-correlation regression tests passed, including missing fences across
+different layers, duplicate observations, ambiguous queues and invalid ordering.
 
 ### PC window recovery, 2026-09-29
 

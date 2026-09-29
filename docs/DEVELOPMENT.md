@@ -76,6 +76,28 @@ uv run --python 3.13 tests/multiplayer-video.py
 PC 视频测试另存 `frame-timestamps.csv`，并统计采集、发送、接收的帧间隔；
 这些间隔用于检查送帧是否均匀，不代表端到端延迟。
 
+进一步定位 Android 显示等待时，可在同一次 USB 测试中采集 Perfetto：
+
+```powershell
+uv run --python 3.13 tests/video-system-trace.py --fps 60 --build-mode profile --skip-install
+uv run --python 3.13 tests/analyze-video-trace.py build/video-system-trace/<本次目录> --processor <trace_processor_shell.exe路径>
+uv run --python 3.13 tests/test-video-trace-analysis.py
+```
+
+采集脚本默认使用 profile 包，省略 `--skip-install` 时先安装对应应用与测试包。
+跟踪最长 60 秒，保存在手机本地，测试后取回；原视频测试的失败退出码会保留。
+结果包含测试日志、跟踪配置、设置恢复核对和电池状态。采集完成后重新打开应用，
+是否自动连接遵循原设置。
+跟踪有额外开销，不能拿其吞吐量替代关闭跟踪时的性能验收。
+
+分析使用 [Perfetto 官方 Trace Processor](https://perfetto.dev/docs/reference/trace-processor-cli)。
+本次验证版本为 v58.2，Windows x64 程序的 SHA-256 为
+`adfa6bad3d72be3ba9b83fa2b17b69fa13b3ab1cad0f42e52b86188bd5f0f997`；
+工具放在忽略目录 `.tools/perfetto/trace_processor_shell.exe` 时可省略 `--processor`。
+脚本保留 SQL、原始事件 CSV、完整帧 CSV 和 `analysis.json`，按同一图层与帧号匹配
+Queue、Latch、PresentFenceSignaled。三段延迟只统计完整且顺序正确的同一批帧，
+缺失事件单独计数；呈现围栏仍是系统时间戳，不是物理屏幕测量。
+
 `video-recovery.py` 需要 `ffmpeg`，使用独立 PC 端口和自己的后台测试窗口验证
 缩放、比例变化、最小化恢复及视频重连。它检查实际解码颜色、居中留边、画面运动
 和持续输入心跳，不修改手机 USB 转发，也不向游戏发送输入。
