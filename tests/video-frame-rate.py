@@ -1,6 +1,11 @@
-"""Verify phone-driven FPS, live changes and shared-stream negotiation without game input."""
+"""Verify on-demand frame-rate groups, isolated subscriptions and phone-driven FPS."""
 
 import argparse
+from collections import Counter
+from contextlib import nullcontext
+import hashlib
+import threading
+import re
 from datetime import datetime, timezone
 import importlib.util
 import json
@@ -34,64 +39,193 @@ def preferences(raw):
     return values
 
 
-def stream_fps(port, expected):
-    deadline = time.monotonic() + 12
-    while time.monotonic() < deadline:
+def read_exact(stream, count):
+    data = bytearray()
+    while len(data) < count:
+        chunk = stream.recv(count - len(data))
+        if not chunk:
+            raise EOFError("Video closed")
+        data.extend(chunk)
+    return data
+
+
+class Viewer:
+    def __init__(self, port, fps, output, name, fragmented=False, record=True):
+        self.fps = fps or 30
+        self.name = name
+        self.records = []
+        self.timings = []
+        self.lock = threading.Lock()
+        self.failure = None
+        self.closing = threading.Event()
+        self.ready = threading.Event()
+        self.socket = socket.create_connection(("127.0.0.1", port), timeout=8)
+        request = struct.pack(">4sBBH", b"IFV1", 2, 0, fps)
+        if fragmented:
+            for byte in request:
+                self.socket.sendall(bytes([byte]))
+                time.sleep(0.005)
+        else:
+            self.socket.sendall(request)
+        filename = output / f"{name}.h264" if record else None
+        self.thread = threading.Thread(target=self.receive, args=(filename,), daemon=True)
+        self.thread.start()
+        if not self.ready.wait(10) or self.failure:
+            self.close()
+            raise AssertionError(f"{name} never started: {self.failure}")
+
+    def receive(self, filename):
         try:
-            with socket.create_connection(("127.0.0.1", port), timeout=5) as stream:
-                def read(count):
-                    data = bytearray()
-                    while len(data) < count:
-                        chunk = stream.recv(count - len(data))
-                        if not chunk:
-                            raise EOFError("Video restarted")
-                        data.extend(chunk)
-                    return data
-                header = HEADER.unpack(read(HEADER.size))
-                assert header[:3] == (b"IFV1", 1, 1), header
+            with (filename.open("wb") if filename else nullcontext()) as recording:
+                header = HEADER.unpack(read_exact(self.socket, HEADER.size))
+                assert header[:3] == (b"IFV1", 2, 1) and header[5] == 0 and header[12] == self.fps, header
                 assert 0 < header[4] <= 65536
-                read(header[4])
-                if header[12] == expected:
-                    frame = HEADER.unpack(read(HEADER.size))
-                    assert frame[2] == 2 and frame[3] == 1 and frame[5] == 1, frame
-                    assert frame[12] == expected and 0 < frame[4] <= 4 * 1024 * 1024
-                    read(frame[4])
-                    return
-        except (OSError, EOFError):
+                parameters = read_exact(self.socket, header[4])
+                if recording is not None:
+                    recording.write(parameters)
+                sequence = 0
+                last_capture = 0
+                while not self.closing.is_set():
+                    header = HEADER.unpack(read_exact(self.socket, HEADER.size))
+                    assert header[:3] == (b"IFV1", 2, 2) and header[12] == self.fps, header
+                    assert header[5] == sequence + 1 and 0 < header[4] <= 4 * 1024 * 1024, header
+                    assert last_capture < header[6] <= header[7] <= header[8], header
+                    assert sequence != 0 or header[3] == 1, "New viewer needs an IDR"
+                    payload = read_exact(self.socket, header[4])
+                    received_at = time.perf_counter_ns()
+                    if recording is not None:
+                        recording.write(payload)
+                    sequence += 1
+                    last_capture = header[6]
+                    with self.lock:
+                        self.records.append((header[6], header[7], hashlib.sha256(payload).hexdigest()))
+                        self.timings.append((header[6], header[7], received_at))
+                    self.ready.set()
+        except Exception as error:
+            if not self.closing.is_set():
+                self.failure = repr(error)
+                self.ready.set()
+
+    def snapshot(self):
+        assert self.failure is None, (self.name, self.failure)
+        with self.lock:
+            return list(self.records)
+
+    def close(self):
+        self.closing.set()
+        try:
+            self.socket.shutdown(socket.SHUT_RDWR)
+        except OSError:
             pass
+        self.socket.close()
+        self.thread.join(3)
+        assert not self.thread.is_alive(), "Video reader did not stop"
+
+
+def rates(viewers, seconds=3):
+    starts = [len(viewer.snapshot()) for viewer in viewers]
+    time.sleep(seconds)
+    values = {}
+    for viewer, start in zip(viewers, starts):
+        frames = viewer.snapshot()[start:]
+        assert len(frames) > 1, (viewer.name, "no progress")
+        fps = (len(frames) - 1) * 1e9 / (frames[-1][0] - frames[0][0])
+        assert fps >= viewer.fps * 0.9, (viewer.name, fps, viewer.fps)
+        values[viewer.name] = fps
+    return values
+
+
+def wait_for(predicate, message, timeout=8):
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if predicate():
+            return
         time.sleep(0.05)
-    raise AssertionError(f"Video did not negotiate {expected} FPS")
+    raise AssertionError(message)
 
 
-def verify_peers(control_port, video_port, trace):
+def verify_peers(control_port, video_port, trace, output):
+    log = output / "host.log"
+    text = lambda: log.read_text(encoding="utf-8")
+    def created():
+        return Counter(re.findall(r"Video group (\d+) FPS created", text()))
+    for request in (b"INVALID!", struct.pack(">4sBBH", b"IFV1", 2, 0, 121)):
+        with socket.create_connection(("127.0.0.1", video_port), timeout=3) as stream:
+            stream.sendall(request)
+            try:
+                assert not stream.recv(1), "Malformed subscription was accepted"
+            except ConnectionResetError:
+                pass
+    with socket.create_connection(("127.0.0.1", video_port), timeout=3) as partial:
+        partial.sendall(b"IFV1")
+        assert not partial.recv(1), "Incomplete subscription was accepted"
+    assert not created() and "Video capture started" not in text(), "Idle host allocated video resources"
     peers = []
+    controller = multiplayer.Peer(control_port, fps=120)
+    metrics = {}
     try:
-        first = multiplayer.Peer(control_port, fps=120)
+        controller.request(2, lane=1)
+        time.sleep(0.1)
+        assert not created(), "Input-only peer allocated an encoder"
+        first = Viewer(video_port, 120, output, "first-120", fragmented=True)
         peers.append(first)
-        stream_fps(video_port, 120)
-        first.request(2, lane=1)
-        first.request(11, value=60)
-        stream_fps(video_port, 60)
-        assert "DOWN 1" in trace.read_text() and "UP 1" not in trace.read_text(), "FPS change released a held key"
-        first.request(11, value=120)
-        second = multiplayer.Peer(control_port, fps=60)
-        peers.append(second)
-        stream_fps(video_port, 60)
-        second.request(11, value=90)
-        stream_fps(video_port, 90)
-        second.close()
-        peers.pop()
-        stream_fps(video_port, 120)
-        assert not first.failure, first.failure
-        assert "UP 1" not in trace.read_text(), "Another phone's disconnect released a held key"
-        first.request(3, lane=1)
+        metrics["single"] = rates([first], 2)
+        assert created() == {"120": 1}, created()
+        same = Viewer(video_port, 120, output, "same-120")
+        peers.append(same)
+        low = Viewer(video_port, 60, output, "low-60")
+        peers.append(low)
+        middle = Viewer(video_port, 90, output, "middle-90")
+        peers.append(middle)
+        metrics["mixed"] = rates(peers, 4)
+        assert created() == {"120": 1, "60": 1, "90": 1}, created()
+        a = {row[0]: row[1:] for row in first.snapshot()}
+        b = {row[0]: row[1:] for row in same.snapshot()}
+        common = a.keys() & b.keys()
+        assert len(common) >= 120 and all(a[key] == b[key] for key in common), "Same-rate viewers did not share encoded bytes"
+        same.close()
+        peers.remove(same)
+        low.close()
+        peers.remove(low)
+        wait_for(lambda: "Video group 60 FPS stopped" in text(), "Unused 60 FPS encoder stayed alive")
+        moved = Viewer(video_port, 90, output, "moved-to-90")
+        peers.append(moved)
+        metrics["moveToExistingGroup"] = rates(peers)
+        assert created() == {"120": 1, "60": 1, "90": 1}, created()
+        middle.close()
+        peers.remove(middle)
+        assert "Video group 90 FPS stopped" not in text(), "An occupied encoder was released"
+        moved.close()
+        peers.remove(moved)
+        wait_for(lambda: "Video group 90 FPS stopped" in text(), "Unused 90 FPS encoder stayed alive")
+        metrics["remaining120"] = rates(peers, 2)
+        records = first.snapshot()
+        metrics["maximum120CaptureGapMs"] = max((b[0] - a[0]) / 1e6 for a, b in zip(records, records[1:]))
+        assert metrics["maximum120CaptureGapMs"] < 150, metrics
+        assert text().count("Video capture started") == 1, "Group changes restarted shared capture"
+        assert "UP 1" not in trace.read_text(), "Video subscription changes released held input"
         first.close()
-        peers.pop()
-        stream_fps(video_port, 30)
-        print("PASS: phone overrides Host fallback; 120/60/90 live changes; peer leave; held input preserved", flush=True)
+        peers.remove(first)
+        wait_for(lambda: "Video group 120 FPS stopped" in text() and "Video capture stopped" in text(), "Idle resources were not released")
+        controller.request(3, lane=1)
+        assert not controller.failure, controller.failure
+        fallback = Viewer(video_port, 0, output, "fallback-30")
+        peers.append(fallback)
+        metrics["diagnosticFallback"] = rates([fallback], 2)
+        fallback.close()
+        peers.remove(fallback)
+        wait_for(lambda: "Video group 30 FPS stopped" in text(), "Fallback group stayed alive")
+        assert created() == {"120": 1, "60": 1, "90": 1, "30": 1}, created()
+        metrics["groupCreations"] = dict(created())
+        metrics["sharedEncodedFrames"] = len(common)
+        metrics["physicalPhones"] = 0
+        (output / "groups.json").write_text(json.dumps(metrics, indent=2), encoding="utf-8")
+        print(json.dumps(metrics, indent=2), flush=True)
+        print("PASS: on-demand 60/90/120 groups, identical same-rate bitstreams, isolated changes, idle release, held input", flush=True)
     finally:
         for peer in peers:
             peer.close()
+        controller.close()
 
 
 def verify_device(output, control_port, video_port, skip_install):
@@ -157,10 +291,18 @@ def main():
                 "--dry-run", "--video", "--no-profile", "--window", window, "--fps", "30", "--trace", str(trace),
                 "--port", str(control_port), "--video-port", str(video_port)],
                 stdout=log, stderr=log, creationflags=subprocess.CREATE_NO_WINDOW)
-            stream_fps(video_port, 30)
-            verify_peers(control_port, video_port, trace)
+            wait_for(lambda: "Video listening" in (output / "host.log").read_text(encoding="utf-8"), "Host did not listen")
+            verify_peers(control_port, video_port, trace, output)
             if args.device:
-                verify_device(output, control_port, video_port, args.skip_install)
+                observer = Viewer(video_port, 60, output, "phone-companion-60")
+                try:
+                    verify_device(output, control_port, video_port, args.skip_install)
+                    companion = rates([observer], 2)
+                    assert (output / "host.log").read_text(encoding="utf-8").count("Video group 60 FPS created") == 2, "Phone changes restarted the companion's encoder"
+                    (output / "companion.json").write_text(json.dumps(companion, indent=2), encoding="utf-8")
+                    print("PASS: phone changes and reconnects preserved the companion's 60 FPS stream", flush=True)
+                finally:
+                    observer.close()
     finally:
         for process in (host, pattern):
             if process is not None and process.poll() is None:

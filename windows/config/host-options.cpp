@@ -175,7 +175,7 @@ void printHelp() {
     "  --video-port 27183      Independent loopback video listener\n"
     "  --resolution 720p       720p or 1080p, client aspect preserved\n"
     "  --fps 60 --bitrate 8000000  Fallback FPS: 24-120; default 60\n"
-    "  Phone FPS settings override the fallback; multiple phones share the lowest request.\n"
+    "  Each phone requests its own FPS; matching requests share an on-demand encoder.\n"
     "Relative Field preserves horizontal touch pixels; tune sensitivity in In Falsus.\n"
     "Experimental absolute mapping only:\n"
     "  --field-left 0.05 --field-right 0.95 --field-y 0.5\n"

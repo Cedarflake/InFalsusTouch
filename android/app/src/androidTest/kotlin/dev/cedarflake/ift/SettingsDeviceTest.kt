@@ -4,10 +4,9 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Rect
 import android.graphics.Point
+import android.os.ParcelFileDescriptor
 import android.os.SystemClock
 import android.view.Choreographer
-import android.view.InputDevice
-import android.view.MotionEvent
 import android.view.ViewGroup
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
@@ -324,18 +323,18 @@ class SettingsDeviceTest {
 
   private fun openSettings(language: String = "en") {
     val label = if (language == "zh") "设置" else "Settings"
-    click(label)
-    SystemClock.sleep(100)
-    click(label)
+    tap(boundsFor(label), times = 2)
     waitForText(if (language == "zh") "控制设置" else "Controller settings")
   }
 
-  private fun click(label: String) {
+  private fun click(label: String) = tap(boundsFor(label))
+
+  private fun boundsFor(label: String): Rect {
     val node = waitForText(label, clickable = true)
     val bounds = Rect()
     node.getBoundsInScreen(bounds)
     assertTrue("Flutter control is off screen: " + label, !bounds.isEmpty)
-    tap(bounds)
+    return bounds
   }
 
   private fun scrollContent() {
@@ -355,13 +354,15 @@ class SettingsDeviceTest {
     instrumentation.waitForIdleSync()
   }
 
-  private fun tap(bounds: Rect) {
+  private fun tap(bounds: Rect, times: Int = 1) {
     val instrumentation = InstrumentationRegistry.getInstrumentation()
-    val start = SystemClock.uptimeMillis()
-    for (action in listOf(MotionEvent.ACTION_DOWN, MotionEvent.ACTION_UP)) {
-      val event = MotionEvent.obtain(start, SystemClock.uptimeMillis(), action, bounds.exactCenterX(), bounds.exactCenterY(), 0)
-      event.source = InputDevice.SOURCE_TOUCHSCREEN
-      try { instrumentation.sendPointerSync(event) } finally { event.recycle() }
+    // Keep both taps inside the confirmation window without waiting on Flutter animations between them.
+    repeat(times) { index ->
+      if (index > 0) SystemClock.sleep(100)
+      val command = "input tap ${bounds.centerX()} ${bounds.centerY()}"
+      ParcelFileDescriptor.AutoCloseInputStream(instrumentation.uiAutomation.executeShellCommand(command)).use {
+        it.readBytes()
+      }
     }
     instrumentation.waitForIdleSync()
   }

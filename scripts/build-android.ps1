@@ -50,7 +50,7 @@ try {
   $ErrorActionPreference = 'Continue'
   $testMode = if ($Mode -eq 'release') { 'debug' } else { $Mode }
   $gradleOptions = @('--no-daemon', '--console=plain', '--max-workers=1',
-    '-Dorg.gradle.jvmargs=-Xms32m -Xmx512m -XX:+UseSerialGC -XX:ReservedCodeCacheSize=64m -Dfile.encoding=UTF-8')
+    '-Dorg.gradle.jvmargs=-Xms32m -Xmx512m -XX:+UseSerialGC -XX:ReservedCodeCacheSize=128m -Dfile.encoding=UTF-8')
   if ($Offline) { $gradleOptions += '--offline' }
   & $gradle @gradleOptions "-PiftTestBuildType=$testMode" @tasks
   $buildExit = $LASTEXITCODE

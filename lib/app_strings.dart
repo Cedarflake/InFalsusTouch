@@ -114,8 +114,8 @@ class AppStrings {
       : "Fit keeps the entire picture. Stretch changes its proportions; Crop may hide notes and judgment lines.";
   String get videoFrameRate => zh ? "视频帧率" : "Video frame rate";
   String get videoFrameRateHint => zh
-      ? "自动同步到电脑，同时请求对应的屏幕刷新率。多设备共用各自所选的最低帧率。"
-      : "Syncs to the PC and requests matching screen refresh. Multiple devices share the lowest selected frame rate.";
+      ? "为这台设备选择视频帧率，同时请求对应的屏幕刷新率。电脑按需编码，同帧率设备共用一路。"
+      : "Choose this device’s video frame rate and matching screen refresh. The PC encodes on demand; devices at the same rate share a stream.";
   String get statistics => zh ? "游玩时显示性能统计" : "Show statistics while playing";
   String get performanceDetails => zh ? "性能详情" : "Performance details";
   String get inputRoundTrip => zh ? "输入往返" : "Input round trip";

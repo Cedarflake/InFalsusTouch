@@ -8,6 +8,8 @@
 namespace ift::video {
 
 constexpr std::size_t headerSize = 64;
+constexpr std::size_t requestSize = 8;
+constexpr std::uint8_t version = 2;
 constexpr std::uint32_t maxPayloadSize = 4 * 1024 * 1024;
 enum class Type : std::uint8_t { config = 1, frame = 2, error = 3 };
 
@@ -27,6 +29,9 @@ struct Header {
 };
 
 using HeaderBytes = std::array<std::uint8_t, headerSize>;
+using RequestBytes = std::array<std::uint8_t, requestSize>;
+RequestBytes encodeRequest(std::uint16_t fps);
+std::uint16_t decodeRequest(std::span<const std::uint8_t> bytes);
 HeaderBytes encodeHeader(const Header& header);
 Header decodeHeader(std::span<const std::uint8_t> bytes);
 std::vector<std::uint8_t> toAnnexB(std::span<const std::uint8_t> bytes);

@@ -5,7 +5,7 @@
 namespace ift::video {
 namespace {
 
-void put(HeaderBytes& bytes, std::size_t offset, std::uint64_t value, unsigned size) {
+void put(std::span<std::uint8_t> bytes, std::size_t offset, std::uint64_t value, unsigned size) {
   for (unsigned index = 0; index < size; ++index) {
     bytes[offset + size - index - 1] = static_cast<std::uint8_t>(value >> (index * 8));
   }
@@ -41,11 +41,27 @@ void validate(const Header& header) {
 
 }
 
+RequestBytes encodeRequest(std::uint16_t fps) {
+  if (fps != 0 && (fps < 24 || fps > 120)) throw std::invalid_argument("Unsupported requested video FPS");
+  RequestBytes bytes{'I', 'F', 'V', '1', version, 0, 0, 0};
+  put(bytes, 6, fps, 2);
+  return bytes;
+}
+
+std::uint16_t decodeRequest(std::span<const std::uint8_t> bytes) {
+  if (bytes.size() != requestSize || get(bytes, 0, 4) != 0x49465631 || bytes[4] != version || bytes[5] != 0) {
+    throw std::invalid_argument("Invalid video subscription");
+  }
+  const auto fps = static_cast<std::uint16_t>(get(bytes, 6, 2));
+  if (fps != 0 && (fps < 24 || fps > 120)) throw std::invalid_argument("Unsupported requested video FPS");
+  return fps;
+}
+
 HeaderBytes encodeHeader(const Header& header) {
   validate(header);
   HeaderBytes bytes{};
   bytes[0] = 'I'; bytes[1] = 'F'; bytes[2] = 'V'; bytes[3] = '1';
-  bytes[4] = 1;
+  bytes[4] = version;
   bytes[5] = static_cast<std::uint8_t>(header.type);
   bytes[7] = header.keyFrame ? 1 : 0;
   put(bytes, 8, header.payloadSize, 4);
@@ -62,7 +78,7 @@ HeaderBytes encodeHeader(const Header& header) {
 }
 
 Header decodeHeader(std::span<const std::uint8_t> bytes) {
-  if (bytes.size() != headerSize || get(bytes, 0, 4) != 0x49465631 || bytes[4] != 1 ||
+  if (bytes.size() != headerSize || get(bytes, 0, 4) != 0x49465631 || bytes[4] != version ||
       bytes[6] != 0 || bytes[7] > 1 || get(bytes, 54, 2) != 0 || get(bytes, 60, 4) != 0) {
     throw std::invalid_argument("Invalid video packet header");
   }

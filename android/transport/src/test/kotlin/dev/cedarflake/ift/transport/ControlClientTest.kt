@@ -1,7 +1,6 @@
 package dev.cedarflake.ift.transport
 
 import java.io.DataInputStream
-import java.io.EOFException
 import java.net.InetAddress
 import java.net.ServerSocket
 import java.util.concurrent.Executor
@@ -41,48 +40,6 @@ internal class TestListener : ControlListener {
 
 class ControlClientTest {
   private val direct = Executor { it.run() }
-
-  @Test fun phoneFrameRateSurvivesFocusLossAndReconnect() {
-    ServerSocket(0, 2, InetAddress.getByName("127.0.0.1")).use { server ->
-      val requests = LinkedBlockingQueue<Packet>()
-      val reader = Thread {
-        repeat(2) {
-          server.accept().use { socket ->
-            val input = DataInputStream(socket.getInputStream())
-            val codec = PacketCodec()
-            val bytes = ByteArray(32)
-            while (true) {
-              try { input.readFully(bytes) } catch (_: EOFException) { break }
-              val packet = codec.decode(bytes)
-              if (packet.type == MessageType.HELLO || packet.type == MessageType.VIDEO_FRAME_RATE) requests.put(packet)
-              socket.getOutputStream().write(codec.encode(Packet(MessageType.ACK, status = 1,
-                sequence = packet.sequence, timestampNs = packet.timestampNs)))
-            }
-          }
-        }
-      }.apply { isDaemon = true; start() }
-      val listener = TestListener()
-      ControlClient(listener, direct, server.localPort).use { client ->
-        client.setVideoFrameRate(120)
-        client.connect()
-        listener.awaitState(ConnectionState.CONNECTED)
-        assertEquals(120f, assertNotNull(requests.poll(2, TimeUnit.SECONDS)).value)
-        client.setVideoFrameRate(60)
-        val change = assertNotNull(requests.poll(2, TimeUnit.SECONDS))
-        assertEquals(MessageType.VIDEO_FRAME_RATE, change.type)
-        assertEquals(60f, change.value)
-        client.close()
-        listener.awaitState(ConnectionState.DISCONNECTED)
-        client.connect()
-        listener.awaitState(ConnectionState.CONNECTED)
-        val reconnected = assertNotNull(requests.poll(2, TimeUnit.SECONDS))
-        assertEquals(MessageType.HELLO, reconnected.type)
-        assertEquals(60f, reconnected.value)
-      }
-      reader.join(2000)
-      assertTrue(!reader.isAlive)
-    }
-  }
 
   @Test fun stalledHostClosesConnectionWithoutBlockingCaller() {
     ServerSocket(0, 1, InetAddress.getByName("127.0.0.1")).use { server ->

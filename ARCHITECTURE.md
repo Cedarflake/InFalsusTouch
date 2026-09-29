@@ -11,13 +11,14 @@ flowchart LR
   Host --> Input[SendInput]
   Input --> Game[In Falsus]
   Game --> Capture[Windows Graphics Capture]
-  Capture --> Encode[硬件 H.264 编码]
+  Capture --> Convert[共享 GPU 缩放与 NV12 转换]
+  Convert --> Encode[按需创建的帧率编码组]
   Encode --> Video[USB 视频通道]
   Video --> Decode[Android MediaCodec]
   Decode --> Screen[SurfaceView]
 ```
 
-两个通道均通过 ADB reverse 连接本机 TCP 服务：输入端口 27184，视频端口 27183。Host 不监听局域网，信任边界是本机与已获 USB 调试授权的设备。最多 7 台设备共享一次采集和编码，各自保留输入状态及视频发送队列。
+两个通道均通过 ADB reverse 连接本机 TCP 服务：输入端口 27184，视频端口 27183。Host 不监听局域网，信任边界是本机与已获 USB 调试授权的设备。最多 7 台设备共享一次采集与缩放，同帧率设备复用一个编码器，各自保留输入状态及视频发送队列。
 
 ## 模块
 
@@ -33,6 +34,7 @@ flowchart LR
 | `windows/transport/` | 本机监听、分包、超时和应答 |
 | `windows/target/`、`windows/config/` | 目标窗口、游戏键位与 Host 配置 |
 | `windows/capture/`、`windows/encoder/` | WGC 采集、GPU 缩放、Media Foundation 硬件编码 |
+| `windows/video/` | 按需编码组、帧率调度、GPU 与媒体运行环境 |
 | `protocol/` | 协议规范、C++ 编解码和共享测试向量 |
 | `tests/`、`scripts/` | 验证工具与构建脚本 |
 
@@ -51,6 +53,8 @@ Host 仅向选定且处于前台的窗口注入输入。失焦后释放按键，
 ## 视频约束
 
 WGC 只捕获选定窗口，缩放与 NV12 转换在 GPU 上完成。Media Foundation 使用硬件 H.264 Baseline 编码，不使用 B 帧；Android 使用支持目标分辨率和帧率的硬件解码器。
+
+视频连接先提交本设备帧率，首次订阅才创建该帧率的编码组，最后一台离开后释放，无人观看时停止采集。每组独立启动、编码和退出，不预建空组；不同组引用同一次转换的不可变纹理。切换帧率只重连该设备的视频，其他组、同组剩余观看端和输入连接继续运行。
 
 各阶段队列都有上限。慢速观看端仅断开自身视频，不阻塞其他设备或输入。压缩帧队列溢出后等待 IDR 并重置解码状态，不把有依赖的 P 帧随意丢弃后继续解码。后台或 Surface 销毁关闭视频连接，重连从新配置和 IDR 开始。
 

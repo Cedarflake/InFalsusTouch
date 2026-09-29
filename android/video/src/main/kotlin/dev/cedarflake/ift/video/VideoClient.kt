@@ -6,6 +6,7 @@ import dev.cedarflake.ift.transport.VideoFrameQueue
 import dev.cedarflake.ift.transport.VideoPacket
 import dev.cedarflake.ift.transport.VideoPacketReader
 import dev.cedarflake.ift.transport.VideoPacketType
+import dev.cedarflake.ift.transport.VideoProtocol
 
 import java.io.Closeable
 import java.io.IOException
@@ -13,6 +14,7 @@ import java.net.InetSocketAddress
 import java.net.Socket
 import java.util.concurrent.Executor
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 
 interface VideoListener {
@@ -32,6 +34,13 @@ class VideoClient(private val listener: VideoListener, private val executor: Exe
   }
 
   private val active = AtomicReference<Session?>()
+  private val requestedFps = AtomicInteger(120)
+
+  fun setFrameRate(fps: Int) {
+    require(fps in 24..120)
+    if (requestedFps.getAndSet(fps) == fps) return
+    try { active.get()?.socket?.getAndSet(null)?.close() } catch (_: IOException) { }
+  }
 
   fun connect(surface: Surface, port: Int = 27183) {
     require(port in 1024..65535)
@@ -50,35 +59,40 @@ class VideoClient(private val listener: VideoListener, private val executor: Exe
   private fun run(session: Session) {
     var retry = 0
     while (session.running.get() && session.surface.isValid) {
+      val fps = requestedFps.get()
       try {
-        stream(session)
-        retry = 0
+        stream(session, fps) { retry = 0 }
       } catch (error: Exception) {
-        emit(session) { listener.onStatus("Video: ${error.message ?: error.javaClass.simpleName}") }
+        if (requestedFps.get() == fps) {
+          emit(session) { listener.onStatus("Video: ${error.message ?: error.javaClass.simpleName}") }
+        }
       } finally {
         try { session.socket.getAndSet(null)?.close() } catch (_: IOException) { }
       }
+      if (requestedFps.get() != fps) { retry = 0; continue }
       val delay = (500L shl retry.coerceAtMost(3))
       retry++
       val deadline = System.nanoTime() + delay * 1_000_000
-      while (session.running.get() && System.nanoTime() < deadline) Thread.sleep(50)
+      while (session.running.get() && requestedFps.get() == fps && System.nanoTime() < deadline) Thread.sleep(50)
     }
   }
 
-  private fun stream(session: Session) {
+  private fun stream(session: Session, fps: Int, onProgress: () -> Unit) {
     val socket = Socket()
     if (!session.running.get()) { socket.close(); return }
     session.socket.set(socket)
-    if (!session.running.get()) { socket.close(); return }
+    if (!session.running.get() || requestedFps.get() != fps) { socket.close(); return }
     socket.tcpNoDelay = true
     socket.receiveBufferSize = 64 * 1024
     socket.soTimeout = 100
     emit(session) { listener.onStatus("Video connecting over USB") }
     socket.connect(InetSocketAddress("127.0.0.1", session.port), 1500)
+    socket.getOutputStream().write(VideoProtocol.subscription(fps))
     val reader = VideoPacketReader(socket.getInputStream()) { session.running.get() && !socket.isClosed }
     val config = reader.read(idleTimeoutMs = 5000)
     checkError(config)
     require(config.header.type == VideoPacketType.CONFIG && config.header.sequence == 0) { "Video must start with configuration" }
+    require(config.header.fps == fps) { "Host did not apply requested video FPS" }
     val queue = VideoFrameQueue()
     val statistics = VideoStatistics()
     val readerFailure = AtomicReference<Exception?>()
@@ -101,6 +115,7 @@ class VideoClient(private val listener: VideoListener, private val executor: Exe
         while (session.running.get() && receiving.get()) {
           val progressed = decoder.step(queue)
           statistics.snapshot(queue.dropped + decoder.dropped, queue.depth() + decoder.pendingCount(), queue.recoveries)?.let { snapshot ->
+            onProgress()
             emit(session) { listener.onStatistics(snapshot) }
           }
           if (!progressed) decoder.awaitProgress()

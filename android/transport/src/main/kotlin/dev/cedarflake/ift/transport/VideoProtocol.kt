@@ -27,13 +27,20 @@ data class VideoHeader(
 data class VideoPacket(val header: VideoHeader, val bytes: ByteArray, val receiveTimestamp: Long)
 
 object VideoProtocol {
+  const val VERSION = 2
   const val HEADER_SIZE = 64
   const val MAX_PAYLOAD_SIZE = 4 * 1024 * 1024
+
+  fun subscription(fps: Int): ByteArray {
+    require(fps == 0 || fps in 24..120) { "Unsupported requested video FPS" }
+    return ByteBuffer.allocate(8).order(ByteOrder.BIG_ENDIAN)
+      .putInt(0x49465631).put(VERSION.toByte()).put(0).putShort(fps.toShort()).array()
+  }
 
   fun decodeHeader(bytes: ByteArray): VideoHeader {
     require(bytes.size == HEADER_SIZE) { "Video header must be 64 bytes" }
     val buffer = ByteBuffer.wrap(bytes).order(ByteOrder.BIG_ENDIAN)
-    require(buffer.int == 0x49465631 && buffer.get().toInt() == 1) { "Unsupported video protocol" }
+    require(buffer.int == 0x49465631 && buffer.get().toInt() == VERSION) { "Unsupported video protocol" }
     val code = buffer.get().toInt()
     val type = VideoPacketType.entries.firstOrNull { it.code == code } ?: error("Unknown video packet type")
     val flags = buffer.short.toInt() and 0xffff

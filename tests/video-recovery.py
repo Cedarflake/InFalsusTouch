@@ -106,6 +106,7 @@ class Video:
     def poll(self):
         if not self.socket:
             self.socket = BASE.connect(self.port, self.host)
+            BASE.subscribe(self.socket)
             self.socket.settimeout(0.1)
             self.sessions += 1
             self.sequence = 0
@@ -117,7 +118,7 @@ class Video:
                 return None
             values = BASE.HEADER.unpack(header)
             magic, version, kind, flags, size, seq, capture, encoded, sent, pts, width, height, fps, reserved, bitrate, tail = values
-            assert magic == b"IFV1" and version == 1 and reserved == tail == 0
+            assert magic == b"IFV1" and version == 2 and reserved == tail == 0
             assert 0 < size <= 4 * 1024 * 1024
             payload = self.read_exact(size)
             if kind == 3:

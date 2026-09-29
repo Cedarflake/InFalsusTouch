@@ -321,7 +321,7 @@ class MainActivity : FlutterActivity(), SurfaceHolder.Callback {
     settings = value
     controllerView.setSettings(value)
     client.setControls(value.controlsMask)
-    client.setVideoFrameRate(value.videoFps)
+    videoClient.setFrameRate(value.videoFps)
     viewport.setSettings(value)
     window.attributes = window.attributes.apply { preferredRefreshRate = value.videoFps.toFloat() }
     queueState()

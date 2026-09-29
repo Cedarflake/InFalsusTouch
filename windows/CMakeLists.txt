@@ -12,6 +12,7 @@ add_executable(InFalsusTouchHost
   transport/usb-bridge.cpp
   transport/video-server.cpp
   video/media-runtime.cpp
+  video/encoding-group.cpp
   capture/window-capture.cpp
   capture/frame-converter.cpp
   encoder/encoder-config.cpp

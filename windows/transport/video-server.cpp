@@ -2,13 +2,17 @@
 #include "windows/transport/video-server.h"
 
 #include <chrono>
+#include <algorithm>
 #include <deque>
 #include <iostream>
 #include <memory>
+#include <map>
+#include <optional>
+#include <syncstream>
 
 #include "protocol/cpp/video-packet.h"
 #include "windows/capture/frame-converter.h"
-#include "windows/encoder/hardware-encoder.h"
+#include "windows/video/encoding-group.h"
 #include "windows/input/control-group.h"
 #include "windows/video/frame-pacer.h"
 #include "windows/video/frame-wait.h"
@@ -18,7 +22,7 @@ namespace {
 
 using Clock = std::chrono::steady_clock;
 using namespace std::chrono_literals;
-using Payload = std::shared_ptr<const std::vector<std::uint8_t>>;
+using Payload = VideoPayload;
 
 struct Shutdown {
   const std::atomic_bool& stopping;
@@ -45,6 +49,9 @@ struct Viewer {
     }
   }
   Socket socket;
+  video::RequestBytes request{};
+  std::size_t received = 0;
+  std::optional<std::uint16_t> fps;
   bool configured = false;
   std::uint32_t sequence = 0;
   Clock::time_point joined = Clock::now();
@@ -56,11 +63,23 @@ struct Viewer {
     pending.push_back({header, std::move(payload)});
   }
 
-  void pump() {
+  void pump(std::uint16_t fallback) {
+    if (!fps) {
+      if (Clock::now() - joined > 2s) throw std::runtime_error("Video subscription timeout");
+      const auto count = recv(socket.get(), reinterpret_cast<char*>(request.data() + received),
+        static_cast<int>(request.size() - received), 0);
+      if (count == SOCKET_ERROR && WSAGetLastError() == WSAEWOULDBLOCK) return;
+      if (count <= 0) throw std::runtime_error("Video subscription closed");
+      received += static_cast<std::size_t>(count);
+      if (received != request.size()) return;
+      const auto requested = video::decodeRequest(request);
+      fps = requested == 0 ? fallback : requested;
+      joined = Clock::now();
+    }
     char unexpected = 0;
-    const auto received = recv(socket.get(), &unexpected, 1, MSG_PEEK);
-    if (received == 0) throw std::runtime_error("Video viewer closed");
-    if (received > 0) throw std::runtime_error("Unexpected data on receive-only video socket");
+    const auto peeked = recv(socket.get(), &unexpected, 1, MSG_PEEK);
+    if (peeked == 0) throw std::runtime_error("Video viewer closed");
+    if (peeked > 0) throw std::runtime_error("Unexpected data after video subscription");
     if (WSAGetLastError() != WSAEWOULDBLOCK) throw socketError("video peer");
     if (!configured && Clock::now() - joined > 5s) throw std::runtime_error("No IDR for new video viewer within 5 seconds");
     std::size_t budget = 256 * 1024;
@@ -85,27 +104,65 @@ struct Viewer {
   }
 };
 
-struct Stream {
-  Stream(HWND window, const GraphicsDevice& graphics, const VideoOptions& options)
-    : encoder(graphics, options), converter(graphics, options), capture(window, graphics), pacing(options.fps) {}
-  HardwareEncoder encoder;
-  FrameConverter converter;
-  WindowCapture capture;
+struct Group {
+  Group(const GraphicsDevice& graphics, VideoOptions options)
+    : fps(options.fps), encoder(graphics, options), pacing(options.fps) {}
+  std::uint16_t fps;
+  EncodingGroup encoder;
   FramePacer pacing;
-  Payload parameters;
-  std::uint64_t lastEncoded = 0;
-  std::uint64_t frames = 0;
-  bool warmed = false;
-  Clock::time_point started = Clock::now();
-  Clock::time_point lastOutput = started;
-  ~Stream() {
-    const double seconds = std::chrono::duration<double>(Clock::now() - started).count();
-    std::cout << "Video broadcast: " << frames << " encoded frames (" << frames / seconds << " fps), "
-      << capture.received() << " WGC frames, " << capture.dropped() << " capture replacements" << std::endl;
+};
+
+struct Capture {
+  Capture(HWND window, const GraphicsDevice& graphics, VideoOptions options)
+    : converter(graphics, options), source(window, graphics), fps(options.fps), pacing(options.fps) {
+    std::osyncstream(std::cout) << "Video capture started" << std::endl;
+  }
+  FrameConverter converter;
+  WindowCapture source;
+  std::uint16_t fps;
+  FramePacer pacing;
+  ~Capture() {
+    std::osyncstream(std::cout) << "Video capture stopped: " << source.received() << " WGC frames, "
+      << source.dropped() << " capture replacements" << std::endl;
+  }
+  void setFrameRate(std::uint16_t value) {
+    if (fps == value) return;
+    fps = value;
+    pacing = FramePacer(value);
   }
 };
 
-void serve(VideoOptions options, HWND window, const VideoFrameRate& frameRate, const Shutdown& shutdown) {
+void distribute(const GroupFrame& frame, std::uint16_t fps, const VideoOptions& options,
+                std::array<std::unique_ptr<Viewer>, maxControllers>& viewers) {
+  for (auto& viewer : viewers) {
+    if (!viewer || viewer->fps != fps) continue;
+    try {
+      video::Header header;
+      header.width = options.width;
+      header.height = options.height;
+      header.fps = fps;
+      header.bitrate = options.bitrate;
+      if (!viewer->configured) {
+        if (!frame.keyFrame) continue;
+        header.type = video::Type::config;
+        viewer->queue(header, frame.parameters);
+        viewer->configured = true;
+      }
+      header.type = video::Type::frame;
+      header.keyFrame = frame.keyFrame;
+      header.sequence = ++viewer->sequence;
+      header.captureTimestamp = frame.captureTimestamp;
+      header.encodeTimestamp = frame.encodeTimestamp;
+      header.presentationUs = frame.captureTimestamp / 1000;
+      viewer->queue(header, frame.payload);
+    } catch (const std::exception& error) {
+      viewer.reset();
+      std::cerr << "Video viewer: " << error.what() << std::endl;
+    }
+  }
+}
+
+void serve(VideoOptions options, HWND window, const Shutdown& shutdown) {
   MediaRuntime runtime;
   const auto graphics = createGraphicsDevice();
   Winsock winsock;
@@ -121,18 +178,37 @@ void serve(VideoOptions options, HWND window, const VideoFrameRate& frameRate, c
       listen(listener.get(), static_cast<int>(maxControllers)) != 0) throw socketError("video bind/listen");
   listener.nonblocking();
   std::cout << "Video listening on 127.0.0.1:" << options.port << " ("
-    << options.width << 'x' << options.height << '@' << options.fps << ", up to " << maxControllers << " viewers)" << std::endl;
+    << options.width << 'x' << options.height << ", on-demand FPS groups, up to " << maxControllers << " viewers)" << std::endl;
   std::array<std::unique_ptr<Viewer>, maxControllers> viewers;
-  std::unique_ptr<Stream> stream;
+  std::unique_ptr<Capture> capture;
+  std::map<std::uint16_t, std::unique_ptr<Group>> groups;
+  std::vector<std::unique_ptr<Group>> retiring;
+  const auto retire = [&](auto it) {
+    it->second->encoder.stop();
+    retiring.push_back(std::move(it->second));
+    return groups.erase(it);
+  };
+  const auto pump = [&] {
+    for (auto& viewer : viewers) {
+      if (!viewer) continue;
+      try { viewer->pump(options.fps); }
+      catch (const std::exception& error) {
+        viewer.reset();
+        std::cerr << "Video viewer: " << error.what() << std::endl;
+      }
+    }
+  };
   FrameWait wake;
   while (!shutdown.requested()) {
-    const auto requestedFps = frameRate.current();
-    if (requestedFps != options.fps) {
-      options.fps = requestedFps;
-      for (auto& viewer : viewers) viewer.reset();
-      stream.reset();
-      std::cout << "Video frame rate: " << options.fps << " FPS (controller settings)" << std::endl;
+    pump();
+    for (auto it = groups.begin(); it != groups.end();) {
+      const bool subscribed = std::any_of(viewers.begin(), viewers.end(), [&](const auto& viewer) {
+        return viewer && viewer->fps == it->first;
+      });
+      if (subscribed) ++it;
+      else it = retire(it);
     }
+    std::erase_if(retiring, [](const auto& group) { return group->encoder.stopped(); });
     const SOCKET accepted = accept(listener.get(), nullptr, nullptr);
     if (accepted != INVALID_SOCKET) {
       std::size_t slot = 0;
@@ -140,96 +216,81 @@ void serve(VideoOptions options, HWND window, const VideoFrameRate& frameRate, c
       if (slot == viewers.size()) closesocket(accepted);
       else viewers[slot] = std::make_unique<Viewer>(accepted);
     } else if (WSAGetLastError() != WSAEWOULDBLOCK) throw socketError("video accept");
-    bool any = false;
-    for (const auto& viewer : viewers) if (viewer) any = true;
-    if (!any) {
-      stream.reset();
-      fd_set readable;
-      FD_ZERO(&readable);
-      FD_SET(listener.get(), &readable);
-      timeval timeout{0, 20000};
-      if (select(0, &readable, nullptr, nullptr, &timeout) == SOCKET_ERROR) throw socketError("video listener select");
+    for (const auto& viewer : viewers) {
+      if (!viewer || !viewer->fps || groups.contains(*viewer->fps)) continue;
+      const auto fps = *viewer->fps;
+      // Shutdown may involve the driver; retire off-thread before reusing its encoder slot.
+      if (groups.size() + retiring.size() >= maxControllers ||
+          std::any_of(retiring.begin(), retiring.end(), [fps](const auto& group) { return group->fps == fps; })) continue;
+      auto groupOptions = options;
+      groupOptions.fps = fps;
+      groups.emplace(fps, std::make_unique<Group>(graphics, groupOptions));
+      std::osyncstream(std::cout) << "Video group " << fps << " FPS created" << std::endl;
+    }
+    for (auto it = groups.begin(); it != groups.end();) {
+      auto output = it->second->encoder.poll();
+      if (!output.failure.empty()) {
+        const auto fps = it->first;
+        std::cerr << "Video group " << fps << " FPS failed: " << output.failure << std::endl;
+        for (auto& viewer : viewers) if (viewer && viewer->fps == fps) viewer.reset();
+        it = retire(it);
+        continue;
+      }
+      for (const auto& frame : output.frames) distribute(frame, it->first, options, viewers);
+      ++it;
+    }
+    pump();
+    if (groups.empty()) {
+      capture.reset();
+      const bool any = std::any_of(viewers.begin(), viewers.end(), [](const auto& viewer) { return !!viewer; });
+      if (any) wake.wait();
+      else {
+        fd_set readable;
+        FD_ZERO(&readable);
+        FD_SET(listener.get(), &readable);
+        timeval timeout{0, 20000};
+        if (select(0, &readable, nullptr, nullptr, &timeout) == SOCKET_ERROR) throw socketError("video listener select");
+      }
       continue;
     }
     std::string failure;
     try {
-      if (!stream) stream = std::make_unique<Stream>(window, graphics, options);
-      for (auto& frame : stream->encoder.poll()) {
-        if (frame.captureTimestamp <= stream->lastEncoded) throw std::runtime_error("Encoder reordered a frame");
-        stream->lastEncoded = frame.captureTimestamp;
-        const auto age = performanceNanoseconds() - frame.captureTimestamp;
-        if ((stream->warmed || Clock::now() - stream->started > 2s) && age > 250'000'000) {
-          throw std::runtime_error("Encoded frame exceeded 250 ms; restarting broadcast");
-        }
-        if (age < 100'000'000) stream->warmed = true;
-        if (!stream->parameters) {
-          auto parameters = stream->encoder.parameterSets();
-          if (parameters.empty()) parameters = video::extractParameterSets(frame.bytes);
-          if (!frame.keyFrame || !video::hasNal(parameters, 7) || !video::hasNal(parameters, 8)) {
-            throw std::runtime_error("Encoder did not start with an IDR and SPS/PPS");
-          }
-          stream->parameters = std::make_shared<const std::vector<std::uint8_t>>(std::move(parameters));
-        }
-        const auto payload = std::make_shared<const std::vector<std::uint8_t>>(std::move(frame.bytes));
-        for (auto& viewer : viewers) {
-          if (!viewer) continue;
-          try {
-            video::Header header;
-            header.width = options.width;
-            header.height = options.height;
-            header.fps = options.fps;
-            header.bitrate = options.bitrate;
-            if (!viewer->configured) {
-              if (!frame.keyFrame) continue;
-              header.type = video::Type::config;
-              viewer->queue(header, stream->parameters);
-              viewer->configured = true;
-            }
-            header.type = video::Type::frame;
-            header.keyFrame = frame.keyFrame;
-            header.sequence = ++viewer->sequence;
-            header.captureTimestamp = frame.captureTimestamp;
-            header.encodeTimestamp = frame.encodeTimestamp;
-            header.presentationUs = frame.captureTimestamp / 1000;
-            viewer->queue(header, payload);
-          } catch (const std::exception& error) {
-            viewer.reset();
-            std::cerr << "Video viewer: " << error.what() << std::endl;
-          }
-        }
-        ++stream->frames;
-        stream->lastOutput = Clock::now();
+      const auto maximumFps = groups.rbegin()->first;
+      if (!capture) {
+        auto captureOptions = options;
+        captureOptions.fps = maximumFps;
+        capture = std::make_unique<Capture>(window, graphics, captureOptions);
       }
+      capture->setFrameRate(maximumFps);
       const auto now = performanceNanoseconds();
-      if (stream->encoder.canAccept() && stream->pacing.ready(now)) {
-        auto frame = stream->capture.takeLatest();
+      if (capture->pacing.ready(now)) {
+        auto frame = capture->source.takeLatest();
         if (frame.owner) {
-          const auto texture = stream->converter.convert(frame);
-          stream->encoder.submit(texture.get(), frame.timestamp);
-          stream->pacing.submitted(now);
+          try {
+            const auto texture = capture->converter.convert(frame);
+            for (auto& [fps, group] : groups) {
+              if (!group->pacing.ready(now)) continue;
+              group->encoder.submit(texture, frame.timestamp);
+              group->pacing.submitted(now);
+            }
+            capture->pacing.submitted(now);
+          } catch (...) {
+            frame.owner.Close();
+            throw;
+          }
           frame.owner.Close();
         }
       }
-      if (stream->encoder.pending() && Clock::now() - stream->lastOutput > 2s) throw std::runtime_error("Hardware encoder stalled");
-      if (!stream->parameters && Clock::now() - stream->started > 5s) throw std::runtime_error("No captured video within 5 seconds");
     } catch (const winrt::hresult_error& error) {
       failure = winrt::to_string(error.message());
     } catch (const std::exception& error) {
       failure = error.what();
     }
     if (!failure.empty()) {
-      std::cerr << "Video broadcast: " << failure << std::endl;
+      std::cerr << "Video capture: " << failure << std::endl;
       for (auto& viewer : viewers) viewer.reset();
-      stream.reset();
-      continue;
-    }
-    for (auto& viewer : viewers) {
-      if (!viewer) continue;
-      try { viewer->pump(); }
-      catch (const std::exception& error) {
-        viewer.reset();
-        std::cerr << "Video viewer: " << error.what() << std::endl;
-      }
+      for (auto it = groups.begin(); it != groups.end();) it = retire(it);
+      capture.reset();
     }
     wake.wait();
   }
@@ -237,9 +298,9 @@ void serve(VideoOptions options, HWND window, const VideoFrameRate& frameRate, c
 
 }
 
-void runVideoServer(VideoOptions options, HWND window, const VideoFrameRate& frameRate, const std::atomic_bool& stopping,
+void runVideoServer(VideoOptions options, HWND window, const std::atomic_bool& stopping,
                     std::stop_token token) noexcept {
-  try { serve(options, window, frameRate, {stopping, token}); }
+  try { serve(options, window, {stopping, token}); }
   catch (const winrt::hresult_error& error) { std::cerr << "Video unavailable: " << winrt::to_string(error.message()) << std::endl; }
   catch (const std::exception& error) { std::cerr << "Video unavailable: " << error.what() << std::endl; }
 }

@@ -1,32 +1,25 @@
 #include "tests/test-support.h"
 #include "protocol/cpp/video-packet.h"
 #include "windows/video/frame-pacer.h"
-#include "windows/video/video-frame-rate.h"
+
 
 void videoTests() {
   using namespace ift::video;
-  {
-    ift::VideoFrameRate rate(30);
-    check(rate.current() == 30, "Video fallback missing before a phone connects");
-    rate.request(0, 120);
-    check(rate.current() == 120, "Host fallback capped the phone's requested frame rate");
-    rate.request(1, 60);
-    rate.request(6, 90);
-    check(rate.current() == 60, "Shared stream exceeded a phone's selected frame rate");
-    rate.request(1, 120);
-    check(rate.current() == 90, "Connected phone frame-rate changes were ignored");
-    rate.clear(6);
-    check(rate.current() == 120, "Disconnected phone continued limiting the stream");
-    rate.clear(0);
-    check(rate.current() == 120, "Disconnecting one phone lost another phone's request");
-    rate.clear(1);
-    check(rate.current() == 30, "Final disconnect did not restore the diagnostic fallback");
-    rate.request(0, 60);
-    for (const auto fps : {0, 23, 121}) {
-      expectError<std::invalid_argument>([&] { rate.request(0, static_cast<std::uint16_t>(fps)); });
-    }
-    check(rate.current() == 60, "Invalid rate changed the active stream");
-    expectError<std::out_of_range>([&] { rate.request(7, 120); });
+  const RequestBytes phoneRequest{'I', 'F', 'V', '1', 2, 0, 0, 120};
+  check(encodeRequest(120) == phoneRequest, "Video subscription wire format changed");
+  for (const auto fps : {0, 24, 30, 60, 90, 120}) {
+    check(decodeRequest(encodeRequest(static_cast<std::uint16_t>(fps))) == fps, "Subscription FPS did not round trip");
+  }
+  for (std::size_t size = 0; size < requestSize; ++size) {
+    expectError<std::invalid_argument>([&] { decodeRequest(std::span(phoneRequest).first(size)); });
+  }
+  for (std::size_t offset : {0u, 4u, 5u, 6u, 7u}) {
+    auto bad = phoneRequest;
+    bad[offset] = 255;
+    expectError<std::invalid_argument>([&] { decodeRequest(bad); });
+  }
+  for (const auto fps : {23, 121, 65535}) {
+    expectError<std::invalid_argument>([&] { encodeRequest(static_cast<std::uint16_t>(fps)); });
   }
   {
     ift::FramePacer pacing(120);
@@ -68,6 +61,9 @@ void videoTests() {
   header.sendTimestamp = 3'000'000;
   header.presentationUs = 1000;
   const auto good = encodeHeader(header);
+  auto legacy = good;
+  legacy[4] = 1;
+  expectError<std::invalid_argument>([&] { decodeHeader(legacy); });
   const auto decoded = decodeHeader(good);
   check(decoded.captureTimestamp == header.captureTimestamp && decoded.sequence == 123 && decoded.keyFrame,
     "Video header endian mismatch");

@@ -19,6 +19,10 @@ HEADER = struct.Struct(">4sBBHIIQQQQHHHHII")
 INPUT = struct.Struct(">4sBBBBIfQQ")
 
 
+def subscribe(stream, fps=0):
+    stream.sendall(struct.pack(">4sBBH", b"IFV1", 2, 0, fps))
+
+
 def unused_port():
     with socket.socket() as probe:
         probe.bind(("127.0.0.1", 0))
@@ -80,6 +84,7 @@ def main():
                                      "--trace", str((output / "input-trace.txt").resolve())],
                                     stdout=log, stderr=log, creationflags=subprocess.CREATE_NO_WINDOW)
             with connect(video_port, host) as video, connect(control_port, host) as control:
+                subscribe(video)
                 control.settimeout(1)
                 video.settimeout(5)
                 sequence = 0
@@ -127,7 +132,7 @@ def main():
                     while started is None or time.monotonic() - started < args.seconds:
                         values = HEADER.unpack(read_exact(video, 64))
                         magic, version, kind, flags, size, seq, capture, encoded, sent, pts, width, height, fps, reserved, bitrate, tail = values
-                        assert magic == b"IFV1" and version == 1 and reserved == tail == 0
+                        assert magic == b"IFV1" and version == 2 and reserved == tail == 0
                         assert 0 < size <= 4 * 1024 * 1024
                         payload = read_exact(video, size)
                         received = time.perf_counter_ns()

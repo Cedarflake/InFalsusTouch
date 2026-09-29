@@ -1,5 +1,6 @@
 """Verify one hardware bitstream reaches several viewers while a slow viewer is isolated."""
 
+import argparse
 import json
 import pathlib
 import socket
@@ -23,6 +24,9 @@ def read_exact(stream, count):
 
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--window")
+    args = parser.parse_args()
     output = pathlib.Path("build/multiplayer-video-test")
     output.mkdir(parents=True, exist_ok=True)
     with socket.socket() as probe:
@@ -31,17 +35,17 @@ def main():
     with socket.socket() as probe:
         probe.bind(("127.0.0.1", 0))
         video_port = probe.getsockname()[1]
-    pattern = subprocess.Popen([str(pathlib.Path("build/windows/tests/Release/ift_video_pattern.exe").resolve())],
+    pattern = None if args.window else subprocess.Popen([str(pathlib.Path("build/windows/tests/Release/ift_video_pattern.exe").resolve())],
         stdout=subprocess.PIPE, text=True, creationflags=subprocess.CREATE_NO_WINDOW)
     host = None
     sockets = []
     failures = []
     results = [{} for _ in range(6)]
     try:
-        window = pattern.stdout.readline().strip()
+        window = args.window or pattern.stdout.readline().strip()
         assert window.startswith("0x")
         with (output / "host.log").open("w", encoding="utf-8") as log:
-            host = subprocess.Popen([str(pathlib.Path("dist/InFalsusTouchHost.exe").resolve()), "--dry-run", "--video",
+            host = subprocess.Popen([str(pathlib.Path("build/windows/windows/Release/InFalsusTouchHost.exe").resolve()), "--dry-run", "--video", "--no-profile", "--fps", "60",
                 "--window", window, "--port", str(control_port), "--video-port", str(video_port)],
                 stdout=log, stderr=log, creationflags=subprocess.CREATE_NO_WINDOW)
             deadline = time.monotonic() + 15
@@ -51,6 +55,7 @@ def main():
                     slow.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 1024)
                     slow.settimeout(2)
                     slow.connect(("127.0.0.1", video_port))
+                    slow.sendall(struct.pack(">4sBBH", b"IFV1", 2, 0, 60))
                     sockets.append(slow)
                     break
                 except OSError:
@@ -61,13 +66,14 @@ def main():
             def viewer(index):
                 try:
                     with socket.create_connection(("127.0.0.1", video_port), timeout=5) as stream:
+                        stream.sendall(struct.pack(">4sBBH", b"IFV1", 2, 0, 60))
                         sequence = 0
                         first = None
                         captures = {}
                         while first is None or time.monotonic() - first < 6:
                             header = HEADER.unpack(read_exact(stream, HEADER.size))
                             magic, version, kind, flags, size, seq, capture, encoded, sent, pts, width, height, fps, reserved, bitrate, tail = header
-                            assert magic == b"IFV1" and version == 1 and 0 < size <= 4 * 1024 * 1024
+                            assert magic == b"IFV1" and version == 2 and 0 < size <= 4 * 1024 * 1024
                             read_exact(stream, size)
                             if kind == 1:
                                 assert seq == 0 and first is None

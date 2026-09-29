@@ -5,6 +5,7 @@ import java.io.EOFException
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import kotlin.test.Test
+import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
@@ -17,13 +18,25 @@ class VideoProtocolTest {
   private val predicted = byteArrayOf(0, 0, 0, 1, 0x41, 0x45)
 
   private fun header(size: Int = 6): ByteArray = ByteBuffer.allocate(64).order(ByteOrder.BIG_ENDIAN)
-    .putInt(0x49465631).put(1).put(2).putShort(1).putInt(size).putInt(123)
+    .putInt(0x49465631).put(2).put(2).putShort(1).putInt(size).putInt(123)
     .putLong(1_000_000).putLong(2_000_000).putLong(3_000_000).putLong(1000)
     .putShort(1280).putShort(720).putShort(60).putShort(0).putInt(8_000_000).putInt(0).array()
 
   private fun packet(key: Boolean): VideoPacket {
     val decoded = VideoProtocol.decodeHeader(header()).copy(isKeyFrame = key)
     return VideoPacket(decoded, if (key) idr else predicted, System.nanoTime())
+  }
+
+  @Test fun videoSubscriptionCarriesOnlyThisViewerFrameRate() {
+    assertContentEquals(byteArrayOf(0x49, 0x46, 0x56, 0x31, 2, 0, 0, 120), VideoProtocol.subscription(120))
+    for (fps in listOf(0, 24, 30, 60, 90, 120)) {
+      assertEquals(fps, ByteBuffer.wrap(VideoProtocol.subscription(fps)).getShort(6).toInt())
+    }
+    for (fps in listOf(-1, 23, 121, 65535)) {
+      assertFailsWith<IllegalArgumentException> { VideoProtocol.subscription(fps) }
+    }
+    val legacy = header().apply { this[4] = 1 }
+    assertFailsWith<IllegalArgumentException> { VideoProtocol.decodeHeader(legacy) }
   }
 
   @Test fun readsFragmentedPacketsAndPreservesPcClock() {
