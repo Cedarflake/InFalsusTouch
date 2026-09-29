@@ -3,6 +3,7 @@ package dev.cedarflake.ift
 import android.os.SystemClock
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.Color
 import android.graphics.RectF
 import android.view.InputDevice
 import android.view.MotionEvent
@@ -11,6 +12,8 @@ import android.widget.FrameLayout
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import dev.cedarflake.ift.touch.TouchSink
+import dev.cedarflake.ift.settings.ControlSettings
+import dev.cedarflake.ift.settings.VideoPlacement
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
@@ -206,6 +209,29 @@ class MotionEventDeviceTest {
     dispatch(view, MotionEvent.ACTION_DOWN, listOf(Finger(1, 550f, 350f)))
     view.layout(0, 0, 800, 400)
     assertEquals(listOf("D2", "CLEAR", "D6", "CLEAR"), sink.events)
+  }
+
+  @Test fun selectedAlignedButtonsDrawAndRespondAtTheirVideoTrackPositions() = withView { view, sink ->
+    val bitmap = Bitmap.createBitmap(600, 400, Bitmap.Config.ARGB_8888)
+    try {
+      view.setVideoPlacement(VideoPlacement(60, 40, 480, 270, 400))
+      view.setVideoVisible(true)
+      for (mask in listOf(1, 17)) {
+        view.setSettings(ControlSettings(controlsMask = mask, showLabels = false))
+        bitmap.eraseColor(Color.TRANSPARENT)
+        view.draw(Canvas(bitmap))
+        assertTrue("Key 1 must stay on the left track", Color.alpha(bitmap.getPixel(120, 280)) > 0)
+        assertEquals("Hidden center tracks must remain empty", 0, Color.alpha(bitmap.getPixel(300, 280)))
+        assertEquals(mask == 17, Color.alpha(bitmap.getPixel(404, 280)) > 0)
+        sink.events.clear()
+        for ((id, x) in listOf(120f, 300f, 404f).withIndex()) {
+          val finger = Finger(id, x, 280f)
+          dispatch(view, MotionEvent.ACTION_DOWN, listOf(finger))
+          dispatch(view, MotionEvent.ACTION_UP, listOf(finger))
+        }
+        assertEquals(if (mask == 17) listOf("D1", "U1", "D5", "U5") else listOf("D1", "U1"), sink.events)
+      }
+    } finally { bitmap.recycle() }
   }
 
   @Test fun localFeedbackStaysLitUntilTheLastFingerLifts() = withView { view, _ ->

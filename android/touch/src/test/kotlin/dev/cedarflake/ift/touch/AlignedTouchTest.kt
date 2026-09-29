@@ -14,8 +14,8 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class AlignedTouchTest {
-  @Test fun partialSelectionsCenterWithoutResizingShapesOrChangingLaneIds() {
-    for (mode in LayoutMode.entries) {
+  @Test fun fixedAndReservedSelectionsCenterWithoutResizingShapesOrChangingLaneIds() {
+    for (mode in listOf(LayoutMode.OVERLAY, LayoutMode.RESERVED)) {
       val settings = ControlSettings(layoutMode = mode, laneHeight = 0.1f)
       val video = placeVideo(2400, 1080, 1280, 720, settings)
       val original = TouchGeometry(2400f, 1080f, settings, video)
@@ -43,6 +43,33 @@ class AlignedTouchTest {
         }
         assertEquals(original.fieldLeft, geometry.fieldLeft)
         assertEquals(original.fieldRight, geometry.fieldRight)
+      }
+    }
+  }
+
+  @Test fun alignedSelectionsStayOnCalibratedTracksAcrossVideoTransforms() {
+    val layout = JudgmentLayout(fieldLeft = 0.1f, fieldRight = 0.9f,
+      floorLeft = 0.28f, floorRight = 0.74f, sideLeft = 0.12f, sideRight = 0.88f)
+    for ((width, height) in listOf(2400 to 1080, 1920 to 1080, 1600 to 1200)) {
+      for (scale in VideoScale.entries) {
+        val settings = ControlSettings(videoScale = scale, judgment = layout, laneHeight = 0.3f)
+        val video = placeVideo(width, height, 1280, 720, settings)
+        val complete = TouchGeometry(width.toFloat(), height.toFloat(), settings, video)
+        for (mask in 0..63) {
+          val selected = TouchGeometry(width.toFloat(), height.toFloat(), settings.copy(controlsMask = mask or 64), video)
+          assertEquals(complete.laneRegions, selected.laneRegions, "Track positions must not move for $width/$scale/$mask")
+          for ((lane, region) in complete.laneRegions.withIndex()) {
+            val x = (region.left + region.right) / 2f
+            val top = maxOf(region.topAt(x), selected.clipTop)
+            val bottom = minOf(region.bottom, selected.clipBottom)
+            if (x < selected.clipLeft || x >= selected.clipRight || top >= bottom) continue
+            val y = (top + bottom) / 2f
+            assertEquals(if (mask and (1 shl lane) != 0) lane else null, selected.laneAt(x, y))
+            if (mask and (1 shl lane) != 0) assertFalse(selected.isField(x, y))
+          }
+          assertEquals(complete.fieldLeft, selected.fieldLeft)
+          assertEquals(complete.fieldRight, selected.fieldRight)
+        }
       }
     }
   }

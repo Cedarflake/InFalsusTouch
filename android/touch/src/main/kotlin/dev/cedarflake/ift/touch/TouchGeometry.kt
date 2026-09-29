@@ -38,7 +38,7 @@ class TouchGeometry(val width: Float, val height: Float, val settings: ControlSe
       TouchRegion(right, laneTop, videoX(layout.sideRight), sideTop, bottom, floorLine, sideLine)
   } else List(6) { lane -> TouchRegion(width * lane / 6, laneTop, width * (lane + 1) / 6, laneTop, height) }
 
-  val laneRegions: List<TouchRegion> = centerSelectedLanes()
+  val laneRegions: List<TouchRegion> = if (isAligned) originalLaneRegions else centerSelectedLanes()
   private val selectedRegions = laneRegions.filterIndexed { lane, _ -> settings.controlsMask and (1 shl lane) != 0 }
   private val freeFieldBottom = if (selectedRegions.isEmpty()) clipBottom else laneTop
   val fieldBoundary: List<TouchPoint> = buildFieldBoundary()

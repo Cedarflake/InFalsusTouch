@@ -33,9 +33,10 @@ have no reserved height; RTT remains in performance statistics. Gameplay shows o
 a 48 dp settings entry with equal 8 dp edge margins;
 it switches corners only if the actual cutout overlaps. UI buttons/chips use full
 pill shapes, the settings entry is circular, and cards have larger 32 dp corners.
-Gameplay lane shapes are unchanged. A partial key selection packs in original lane
-order and centers horizontally, preserving each key's width and height. Drawing
-and hit testing share those translated regions; key numbers and bindings retain
+Gameplay lane shapes are unchanged. In Aligned mode, a partial key selection keeps
+each button at its calibrated video track position, leaving hidden lanes empty.
+Fixed and Reserved modes pack selected keys in lane order and center the group.
+Drawing and hit testing share the same regions; key numbers and bindings retain
 their original lane identity. Showing all six keys keeps the original chart layout.
 Field and video placement remain independent. Settings use the full screen
 width; only controls intersecting an actual cutout receive local padding.
@@ -112,7 +113,8 @@ Both lines are centered, with consistent type sizes and fitting for long key nam
 **Controls / 按键显示** uses seven independent chips with current IF key names.
 A top information card combines the seven-device cooperative play explanation
 with key synchronization and IME guidance. The selection card follows without additional help text.
-Hidden lanes cannot acquire a touch; selected lane subsets keep their widths and center as a group.
+Hidden lanes cannot acquire a touch. Selected keys keep their track positions in
+Aligned mode and center as a group in Fixed and Reserved modes; widths are preserved.
 All / Keys only / Field only / View only presets affect only this device. In Field-only
 mode the gesture region extends farther down the picture. Other phones can overlap
 these choices, and unassigned operations may be handled by the PC keyboard/mouse.
