@@ -14,7 +14,8 @@ internal object DecoderLatency {
     "vendor.low-latency.enable",
   )
 
-  fun configure(codec: MediaCodec, capabilities: MediaCodecInfo.CodecCapabilities, format: MediaFormat, surface: Surface): String {
+  fun configure(codec: MediaCodec, capabilities: MediaCodecInfo.CodecCapabilities, format: MediaFormat, surface: Surface,
+    restoreAfterReset: () -> Unit = {}): String {
     val option = supportedOption(codec, capabilities)
     if (option != null) format.setInteger(option, 1)
     try {
@@ -23,6 +24,7 @@ internal object DecoderLatency {
       if (option == null) throw error
       Log.w("InFalsusTouchVideo", "Decoder rejected $option; retrying without it", error)
       codec.reset()
+      restoreAfterReset()
       if (Build.VERSION.SDK_INT >= 29) format.removeKey(option)
       codec.configure(format, surface, null, 0)
       return "unavailable (configuration rejected)"

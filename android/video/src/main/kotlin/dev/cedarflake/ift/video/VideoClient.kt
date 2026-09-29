@@ -89,11 +89,12 @@ class VideoClient(private val listener: VideoListener, private val executor: Exe
     }.use { decoder ->
       val receiver = Thread({
         try {
-          receiveFrames(reader, config, queue, statistics, session, receiving)
+          receiveFrames(reader, config, queue, statistics, session, receiving, decoder::wake)
         } catch (error: Exception) {
           readerFailure.set(error)
         } finally {
           receiving.set(false)
+          decoder.wake()
         }
       }, "ift-video-receive").apply { start() }
       try {
@@ -102,7 +103,7 @@ class VideoClient(private val listener: VideoListener, private val executor: Exe
           statistics.snapshot(queue.dropped + decoder.dropped, queue.depth() + decoder.pendingCount())?.let { snapshot ->
             emit(session) { listener.onStatistics(snapshot) }
           }
-          if (!progressed) Thread.sleep(1)
+          if (!progressed) decoder.awaitProgress()
         }
         readerFailure.get()?.let { throw it }
       } finally {
@@ -120,6 +121,7 @@ class VideoClient(private val listener: VideoListener, private val executor: Exe
     statistics: VideoStatistics,
     session: Session,
     receiving: AtomicBoolean,
+    wake: () -> Unit,
   ) {
     var sequence = 1
     var lastCapture = 0L
@@ -135,6 +137,7 @@ class VideoClient(private val listener: VideoListener, private val executor: Exe
       lastCapture = header.captureTimestamp
       statistics.received(packet)
       queue.offer(packet)
+      wake()
     }
   }
 

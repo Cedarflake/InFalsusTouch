@@ -52,7 +52,7 @@ and button shapes are unchanged.
 | Windows host compilation | Passed, MSVC 19.44 / CMake 3.31.6 / Windows SDK 10.0.26100.0 |
 | Android APK compilation | Passed, Gradle 8.11.1 / AGP 8.9.2 / Kotlin 2.1.20 / JDK 21 |
 | C++ input protocol / input state / mapping / video / profile / cooperative suites | 6/6 passed |
-| Kotlin settings / touch / input+video protocol / queue / socket / native-host / video timing tests | 48/48 passed, no skips; includes gap-free Field/button boundaries, pixel-preserving relative movement, large swipes, native-host deltas, haptic-setting codecs, 186 partial-selection/layout combinations, bounded local-clock latency statistics, high-frame-rate protocol bounds and callback accounting after timing eviction |
+| Kotlin settings / touch / input+video protocol / queue / socket / native-host / video timing tests | 51/51 passed, no skips; includes gap-free Field/button boundaries, pixel-preserving relative movement, large swipes, native-host deltas, haptic-setting codecs, 186 partial-selection/layout combinations, bounded local-clock latency statistics, high-frame-rate protocol bounds, callback accounting after timing eviction and codec-buffer ownership across flush/error/close |
 | Flutter analysis and UI tests | No analysis issues; 20/20 tests passed, including bilingual vibration toggle and immediate saving |
 | Native profile persistence and CLI precedence integration | Passed, including legacy tuning migration, retired flags, invalid/missing profile and unchanged-file failure checks |
 | TCP disconnect / malformed / reconnect integration | 8/8 checks passed, including coalesced full-width relative movement |
@@ -71,9 +71,9 @@ and button shapes are unchanged.
 | WGC / GPU conversion / hardware H.264 / TCP | Passed, including Baseline SPS and >=58 FPS gate |
 | PC source resize / aspect changes / minimize and restore | 720p decoded color, centered bars, animation and independent input passed; minimize triggered a stream restart which the test receiver recovered |
 | Android hardware decode / output colors / seven-pointer input / settings and calibration isolation / reconnect | Passed at both 720p and 1080p with relative Field movement and restored device settings |
-| 720p60 short-run throughput | Latest USB phone steady receive/decode 59.99 FPS, present callbacks 59.57 FPS; 21.02-second steady interval; no unmatched presentation callbacks |
-| Experimental 720p120 throughput | PC 120.13 FPS passed; after callback-accounting correction, phone receive 120.00 FPS, decode 118.88 FPS, present callbacks 93.27 FPS still failed the unchanged proportional presentation gate; default remains 60 FPS |
-| 1080p60 short-run throughput | Earlier PC 60.13 FPS; latest USB phone steady receive 60.00 FPS, present callbacks 59.52 FPS; native source and received dimensions verified |
+| 720p60 short-run throughput | Latest callback-driven USB phone steady receive 60.02 FPS, decode 59.97 FPS, present callbacks 59.07 FPS; 21.11-second steady interval; no unmatched presentation callbacks |
+| Experimental 720p120 throughput | PC 120.13 FPS passed; latest callback-driven phone receive 119.98 FPS, decode 116.49 FPS, present callbacks 86.89 FPS still failed the unchanged proportional presentation gate; default remains 60 FPS |
+| 1080p60 short-run throughput | Earlier PC 60.13 FPS; latest callback-driven USB phone steady receive 60.01 FPS, decode 59.97 FPS, present callbacks 59.35 FPS; native source and received dimensions verified |
 | Measured latency tuning | Bounded queues, WGC pacing, low-latency codec selection and local statistics implemented |
 | Settings / calibration UX | Implemented; phone persistence/dialog/calibration and PC profile/mapping checks passed; physical PC cursor wizard use remains manual |
 
@@ -474,6 +474,66 @@ Evidence under `build/video-system-trace/`:
 `60fps-profile-20260928T235416831692Z/` (earlier complete frame trace).
 Two frame-correlation regression tests passed, including missing fences across
 different layers, duplicate observations, ambiguous queues and invalid ordering.
+
+### Callback-driven decoder, 2026-09-29
+
+The Android decoder now consumes input/output buffer callbacks and wakes its worker
+when a codec buffer or compressed packet becomes available. This removes the former
+1 ms polling sleep. Queue capacity, two-frame decoder submission limit, presentation
+timestamps, codec priority and the default 60 FPS profile are unchanged.
+
+Flush suppresses stale buffer indices until a barrier on the codec callback looper
+has drained, then restarts the asynchronous codec. Errors remain fatal across flush;
+late callbacks cannot revive a closed session. Input buffer access is serialized
+with error handling to avoid copying through invalidated direct buffers. This follows
+the lifecycle requirements in [MediaCodec](https://developer.android.com/reference/android/media/MediaCodec)
+and the error/flush handling rationale in
+[AndroidX Media3](https://github.com/androidx/media/blob/release/libraries/exoplayer/src/main/java/androidx/media3/exoplayer/mediacodec/AsynchronousMediaCodecCallback.java).
+Three additional JVM tests cover these ownership boundaries; all 51 Kotlin tests
+and Android lint passed.
+
+Two untraced old/new comparisons used the same phone, profile build, 720p60 stream,
+120 Hz display and existing dry-run interaction test. Each steady interval lasted
+approximately 21 seconds. Latencies below cover the final 240 matched frames:
+
+| Run | Receive to submit mean | Decode mean | Decode to callback timestamp mean | Receive to callback timestamp mean / P95 | Present callbacks/s |
+| --- | --- | --- | --- | --- | --- |
+| Polling baseline, first | 2.09 ms | 5.29 ms | 23.87 ms | 31.25 / 36.22 ms | 59.18 |
+| Callback candidate, first | 1.02 ms | 5.25 ms | 23.99 ms | 30.26 / 35.63 ms | 59.23 |
+| Polling baseline, repeat | 1.64 ms | 5.25 ms | 23.84 ms | 30.73 / 36.60 ms | 58.52 |
+| Callback candidate, repeat | 1.02 ms | 5.27 ms | 23.75 ms | 30.04 / 35.65 ms | 59.07 |
+
+Both comparisons reduced receive-to-submit by 0.62–1.07 ms and total local callback
+timestamp latency by 0.69–0.99 ms. This supports retaining the narrower scheduling
+change, not a claim of resolved Late judgments or a measured CPU/power improvement.
+Post-decode presentation remains the larger stage. Every 60 FPS run passed colors,
+seven synthetic pointers, Field deltas, settings/calibration isolation and reconnect;
+each had 29 session drops including startup and zero unmatched callbacks.
+
+The candidate's 120 FPS run still failed the unchanged >=110 presentation gate:
+119.98 receive / 116.49 decode / 86.89 presentation callbacks/s over 14.05 seconds.
+Its final 240-frame receive-to-callback window was 28.02 ms mean / 35.81 ms P95,
+with 581 session drops and zero unmatched callbacks. Colors and reconnect completed,
+but high-rate playback remains experimental. These figures do not isolate a
+120 FPS regression or improvement against older runs with different conditions.
+Phone preferences and ADB mappings were verified unchanged after every run.
+
+The same candidate also passed the full 1080p60 interaction/reconnect test:
+60.01 receive / 59.97 decode / 59.35 presentation callbacks/s over 21.11 seconds,
+with 31.72 ms mean / 37.02 ms P95 receive-to-callback timestamp latency over the
+final 240 frames. Its input wait, decode and post-decode means were 1.18, 6.75
+and 23.79 ms. This is compatibility validation, not a paired 1080p improvement.
+
+Both debug/profile APKs and their instrumentation packages were rebuilt. The
+installed profile APK was verified against the delivered file's SHA-256, with
+the normal Host connection resumed and original phone preferences preserved.
+
+Evidence: `build/async-codec-baseline/video-60/` and, under
+`build/async-codec-test/`, `candidate-60-20260929T002303139549Z/`,
+`baseline-60-repeat-20260929T002943313910Z/`,
+`candidate-60-repeat-20260929T003022249974Z/`,
+`candidate-120-20260929T002741916259Z/` and
+`candidate-1080p60-20260929T003117081032Z/`.
 
 ### PC window recovery, 2026-09-29
 
