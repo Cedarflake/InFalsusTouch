@@ -54,6 +54,7 @@ class MainActivity : FlutterActivity(), SurfaceHolder.Callback {
   private var isResumed = false
   private var isVideoStarted = false
   private var isStatePending = false
+  private var lastInputGate = -1
   private var wantsConnection = false
   private var retryScheduled = false
   private var connectionFailed = false
@@ -151,6 +152,7 @@ class MainActivity : FlutterActivity(), SurfaceHolder.Callback {
     client = ControlClient(object : ControlListener {
       override fun onState(state: ConnectionState, detail: String) {
         if (isDestroyed) return
+        InputTrace.write("connection=$state detail=$detail")
         this@MainActivity.state = state
         this@MainActivity.detail = detail
         if (state == ConnectionState.DISCONNECTED) {
@@ -298,7 +300,15 @@ class MainActivity : FlutterActivity(), SurfaceHolder.Callback {
   }
 
   private fun updateInputAllowed() {
-    if (::controllerView.isInitialized) controllerView.setInputAllowed(isTargetReady && hasWindowFocus() && isResumed && !isConfiguring)
+    val focused = hasWindowFocus()
+    val configuring = isConfiguring
+    val gate = (if (isTargetReady) 1 else 0) or (if (focused) 2 else 0) or
+      (if (isResumed) 4 else 0) or (if (configuring) 8 else 0)
+    if (lastInputGate != gate) {
+      lastInputGate = gate
+      InputTrace.write("input target=$isTargetReady focus=$focused resumed=$isResumed configuring=$configuring")
+    }
+    if (::controllerView.isInitialized) controllerView.setInputAllowed(isTargetReady && focused && isResumed && !configuring)
   }
 
   private fun applySettings(value: ControlSettings) {

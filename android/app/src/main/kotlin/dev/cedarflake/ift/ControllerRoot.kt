@@ -20,6 +20,7 @@ class ControllerRoot(context: Context) : FrameLayout(context) {
       gestureTarget = if (isConfiguring || interfaceRegions.any { it.contains(x, y) }) interfaceView else gameplay
     }
     val target = gestureTarget ?: return false
+    if (target === gameplay) InputTrace.motion(event)
     // Keep every pointer of a gameplay gesture native, even when a finger crosses the menu.
     val local = MotionEvent.obtain(event)
     try {

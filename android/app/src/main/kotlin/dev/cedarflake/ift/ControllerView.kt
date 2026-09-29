@@ -60,7 +60,7 @@ class ControllerView(context: Context, private val sink: TouchSink) : View(conte
   }
 
   fun setInputAllowed(allowed: Boolean) {
-    if (isInputAllowed && !allowed) controller.cancel()
+    if (isInputAllowed && !allowed) cancelTouches("input disabled")
     isInputAllowed = allowed
     if (!allowed) controller.reset()
     invalidate()
@@ -87,8 +87,21 @@ class ControllerView(context: Context, private val sink: TouchSink) : View(conte
   }
 
   fun releaseTouches() {
-    controller.cancel()
+    cancelTouches("explicit release")
     invalidate()
+  }
+
+  private fun traceCancellation(reason: String) {
+    if (!InputTrace.enabled) return
+    val lanes = (0..5).filter { controller.laneCount(it) > 0 }.map { it + 1 }
+    if (lanes.isNotEmpty() || controller.fieldPointerId >= 0) {
+      InputTrace.write("release reason=$reason lanes=$lanes field=${controller.fieldPointerId}")
+    }
+  }
+
+  private fun cancelTouches(reason: String) {
+    traceCancellation(reason)
+    controller.cancel()
   }
 
   override fun onSizeChanged(width: Int, height: Int, oldWidth: Int, oldHeight: Int) {
@@ -98,6 +111,7 @@ class ControllerView(context: Context, private val sink: TouchSink) : View(conte
   private fun updateGeometry() {
     if (width <= 0 || height <= 0) return
     geometry = TouchGeometry(width.toFloat(), height.toFloat(), settings, videoPlacement.takeIf { isVideoVisible })
+    traceCancellation("geometry changed ${width}x$height video=$isVideoVisible")
     controller.resize(geometry)
     fieldPath.apply {
       rewind()
@@ -161,7 +175,7 @@ class ControllerView(context: Context, private val sink: TouchSink) : View(conte
         controller.up(event.getPointerId(index))
         if (event.actionMasked == MotionEvent.ACTION_UP) performClick()
       }
-      MotionEvent.ACTION_CANCEL -> controller.cancel()
+      MotionEvent.ACTION_CANCEL -> cancelTouches("ACTION_CANCEL")
     }
     invalidate()
     return true
@@ -173,7 +187,7 @@ class ControllerView(context: Context, private val sink: TouchSink) : View(conte
   }
 
   override fun onDetachedFromWindow() {
-    controller.cancel()
+    cancelTouches("view detached")
     super.onDetachedFromWindow()
   }
 

@@ -44,6 +44,17 @@ including slanted side keys. This removes the approximately 41-pixel dead strip
 reported with 30% button height and the user's calibration; judgment positions
 and button shapes are unchanged.
 
+The 2026-09-29 connection update makes Host maintain forwarding for authorized USB
+phones and packages ADB beside the executable. Lost forwarding, Host restart and
+ADB server restart passed phone ACK/input checks. This machine also had spontaneous
+USB read failures with ADB 37.0.1's new Windows backend; its native compatibility
+backend is now used when Host starts an ADB server. A short observation without
+further read failures is not long-term reliability acceptance.
+The exact ground-ground-Field pointer order now passes the native regression test,
+but physical three-finger input still receives Android cancellation while hardware
+touch points remain active. System gesture settings were not changed. Evidence and
+remaining limits are in [USB-RECOVERY.md](USB-RECOVERY.md).
+
 ## Acceptance gates
 
 | Gate | Status |
@@ -51,7 +62,7 @@ and button shapes are unchanged.
 | Architecture and input protocol | Defined |
 | Windows host compilation | Passed, MSVC 19.44 / CMake 3.31.6 / Windows SDK 10.0.26100.0 |
 | Android APK compilation | Passed, Gradle 8.11.1 / AGP 8.9.2 / Kotlin 2.1.20 / JDK 21 |
-| C++ input protocol / input state / mapping / video / profile / cooperative suites | 6/6 passed |
+| C++ input protocol / input state / mapping / video / profile / cooperative / USB / window suites | 8/8 passed |
 | Kotlin settings / touch / input+video protocol / queue / socket / native-host / video timing tests | 51/51 passed, no skips; includes gap-free Field/button boundaries, pixel-preserving relative movement, large swipes, native-host deltas, haptic-setting codecs, 186 partial-selection/layout combinations, bounded local-clock latency statistics, high-frame-rate protocol bounds, callback accounting after timing eviction and codec-buffer ownership across flush/error/close |
 | Flutter analysis and UI tests | No analysis issues; 20/20 tests passed, including bilingual vibration toggle and immediate saving |
 | Native profile persistence and CLI precedence integration | Passed, including legacy tuning migration, retired flags, invalid/missing profile and unchanged-file failure checks |

@@ -3,8 +3,10 @@ package dev.cedarflake.ift
 import android.os.SystemClock
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.RectF
 import android.view.InputDevice
 import android.view.MotionEvent
+import android.view.View
 import android.widget.FrameLayout
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -19,11 +21,15 @@ class MotionEventDeviceTest {
   private var gestureStart = 0L
   private class RecordingSink : TouchSink {
     val events = mutableListOf<String>()
+    var fieldStarts = 0
+    var fieldEnds = 0
     override fun laneDown(lane: Int) { events += "D$lane" }
     override fun laneUp(lane: Int) { events += "U$lane" }
     override fun fieldAbsolute(x: Float) { events += "A$x" }
     override fun fieldRelative(deltaX: Float) { events += "R$deltaX" }
     override fun releaseAll() { events += "CLEAR" }
+    override fun fieldBegin() { fieldStarts++ }
+    override fun fieldEnd() { fieldEnds++ }
   }
 
   private data class Finger(val id: Int, val x: Float, val y: Float)
@@ -41,7 +47,7 @@ class MotionEventDeviceTest {
     }
   }
 
-  private fun dispatch(view: ControllerView, action: Int, fingers: List<Finger>) {
+  private fun dispatch(view: View, action: Int, fingers: List<Finger>) {
     val properties = fingers.map { finger ->
       MotionEvent.PointerProperties().apply { id = finger.id; toolType = MotionEvent.TOOL_TYPE_FINGER }
     }.toTypedArray()
@@ -53,6 +59,52 @@ class MotionEventDeviceTest {
     val event = MotionEvent.obtain(gestureStart, now, action, fingers.size, properties, coordinates,
       0, 0, 1f, 1f, 0, 0, InputDevice.SOURCE_TOUCHSCREEN, 0)
     try { view.dispatchTouchEvent(event) } finally { event.recycle() }
+  }
+
+  @Test fun twoGroundKeysStayHeldWhileThirdFingerSlidesAndRetouchesField() {
+    val instrumentation = InstrumentationRegistry.getInstrumentation()
+    instrumentation.runOnMainSync {
+      val sink = RecordingSink()
+      val root = ControllerRoot(instrumentation.targetContext)
+      val view = ControllerView(instrumentation.targetContext, sink)
+      var interfaceTouches = 0
+      val overlay = object : View(instrumentation.targetContext) {
+        override fun onTouchEvent(event: MotionEvent): Boolean { interfaceTouches++; return true }
+      }
+      root.addView(view, FrameLayout.LayoutParams(-1, -1))
+      root.addView(overlay, FrameLayout.LayoutParams(-1, -1))
+      root.gameplay = view
+      root.interfaceView = overlay
+      root.interfaceRegions = listOf(RectF(0f, 0f, 60f, 60f))
+      root.layout(0, 0, 600, 400)
+      view.layout(0, 0, 600, 400)
+      view.setInputAllowed(true)
+      sink.events.clear()
+      val left = Finger(12, 150f, 350f)
+      val right = Finger(3, 450f, 350f)
+      var field = Finger(7, 300f, 150f)
+      dispatch(root, MotionEvent.ACTION_DOWN, listOf(left))
+      dispatch(root, MotionEvent.ACTION_POINTER_DOWN or (1 shl MotionEvent.ACTION_POINTER_INDEX_SHIFT), listOf(left, right))
+      dispatch(root, MotionEvent.ACTION_POINTER_DOWN or (2 shl MotionEvent.ACTION_POINTER_INDEX_SHIFT), listOf(left, right, field))
+      for (x in listOf(450f, 60f, 30f)) {
+        field = field.copy(x = x, y = 30f)
+        dispatch(root, MotionEvent.ACTION_MOVE, listOf(field, right, left))
+      }
+      dispatch(root, MotionEvent.ACTION_POINTER_UP, listOf(field, right, left))
+      assertEquals(listOf("D2", "D5", "R150.0", "R-390.0", "R-30.0"), sink.events)
+      assertEquals(1, sink.fieldEnds)
+      field = Finger(21, 240f, 150f)
+      dispatch(root, MotionEvent.ACTION_POINTER_DOWN or (2 shl MotionEvent.ACTION_POINTER_INDEX_SHIFT), listOf(left, right, field))
+      field = field.copy(x = 360f)
+      dispatch(root, MotionEvent.ACTION_MOVE, listOf(field, right, left))
+      dispatch(root, MotionEvent.ACTION_POINTER_UP or (1 shl MotionEvent.ACTION_POINTER_INDEX_SHIFT), listOf(field, right, left))
+      dispatch(root, MotionEvent.ACTION_POINTER_UP or (1 shl MotionEvent.ACTION_POINTER_INDEX_SHIFT), listOf(field, left))
+      dispatch(root, MotionEvent.ACTION_UP, listOf(field.copy(x = 400f)))
+      assertEquals(listOf("D2", "D5", "R150.0", "R-390.0", "R-30.0", "R120.0", "U5", "U2", "R40.0"), sink.events)
+      assertEquals(2, sink.fieldStarts)
+      assertEquals(2, sink.fieldEnds)
+      assertEquals(0, interfaceTouches)
+    }
   }
 
   @Test fun nativePointerIndicesMayReorderWithoutChangingOwnership() = withView { view, sink ->
