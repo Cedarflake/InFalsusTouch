@@ -20,9 +20,12 @@ EncodingGroup::~EncodingGroup() {
 }
 
 void EncodingGroup::submit(winrt::com_ptr<ID3D11Texture2D> texture, std::uint64_t timestamp) {
-  std::lock_guard lock(mutex_);
-  latest_ = std::move(texture);
-  timestamp_ = timestamp;
+  {
+    std::lock_guard lock(mutex_);
+    std::swap(latest_, texture);
+    timestamp_ = timestamp;
+  }
+  frameAvailable_.notify_one();
 }
 
 GroupOutput EncodingGroup::poll() {
@@ -46,6 +49,7 @@ void EncodingGroup::run(const GraphicsDevice& graphics, VideoOptions options, st
     FrameWait wake;
     std::uint64_t lastEncoded = 0;
     auto lastOutput = Clock::now();
+    auto awaitingVideoSince = lastOutput;
     bool warmed = false;
     std::osyncstream(std::cout) << "Video group " << options.fps << " FPS ready" << std::endl;
     while (!token.stop_requested()) {
@@ -83,10 +87,21 @@ void EncodingGroup::run(const GraphicsDevice& graphics, VideoOptions options, st
           texture = std::move(latest_);
           timestamp = timestamp_;
         }
-        if (texture) encoder.submit(texture.get(), timestamp);
+        if (texture) {
+          if (!encoder.pending()) lastOutput = Clock::now();
+          encoder.submit(texture.get(), timestamp);
+        }
       }
       if (encoder.pending() && Clock::now() - lastOutput > 2s) throw std::runtime_error("Hardware encoder stalled");
-      if (!parameters && Clock::now() - started > 5s) throw std::runtime_error("No encoded video within 5 seconds");
+      if (!parameters && Clock::now() - awaitingVideoSince > 5s) throw std::runtime_error("No encoded video within 5 seconds");
+      if (!encoder.pending()) {
+        std::unique_lock lock(mutex_);
+        if (!latest_) {
+          frameAvailable_.wait(lock, token, [this] { return latest_ != nullptr; });
+          awaitingVideoSince = lastOutput = Clock::now();
+          continue;
+        }
+      }
       wake.wait();
     }
   } catch (const winrt::hresult_error& error) {

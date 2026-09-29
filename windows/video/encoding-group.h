@@ -1,6 +1,7 @@
 #pragma once
 
 #include <atomic>
+#include <condition_variable>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -39,6 +40,7 @@ public:
 private:
   void run(const GraphicsDevice& graphics, VideoOptions options, std::stop_token token) noexcept;
   std::mutex mutex_;
+  std::condition_variable_any frameAvailable_;
   winrt::com_ptr<ID3D11Texture2D> latest_;
   std::uint64_t timestamp_ = 0;
   GroupOutput output_;

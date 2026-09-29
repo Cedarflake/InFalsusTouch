@@ -58,6 +58,8 @@ uv run --python 3.13 tests/video-frame-rate.py --device
 
 游玩期间测试设备进出可运行 `uv run --python 3.13 tests/video-live-groups.py`。它连接已运行的 Host，最多创建 6 个模拟视频接收端，覆盖同帧率复用、60／90／120 FPS 混合、慢速端及反复重连；不发送输入，也不操作手机或 USB 转发。记录的是电脑采集到本机接收的耗时，不包含 USB、手机解码与屏幕呈现，不能当作游玩总延迟。
 
+分组切换回归使用 `uv run --python 3.13 tests/video-group-churn.py`，再加 `--fps 60` 验证低帧率设备。测试同时建立控制和视频连接，覆盖七个模拟设备、快速切换、同组复用及空闲释放。持续接收原设备的视频，统计包含连接、断开瞬间的最大间隔和 P99；默认最大间隔不得超过 50 毫秒。需使用支持 120 Hz 的显示环境，结果不代表手机实测延迟。
+
 检查间歇性卡顿时，使用帧间隔采样；默认采集测试窗口，`--window` 可指定 `InFalsusTouchHost.exe --list` 列出的游戏窗口句柄：
 
 ```powershell

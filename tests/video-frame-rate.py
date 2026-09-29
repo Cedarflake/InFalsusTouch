@@ -187,7 +187,6 @@ def verify_peers(control_port, video_port, trace, output):
         peers.remove(same)
         low.close()
         peers.remove(low)
-        wait_for(lambda: "Video group 60 FPS stopped" in text(), "Unused 60 FPS encoder stayed alive")
         moved = Viewer(video_port, 90, output, "moved-to-90")
         peers.append(moved)
         metrics["moveToExistingGroup"] = rates(peers)
@@ -197,8 +196,8 @@ def verify_peers(control_port, video_port, trace, output):
         assert "Video group 90 FPS stopped" not in text(), "An occupied encoder was released"
         moved.close()
         peers.remove(moved)
-        wait_for(lambda: "Video group 90 FPS stopped" in text(), "Unused 90 FPS encoder stayed alive")
         metrics["remaining120"] = rates(peers, 2)
+        assert "Video group 60 FPS stopped" not in text() and "Video group 90 FPS stopped" not in text(), "Idle teardown disturbed an active session"
         records = first.snapshot()
         metrics["maximum120CaptureGapMs"] = max((b[0] - a[0]) / 1e6 for a, b in zip(records, records[1:]))
         assert metrics["maximum120CaptureGapMs"] < 150, metrics
@@ -206,7 +205,8 @@ def verify_peers(control_port, video_port, trace, output):
         assert "UP 1" not in trace.read_text(), "Video subscription changes released held input"
         first.close()
         peers.remove(first)
-        wait_for(lambda: "Video group 120 FPS stopped" in text() and "Video capture stopped" in text(), "Idle resources were not released")
+        wait_for(lambda: all(f"Video group {fps} FPS stopped" in text() for fps in (60, 90, 120)) and
+            "Video capture stopped" in text(), "Idle resources were not released")
         controller.request(3, lane=1)
         assert not controller.failure, controller.failure
         fallback = Viewer(video_port, 0, output, "fallback-30")

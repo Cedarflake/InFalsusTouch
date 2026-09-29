@@ -110,25 +110,34 @@ struct Group {
   std::uint16_t fps;
   EncodingGroup encoder;
   FramePacer pacing;
+  std::uint64_t lastCapture = 0;
+  std::optional<Clock::time_point> idleSince;
 };
 
 struct Capture {
   Capture(HWND window, const GraphicsDevice& graphics, VideoOptions options)
-    : converter(graphics, options), source(window, graphics), fps(options.fps), pacing(options.fps) {
+    : converter(graphics, options), source(window, graphics) {
     std::osyncstream(std::cout) << "Video capture started" << std::endl;
   }
   FrameConverter converter;
   WindowCapture source;
-  std::uint16_t fps;
-  FramePacer pacing;
+  winrt::com_ptr<ID3D11Texture2D> texture;
+  std::uint64_t timestamp = 0;
   ~Capture() {
     std::osyncstream(std::cout) << "Video capture stopped: " << source.received() << " WGC frames, "
       << source.dropped() << " capture replacements" << std::endl;
   }
-  void setFrameRate(std::uint16_t value) {
-    if (fps == value) return;
-    fps = value;
-    pacing = FramePacer(value);
+  void refresh() {
+    auto frame = source.takeLatest();
+    if (!frame.owner) return;
+    try {
+      texture = converter.convert(frame);
+      timestamp = frame.timestamp;
+    } catch (...) {
+      frame.owner.Close();
+      throw;
+    }
+    frame.owner.Close();
   }
 };
 
@@ -201,12 +210,16 @@ void serve(VideoOptions options, HWND window, const Shutdown& shutdown) {
   FrameWait wake;
   while (!shutdown.requested()) {
     pump();
+    const bool watching = std::any_of(viewers.begin(), viewers.end(), [](const auto& viewer) { return viewer && viewer->fps; });
     for (auto it = groups.begin(); it != groups.end();) {
       const bool subscribed = std::any_of(viewers.begin(), viewers.end(), [&](const auto& viewer) {
         return viewer && viewer->fps == it->first;
       });
-      if (subscribed) ++it;
-      else it = retire(it);
+      if (subscribed) it->second->idleSince.reset();
+      else if (!it->second->idleSince) it->second->idleSince = Clock::now();
+      // Driver teardown can disturb other streams. Retain idle groups without encoding until nobody is watching.
+      if (!watching && it->second->idleSince && Clock::now() - *it->second->idleSince >= 2s) it = retire(it);
+      else ++it;
     }
     std::erase_if(retiring, [](const auto& group) { return group->encoder.stopped(); });
     const SOCKET accepted = accept(listener.get(), nullptr, nullptr);
@@ -220,8 +233,12 @@ void serve(VideoOptions options, HWND window, const Shutdown& shutdown) {
       if (!viewer || !viewer->fps || groups.contains(*viewer->fps)) continue;
       const auto fps = *viewer->fps;
       // Shutdown may involve the driver; retire off-thread before reusing its encoder slot.
-      if (groups.size() + retiring.size() >= maxControllers ||
-          std::any_of(retiring.begin(), retiring.end(), [fps](const auto& group) { return group->fps == fps; })) continue;
+      if (groups.size() + retiring.size() >= maxControllers) {
+        const auto idle = std::find_if(groups.begin(), groups.end(), [](const auto& entry) { return entry.second->idleSince.has_value(); });
+        if (idle != groups.end()) retire(idle);
+        continue;
+      }
+      if (std::any_of(retiring.begin(), retiring.end(), [fps](const auto& group) { return group->fps == fps; })) continue;
       auto groupOptions = options;
       groupOptions.fps = fps;
       groups.emplace(fps, std::make_unique<Group>(graphics, groupOptions));
@@ -240,7 +257,7 @@ void serve(VideoOptions options, HWND window, const Shutdown& shutdown) {
       ++it;
     }
     pump();
-    if (groups.empty()) {
+    if (std::none_of(groups.begin(), groups.end(), [](const auto& entry) { return !entry.second->idleSince; })) {
       capture.reset();
       const bool any = std::any_of(viewers.begin(), viewers.end(), [](const auto& viewer) { return !!viewer; });
       if (any) wake.wait();
@@ -255,30 +272,21 @@ void serve(VideoOptions options, HWND window, const Shutdown& shutdown) {
     }
     std::string failure;
     try {
-      const auto maximumFps = groups.rbegin()->first;
       if (!capture) {
-        auto captureOptions = options;
-        captureOptions.fps = maximumFps;
-        capture = std::make_unique<Capture>(window, graphics, captureOptions);
+        capture = std::make_unique<Capture>(window, graphics, options);
       }
-      capture->setFrameRate(maximumFps);
       const auto now = performanceNanoseconds();
-      if (capture->pacing.ready(now)) {
-        auto frame = capture->source.takeLatest();
-        if (frame.owner) {
-          try {
-            const auto texture = capture->converter.convert(frame);
-            for (auto& [fps, group] : groups) {
-              if (!group->pacing.ready(now)) continue;
-              group->encoder.submit(texture, frame.timestamp);
-              group->pacing.submitted(now);
-            }
-            capture->pacing.submitted(now);
-          } catch (...) {
-            frame.owner.Close();
-            throw;
-          }
-          frame.owner.Close();
+      if (std::any_of(groups.begin(), groups.end(), [now](const auto& entry) {
+          return !entry.second->idleSince && entry.second->pacing.ready(now);
+        })) {
+        capture->refresh();
+        // Each group keeps its own deadlines across other viewers joining and leaving.
+        // Retain the converted frame so a faster group cannot consume a slower group's input.
+        for (auto& [fps, group] : groups) {
+          if (group->idleSince || !group->pacing.ready(now) || capture->timestamp <= group->lastCapture) continue;
+          group->encoder.submit(capture->texture, capture->timestamp);
+          group->lastCapture = capture->timestamp;
+          group->pacing.submitted(now);
         }
       }
     } catch (const winrt::hresult_error& error) {
