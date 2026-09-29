@@ -35,6 +35,7 @@ std::uint64_t integer(const std::wstring& text) {
 HostOptions parseOptions(int argc, wchar_t** argv) {
   HostOptions options;
   bool explicitVideo = false;
+  bool explicitUsb = false;
   bool useProfile = true;
   bool explicitProfile = false;
   std::vector<std::pair<std::wstring, std::wstring>> values;
@@ -44,6 +45,11 @@ HostOptions parseOptions(int argc, wchar_t** argv) {
     if (option == L"--calibrate") { options.calibrate = true; continue; }
     if (option == L"--no-profile") { useProfile = false; continue; }
     if (option == L"--no-key-sync") { options.syncBindings = false; continue; }
+    if (option == L"--usb" || option == L"--no-usb") {
+      options.usb = option == L"--usb";
+      explicitUsb = true;
+      continue;
+    }
     if (option == L"--video" || option == L"--no-video") {
       options.video.enabled = option == L"--video";
       explicitVideo = true;
@@ -141,6 +147,7 @@ HostOptions parseOptions(int argc, wchar_t** argv) {
   }
   options.field.validate();
   if (options.dryRun && !explicitVideo) options.video.enabled = false;
+  if (options.dryRun && !explicitUsb) options.usb = false;
   if (options.video.enabled && options.video.port == options.port) throw std::invalid_argument("Video and control ports must differ");
   if (!options.tracePath.empty() && !options.dryRun) {
     throw std::invalid_argument("--trace is only supported with --dry-run");
@@ -155,6 +162,9 @@ void printHelp() {
     "  --window 0xHANDLE       Select an exact window\n"
     "  --title TEXT            Match a custom title; default detects infalsus.exe\n"
     "  --port 27184            Control listener on 127.0.0.1 only\n"
+    "  USB phones connect automatically; lost forwarding is restored while Host runs.\n"
+    "  --no-usb                Leave ADB forwarding to external tools\n"
+    "  --usb                   Enable automatic USB setup in dry-run tests\n"
     "  Up to 7 USB controllers choose their own visible keys and Field.\n"
     "  --bindings PATH         Override In Falsus userV2.prefs path (read only)\n"
     "  --no-key-sync           Use default Shift/A/S/D/F/Space bindings\n"

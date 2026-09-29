@@ -16,6 +16,7 @@ struct HostOptions {
   std::wstring profilePath;
   std::wstring bindingsPath;
   bool syncBindings = true;
+  bool usb = true;
   FieldConfig field;
   VideoOptions video;
   bool dryRun = false;

@@ -12,6 +12,7 @@
 #include "windows/input/trace-input.h"
 #include "windows/input/win32-input.h"
 #include "windows/transport/control-server.h"
+#include "windows/transport/usb-bridge.h"
 #include "windows/video/media-runtime.h"
 #include "windows/transport/video-server.h"
 
@@ -37,6 +38,11 @@ BOOL WINAPI handleConsoleSignal(DWORD signal) {
 int wmain(int argc, wchar_t** argv) {
   std::setlocale(LC_CTYPE, ".UTF8");
   SetConsoleOutputCP(CP_UTF8);
+  DWORD consoleMode = 0;
+  const auto consoleInput = GetStdHandle(STD_INPUT_HANDLE);
+  if (GetConsoleMode(consoleInput, &consoleMode)) {
+    SetConsoleMode(consoleInput, (consoleMode | ENABLE_EXTENDED_FLAGS) & ~ENABLE_QUICK_EDIT_MODE);
+  }
   int result = 0;
   try {
     auto options = ift::parseOptions(argc, argv);
@@ -78,6 +84,8 @@ int wmain(int argc, wchar_t** argv) {
         ift::runVideoServer(options.video, window, stopping, token);
       });
     }
+    std::jthread usb;
+    if (options.usb) usb = std::jthread([&](std::stop_token token) { ift::maintainUsb(options, stopping, token); });
     ift::runControlServer(options, target, *sink, stopping);
   } catch (const winrt::hresult_error& error) {
     std::wcerr << L"InFalsusTouchHost: " << error.message().c_str() << L" (0x"

@@ -9,6 +9,7 @@ add_executable(InFalsusTouchHost
   input/trace-input.cpp
   target/game-window.cpp
   transport/control-server.cpp
+  transport/usb-bridge.cpp
   transport/video-server.cpp
   video/media-runtime.cpp
   capture/window-capture.cpp
@@ -17,7 +18,7 @@ add_executable(InFalsusTouchHost
   encoder/hardware-encoder.cpp
 )
 target_link_libraries(InFalsusTouchHost PRIVATE ift_core ws2_32 user32
-  windowsapp d3d11 dxgi mfplat mf mfuuid ole32 dxguid dwmapi shell32 bcrypt)
+  windowsapp d3d11 dxgi mfplat mf mfuuid ole32 dxguid dwmapi shell32 bcrypt setupapi)
 target_compile_definitions(InFalsusTouchHost PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX UNICODE _UNICODE)
 if(MSVC)
   target_link_options(InFalsusTouchHost PRIVATE /MANIFEST:EMBED

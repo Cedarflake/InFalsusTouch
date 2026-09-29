@@ -123,8 +123,15 @@ RTT 是控制协议往返耗时，视频统计是各个处理阶段的测量；
 ## 连接与运行排查
 
 - `adb devices -l` 应显示 `device`；`unauthorized` 需要在手机上确认授权。
-- `setup-adb.ps1` 支持 `-Serial`、`-AdbPath`、`-AllDevices` 和 `-Install`。
-  它将视频端口 27183、输入端口 27184 映射到电脑；拔插设备或重启 ADB 后需重新运行。
+- Host 自动为已授权的 USB 手机建立视频端口 27183、输入端口 27184 的转发，
+  并在转发丢失或 ADB 重启后重新建立。手机仍需启用自动连接；底层 USB 设备不可用时无法恢复。
+  分发时保留 `dist/platform-tools`，其中包含构建脚本复制的 ADB、DLL 和许可证。
+- Host 自行启动 ADB 时默认使用 Windows 原生 USB 后端（`ADB_USB_LEGACY=1`），
+  避免本机在 37.0.1 新后端下反复发生的 USB 读取中断。它不会重启已有 ADB 服务，
+  也不会改写系统环境变量；显式设置该变量时尊重用户选择。
+  该兼容选项见 [Android 平台工具版本说明](https://developer.android.com/tools/releases/platform-tools)。
+- `setup-adb.ps1` 仍支持 `-Serial`、`-AdbPath`、`-AllDevices` 和 `-Install`。
+  需要外部工具管理端口时使用 Host 的 `--no-usb`；自动恢复不会覆盖映射到其他 Host 的端口。
 - 电脑需支持 Windows Graphics Capture 和同一 GPU 上的 D3D11 硬件 H.264 编码器，
   手机需支持目标分辨率与帧率的硬件 H.264 解码器。不支持时会报错，不静默改用软件编解码。
 - 同时六押和操作 Field 需要至少七个触点，实际触点上限取决于手机硬件。

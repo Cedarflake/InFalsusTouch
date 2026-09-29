@@ -23,6 +23,16 @@ try {
   if (-not $CoreOnly -and -not $SkipDistCopy) {
     New-Item -ItemType Directory -Force -Path (Join-Path $repoRoot 'dist') | Out-Null
     Copy-Item -LiteralPath 'build\windows\windows\Release\InFalsusTouchHost.exe' -Destination 'dist\InFalsusTouchHost.exe'
+    $adbCommand = Get-Command adb -ErrorAction SilentlyContinue
+    $adbPath = Join-Path $repoRoot '.tools\android-sdk\platform-tools\adb.exe'
+    if (-not (Test-Path -LiteralPath $adbPath) -and $adbCommand) { $adbPath = $adbCommand.Source }
+    if (Test-Path -LiteralPath $adbPath) {
+      $platformTools = Join-Path $repoRoot 'dist\platform-tools'
+      New-Item -ItemType Directory -Force -Path $platformTools | Out-Null
+      foreach ($file in @('adb.exe', 'AdbWinApi.dll', 'AdbWinUsbApi.dll', 'NOTICE.txt')) {
+        Copy-Item -LiteralPath (Join-Path (Split-Path -Parent $adbPath) $file) -Destination $platformTools
+      }
+    } else { Write-Warning 'ADB was not found. Include Android platform-tools beside the Host before distributing it.' }
   }
 } finally {
   Pop-Location
