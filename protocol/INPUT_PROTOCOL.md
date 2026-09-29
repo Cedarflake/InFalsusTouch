@@ -1,97 +1,73 @@
-# Input protocol v2
+# 输入协议 v2
 
-Transport: TCP through ADB reverse, Android `127.0.0.1:27184` to the Windows
-IPv4 loopback listener. Up to seven simultaneous controllers; no LAN listener or discovery port.
-TCP_NODELAY is enabled at both ends. No authentication is provided by v2;
-the trust boundary is the local PC and its authorized USB debugging devices.
-Host and Android must be updated together; version 1 peers are rejected.
+输入通过 ADB reverse 从 Android `127.0.0.1:27184` 连接 Windows IPv4 本机监听。最多同时连接 7 台控制器，不监听局域网。两端启用 TCP_NODELAY。
 
-Each frame is exactly 32 bytes. All multibyte values are big-endian, including
-the IEEE-754 binary32 bit representation. Never serialize a native C++ struct.
+v2 没有额外身份认证，信任边界是本机及已授权的 USB 调试设备。Host 和 Android 必须配套更新，v1 客户端会被拒绝。
 
-| Offset | Size | Field |
+## 数据格式
+
+每帧固定 32 字节，所有多字节字段均为大端，包括 IEEE-754 binary32 浮点数的位表示。不得直接序列化原生 C++ 结构体。
+
+| 偏移 | 字节数 | 字段 |
 | --- | --- | --- |
-| 0 | 4 | Magic bytes `49 46 54 31` (`IFT1`) |
-| 4 | 1 | Version = 2 |
-| 5 | 1 | Message type |
-| 6 | 1 | Lane = 1..6 for lane messages; CONFIGURATION uses display mask; otherwise 0 |
-| 7 | 1 | Status = 0 on requests; ACK 0 accepted/Field free, 1 inactive, 2 another device owns Field, 4 this device owns Field |
-| 8 | 4 | Unsigned sequence, starting at 1 per connection |
-| 12 | 4 | Float value, zero unless a Field message |
-| 16 | 8 | Sender monotonic nanoseconds; opaque and echoed in ACK |
-| 24 | 8 | Reserved, must be zero |
+| 0 | 4 | 魔数 `49 46 54 31`，即 `IFT1` |
+| 4 | 1 | 版本，固定为 2 |
+| 5 | 1 | 消息类型 |
+| 6 | 1 | 轨道消息为 1–6；CONFIGURATION 为显示掩码；其他为 0 |
+| 7 | 1 | 请求为 0；ACK：0 已接受且 Field 空闲，1 目标不可用，2 其他设备持有 Field，4 本设备持有 Field |
+| 8 | 4 | 无符号序号，每条连接从 1 开始 |
+| 12 | 4 | 浮点值；Field、ASSIGN_CONTROLS 和 CONFIGURATION 使用，其他为 0 |
+| 16 | 8 | 发送端单调时钟纳秒值，ACK 原样返回；CONFIGURATION 另有定义 |
+| 24 | 8 | 保留，必须为 0 |
 
-| Type | Name | Value / behavior |
+| 类型 | 名称 | 值与行为 |
 | --- | --- | --- |
-| 1 | HELLO | Must be first; release this session's state and establish v2 session |
-| 2 | LANE_DOWN | Lane 1..6; default Shift/A/S/D/F/Space, actual keys follow IF configuration |
-| 3 | LANE_UP | Matching lane release, duplicates harmless |
-| 4 | FIELD_ABSOLUTE | Finite float in [0, 1] |
-| 5 | FIELD_RELATIVE | Finite displacement in [-1, 1]; one wire unit is 1280 mouse units |
-| 6 | RELEASE_ALL | Release this device's keys and Field ownership; clear its focus-loss input barrier |
-| 7 | PING | Liveness request |
-| 8 | FIELD_BEGIN | Claim Field or join its ownership queue; value zero |
-| 9 | FIELD_END | Release Field, allowing the next waiting device to move it; value zero |
-| 10 | ASSIGN_CONTROLS | Integer value 0..127; bits 0..5 enable lanes 1..6, bit 6 enables Field |
-| 128 | ACK | Echo sequence and timestamp, lane/value zero |
-| 129 | CONFIGURATION | Unsolicited Host-to-phone snapshot, described below; never acknowledged |
+| 1 | HELLO | 必须为首包，清空本会话状态并建立 v2 会话 |
+| 2 | LANE_DOWN | 轨道 1–6；默认 Shift/A/S/D/F/Space，实际跟随游戏保存的键位 |
+| 3 | LANE_UP | 释放对应轨道，重复释放无副作用 |
+| 4 | FIELD_ABSOLUTE | 有限浮点值，范围 [0, 1] |
+| 5 | FIELD_RELATIVE | 有限位移，范围 [-1, 1]；一个协议单位等于 1280 鼠标单位 |
+| 6 | RELEASE_ALL | 释放本设备按键及 Field，清除本设备失焦输入屏障 |
+| 7 | PING | 心跳 |
+| 8 | FIELD_BEGIN | 申请 Field 或进入等待队列，值为 0 |
+| 9 | FIELD_END | 释放 Field，交给下一等待者，值为 0 |
+| 10 | ASSIGN_CONTROLS | 整数值 0–127；bit 0–5 启用轨道 1–6，bit 6 启用 Field |
+| 128 | ACK | 返回请求序号与时间戳，轨道和值为 0 |
+| 129 | CONFIGURATION | Host 主动下发的配置快照，不需要应答 |
 
-`FIELD_RELATIVE` is the default gameplay path. Android sends horizontal View-pixel
-displacement divided by 1280, splitting larger moves into ordered valid packets.
-Host multiplies by 1280 and retains fractional mouse units within each gesture.
-One touch pixel therefore corresponds to one injected relative mouse unit,
-independently of Field calibration, window size, video resolution and arrival time.
-Host adds no sensitivity, acceleration, smoothing or speed cap; gameplay sensitivity
-belongs to In Falsus.
+## Field 与多设备
 
-`FIELD_ABSOLUTE` requests a normalized Field position. In the supported In Falsus
-build, Host reads the live Field position and sensitivity and uses relative mouse
-corrections to reach that target. New positions replace pending targets without
-duplicating unconsumed corrections. FIELD_END completes the last target; release,
-disconnect and focus loss cancel it. Unlocked menus and diagnostic windows retain
-the configured OS cursor mapping. See [Field mapping](../docs/FIELD-MAPPING.md).
+默认 FIELD_RELATIVE 将 Android View 水平像素位移除以 1280；超出单包范围时按顺序拆分。Host 乘回 1280，并在同一手势内保留小数余量。一个触摸像素对应一个相对鼠标输入单位，不随校准范围、窗口尺寸、视频分辨率或到包时间变化。灵敏度由 In Falsus 控制。
 
-CONFIGURATION reuses the fixed frame with type-specific fields: lane contains the
-display mask (0..127); status is 0 synced IF bindings, 1 defaults, or 2 unavailable
-bindings/input paused. Sequence is a nonzero configuration generation. Value is
-the integer connected-device count (1..7). Bytes 16..23 hold the six Unity Key
-identifiers in the low 48 bits, lane 1 first; the high 16 bits are zero. Reserved
-bytes remain zero. The client distinguishes this packet before matching pending
-ACK sequence/timestamps. Other packet types retain opaque monotonic timestamps.
+FIELD_ABSOLUTE 表示归一化目标位置。在支持的游戏版本中，Host 只读实时位置与灵敏度，通过相对输入修正。新目标替换待处理目标，不重复发送游戏尚未消费的修正。FIELD_END 完成最后目标；释放、断线或失焦取消目标。未锁定的菜单及诊断窗口仍使用系统光标映射，见 [设置说明](../docs/SETTINGS.md)。
 
-Each device selects its own display mask, including zero for view-only. Selection
-changes release that device's input and require a new RELEASE_ALL barrier. Hidden
-controls are ignored by the host as well as Android. Overlap is allowed and no
-combined control count is imposed. A peer-count-only change does not clear holds.
-IF binding changes release old keys across all sessions before applying new scans;
-the new configuration and fresh barriers prevent stale holds from changing keys.
+Windows 对跨设备持键和重复绑定进行引用计数，仅注入第一次 DOWN 和最后一次 UP。Field 归最早的活动触摸所有，随后按等待顺序交接；等待者的移动被忽略。诊断客户端的移动可隐式申请 Field，Android 则显式发送 BEGIN/END，包括未产生位移的相对模式触点。
 
-Windows counts key holders across devices (and handles duplicated IF key bindings).
-Only the first DOWN and final UP are injected. Field belongs to the earliest active
-touch, then the oldest remaining claimant. Movement from waiting devices is ignored.
-For diagnostic clients, a movement implicitly begins Field ownership; Android sends
-explicit BEGIN/END even for a stationary relative-mode finger.
+每台设备独立选择显示掩码，0 表示仅观看。更改选择会释放本设备输入并要求新的 RELEASE_ALL 屏障；隐藏操作在 Host 和 Android 两端均被忽略。允许设备间选择重叠，没有合计数量要求。仅在线人数变化不会清空长按。
 
-Server ACKs each complete valid request after applying or accepting it, or deciding
-the target is inactive. Direct Field ACKs confirm the target was accepted, not that
-the game has consumed the correction. ACK statuses 2 and 4 are ready states, not focus loss.
-Client RTT includes queueing, USB/TCP, processing and return;
-it is not an end-to-end touch-to-photon measurement. Sequences wrap from
-`0xffffffff` to 0. Unknown types, nonzero reserved fields, invalid lane/status,
-nonfinite/out-of-range values, repeated HELLO or unexpected sequence close TCP.
+## 配置快照
 
-Both implementations must handle partial reads and coalesced TCP packets.
-No allocation is driven by a peer-provided length. A packet must complete within
-500 ms per connection. Android sends PING at least every 100 ms when idle. Windows closes a
-session after 500 ms without a valid packet; Android closes after 750 ms without
-an ACK. Local EOF and explicit disconnect release only that device's contribution;
-other controllers continue. Malformed peers and full reply queues are isolated.
+CONFIGURATION 复用固定帧，字段含义如下：
 
-When the target loses foreground status, the host releases keys and ACKs further
-input with status 1 until RELEASE_ALL is received while the target is foreground.
-The client clears touch state on inactive status and periodically sends the
-barrier; a still-held finger must be lifted and pressed again. This prevents
-stale holds or missed DOWNs when returning from another application.
+- lane：显示掩码，0–127。
+- status：0 为游戏键位同步成功，1 为默认键位，2 为绑定不可用且输入暂停。
+- sequence：非零配置代次。
+- value：整数在线设备数，1–7。
+- 字节 16–23：低 48 位依次保存六个 Unity Key 标识，轨道 1 在先，高 16 位为 0。
+- 保留字节仍为 0。
 
-Reconnect opens a new socket, uses HELLO sequence 1, clears pointers and queued
-events, and requires fresh touches. No held-key state is replayed.
+客户端先识别配置快照，再匹配 ACK 的序号和时间戳。其他包的时间戳保持不透明。游戏绑定变化时，Host 先释放所有会话的旧键，再应用新扫描码，通过配置更新和新屏障防止旧长按切换为新键。
+
+## 应答、超时与恢复
+
+Host 在应用、接受请求或判定目标不可用后返回 ACK。绝对 Field 的 ACK 仅表示接受目标，不表示游戏已消费修正；状态 2 和 4 都表示连接就绪，不属于失焦。
+
+RTT 包含排队、USB/TCP、处理和返回时间，不是触控到画面的端到端延迟。序号从 `0xffffffff` 回绕到 0。未知类型、非零保留字段、无效轨道或状态、非有限或越界值、重复 HELLO、非预期序号均关闭 TCP。
+
+两端必须处理短读和 TCP 粘包。输入包无可变长度，不能由对端字段驱动分配。每包需在 500 ms 内完整接收；空闲时 Android 至少每 100 ms 发送 PING。Windows 在 500 ms 未收到有效包后关闭会话，Android 在 750 ms 未收到 ACK 后关闭连接。
+
+EOF 或主动断开仅释放该设备的贡献，其他控制器继续工作。异常包和满应答队列按会话隔离。
+
+目标失焦后 Host 释放按键，后续输入 ACK 状态为 1，直到目标回到前台并收到 RELEASE_ALL。客户端收到不可用状态后清空触点，定期尝试屏障；持续按住的手指需要先抬起再按下。
+
+重连使用新 socket，从 HELLO 序号 1 开始，清空触点和待发事件，不重放旧长按。

@@ -4,6 +4,12 @@ plugins {
   id("dev.flutter.flutter-gradle-plugin")
 }
 
+val appVersion = rootProject.file("../pubspec.yaml").useLines { lines ->
+  lines.first { it.startsWith("version: ") }.substringAfter("version: ").trim().split("+")
+}
+require(appVersion.size == 2) { "pubspec.yaml must declare version: name+code" }
+val signingPath = providers.environmentVariable("IFT_SIGNING_STORE_FILE").orNull
+
 android {
   namespace = "dev.cedarflake.ift"
   compileSdk = 35
@@ -12,14 +18,25 @@ android {
     applicationId = "dev.cedarflake.infalsustouch"
     minSdk = 26
     targetSdk = 35
-    versionCode = 5
-    versionName = "0.5.0-prototype"
+    versionCode = appVersion[1].toInt()
+    versionName = appVersion[0]
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
   testBuildType = providers.gradleProperty("iftTestBuildType").getOrElse("debug").also {
     require(it in setOf("debug", "profile"))
   }
   buildFeatures { buildConfig = true }
+  if (signingPath != null) {
+    signingConfigs {
+      create("release") {
+        storeFile = file(signingPath)
+        storePassword = providers.environmentVariable("IFT_SIGNING_STORE_PASSWORD").get()
+        keyAlias = providers.environmentVariable("IFT_SIGNING_KEY_ALIAS").get()
+        keyPassword = providers.environmentVariable("IFT_SIGNING_KEY_PASSWORD").get()
+      }
+    }
+    buildTypes.getByName("release").signingConfig = signingConfigs.getByName("release")
+  }
   compileOptions {
     sourceCompatibility = JavaVersion.VERSION_17
     targetCompatibility = JavaVersion.VERSION_17

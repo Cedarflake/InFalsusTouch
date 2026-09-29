@@ -1,91 +1,64 @@
-# Video protocol v1
+# 视频协议 v1
 
-The host listens on **127.0.0.1:27183**. ADB reverse carries it over the authorized
-USB devices. This socket never carries input. Up to seven viewers share one capture
-and encoder; each has an independent configuration, sequence and send queue. New
-viewers wait for the next IDR without restarting existing streams.
+Host 监听 `127.0.0.1:27183`，由 ADB reverse 连接已授权 USB 设备。该通道不传输输入。最多 7 个观看端共享一次采集和编码，各端独立维护配置、序号和发送队列。新观看端等待下一个 IDR，不重启已有视频。
 
-Each packet is a fixed 64-byte, big-endian header followed by exactly the declared
-payload. No native structs are serialized. Validate the complete header before
-allocating a payload. The maximum payload is 4 MiB; configuration is limited to
-64 KiB and error text to 4 KiB.
+## 数据格式
 
-| Offset | Bytes | Field |
+每包包含固定 64 字节大端头部，随后是声明长度的负载，不序列化原生结构体。分配负载前必须完成头部校验。负载上限为 4 MiB，配置上限 64 KiB，错误文本上限 4 KiB。
+
+| 偏移 | 字节数 | 字段 |
 | --- | --- | --- |
 | 0 | 4 | ASCII `IFV1` |
-| 4 | 1 | Version `1` |
-| 5 | 1 | Type: CONFIG=1, FRAME=2, ERROR=3 |
-| 6 | 2 | Flags: bit 0 is IDR; all other bits zero |
-| 8 | 4 | Payload length, nonzero |
-| 12 | 4 | Sequence: CONFIG=0, then FRAME=1,2,..., wrapping at uint32 |
-| 16 | 8 | captureTimestamp, PC nanoseconds |
-| 24 | 8 | encodeTimestamp, PC nanoseconds |
-| 32 | 8 | sendTimestamp, PC nanoseconds |
-| 40 | 8 | Presentation timestamp = captureTimestamp / 1000 |
-| 48 | 2 | Width, even, 128..1920 |
-| 50 | 2 | Height, even, 128..1080 |
-| 52 | 2 | Target FPS, 24..120; default 60 |
-| 54 | 2 | Reserved, zero |
-| 56 | 4 | Requested bitrate, 500000..40000000 bits/s |
-| 60 | 4 | Reserved, zero |
+| 4 | 1 | 版本，固定为 1 |
+| 5 | 1 | 类型：CONFIG=1、FRAME=2、ERROR=3 |
+| 6 | 2 | 标志：bit 0 为 IDR，其余为 0 |
+| 8 | 4 | 非零负载长度 |
+| 12 | 4 | 序号：CONFIG=0，FRAME 从 1 递增，按 uint32 回绕 |
+| 16 | 8 | captureTimestamp，电脑端纳秒值 |
+| 24 | 8 | encodeTimestamp，电脑端纳秒值 |
+| 32 | 8 | sendTimestamp，电脑端纳秒值 |
+| 40 | 8 | presentationUs = captureTimestamp / 1000 |
+| 48 | 2 | 宽度，偶数，128–1920 |
+| 50 | 2 | 高度，偶数，128–1080 |
+| 52 | 2 | 目标 FPS，24–120，默认 60 |
+| 54 | 2 | 保留，为 0 |
+| 56 | 4 | 请求码率，500000–40000000 bits/s |
+| 60 | 4 | 保留，为 0 |
 
-CONFIG contains Annex B SPS and PPS NAL units. Its capture/encode/PTS fields are
-zero and its IDR flag is clear. FRAME contains one Annex B access unit, including
-all slices for that picture; its IDR flag must agree with NAL type 5. Timestamps
-must satisfy capture <= encode <= send, and capture must increase between frames.
-ERROR contains UTF-8 diagnostic text and may appear before or after CONFIG. A
-format change requires reconnect, with a new configuration and IDR. An ERROR
-sequence is informational; the receiver closes the session after reporting it.
+CONFIG 包含 Annex B SPS 和 PPS NAL 单元，采集、编码和 PTS 字段为 0，IDR 标志关闭。
 
-The host uses H.264 Baseline, which forbids B slices, and requests a half-second
-GOP. It verifies output timestamps against submitted samples and rejects frame
-reordering. Driver-specific encoder controls are checked; an unsupported optional
-setting is reported instead of silently being described as active.
+FRAME 包含一个完整 Annex B 访问单元，包括该图像的所有切片。IDR 标志须与 NAL 类型 5 一致；时间戳满足 capture ≤ encode ≤ send，帧间 capture 严格递增。
 
-## Clock definitions
+ERROR 包含 UTF-8 错误文本，可在 CONFIG 前后发送。其序号仅供参考，接收端报告后关闭会话。格式变化必须重连，从新 CONFIG 和 IDR 开始。
 
-All three PC timestamps use QueryPerformanceCounter converted to nanoseconds:
+Host 使用禁止 B 切片的 H.264 Baseline，并请求半秒 GOP。编码输出时间戳须匹配提交样本，拒绝帧重排。可选编码器控制不受驱动支持时如实报告，不将其描述为已经生效。
 
-- captureTimestamp: the WGC callback successfully retrieves a frame. This is an
-  application availability boundary, not game rendering or compositor latency.
-- encodeTimestamp: the encoder produces that frame's complete output sample.
-- sendTimestamp: the sender begins writing the header; it is not network delivery.
+## 时钟与统计
 
-On Android, System.nanoTime records full-packet receive, codec submission and
-decoded-output availability. MediaCodec's frame-rendered callback supplies a
-local presentation timestamp. These are retained in `FrameTiming` for debugging.
-Never subtract a PC timestamp from an Android timestamp. The UI reports local
-stage intervals, not glass-to-glass latency; callback presentation is not a
-measurement of physical display light.
+电脑端三个时间戳均来自转换为纳秒的 QueryPerformanceCounter：
 
-`presentationUs` is used to match codec output to its original packet. Rendering
-supplies a separate Android-local monotonic timestamp to the Surface; the PC clock
-must not schedule the phone's display. The Android diagnostic snapshot also carries
-mean and P95 stage intervals over the last 240 presented frames. No PC-to-phone
-subtraction or one-way network-latency inference is made from that window.
+- captureTimestamp：WGC 回调成功取得帧，表示应用可用边界，不是游戏渲染或桌面合成时间。
+- encodeTimestamp：编码器产生该帧完整输出样本。
+- sendTimestamp：开始写入包头，不表示接收端已经收到。
 
-## Bounds and recovery
+Android 用 System.nanoTime 记录完整接收、提交解码和获得解码输出的时间，MediaCodec 帧呈现回调提供本地呈现时间。这些值保存在 FrameTiming 中用于诊断。
 
-- WGC has two surfaces and a latest-frame slot. Replaced captures are closed.
-- At most three samples are in the encoder. NV12 textures stay referenced by their
-  own MF samples; no surface is overwritten while the encoder owns it.
-- Each viewer uses a 32 KiB socket buffer, at most three queued packets (including
-  initial configuration), a 256 KiB send budget per pump and a 100 ms packet deadline.
-  Immutable encoded payloads are shared. A slow peer loses only its video session;
-  other viewers and the independent input worker remain running.
-- After a bounded encoder warm-up, a PC frame age above 250 ms restarts the stream.
-- Android validates configuration within 5 seconds and partial packets within
-  500 ms. An unchanged source may idle between complete packets.
-- Android holds at most two compressed packets plus at most two submitted codec
-  samples and one current packet. On queue overflow it clears pending packets,
-  discards dependent pictures until the next IDR, flushes and resubmits SPS/PPS.
-- Already decoded pictures older than 120 ms on the phone are not presented.
-- Video reconnect uses capped backoff and starts from fresh CONFIG/IDR. It does
-  not reconnect or replay input. Surface destruction closes the video socket.
+禁止将电脑时间戳减去 Android 时间戳。界面显示本地处理阶段耗时，不是屏幕端到端延迟，呈现回调也不代表物理屏幕发光时间。
 
-Static-window update rate, source frame rate, GPU load, USB behavior and decoder
-support affect delivered FPS. The configured FPS is a ceiling, not a measurement
-of presented frames. Rates above 60 require an updated Android receiver; older
-receivers reject them as unsupported. The wire layout is unchanged. Android
-selects a hardware decoder that advertises support for both the size and rate;
-the phone's display refresh setting alone does not change the Host's stream rate.
+presentationUs 仅用于将解码输出关联到原始包，Surface 呈现使用独立的 Android 本地单调时钟，不能用电脑时钟调度手机显示。诊断快照还包含最近 240 个呈现帧的阶段平均值与 P95，不据此推算单向传输延迟。
+
+## 队列上限与恢复
+
+- WGC 使用两个 Surface 和一个最新帧槽，被替换的帧立即关闭。
+- 编码器最多持有 3 个样本；NV12 纹理由各自的 MF 样本引用，编码器仍持有时不可覆盖。
+- 每个观看端使用 32 KiB socket 缓冲区，最多排队 3 个包（含配置），每次发送循环预算 256 KiB，单包发送期限 100 ms。
+- 编码负载以不可变数据共享。慢速端只断开自身视频，其他端及独立输入线程继续运行。
+- 有界编码预热之后，电脑端帧龄超过 250 ms 会重启视频。
+- Android 在 5 秒内验证初始配置，分段接收的单包限时 500 ms；完整包之间允许静止画面空闲。
+- Android 最多保留 8 个压缩包、2 个已提交解码样本和 1 个当前包。接收时间或采集时间跨度超过 50 ms，或容量溢出时，清空待处理包，丢弃依赖帧直到下一 IDR，然后 flush 并重新提交 SPS/PPS。短时突发立即送入解码，不为填满缓冲而等待。
+- 在手机上已超过 120 ms 的解码帧不再呈现。
+- 视频按有上限的退避间隔重连，从新 CONFIG/IDR 开始，不重连或重放输入。Surface 销毁关闭视频 socket。
+
+静止窗口更新率、游戏帧率、GPU 负载、USB 状态及解码能力都会影响实际 FPS。配置值只是目标上限，不代表已呈现帧数；平均速率也不能排除间歇性卡顿。
+
+超过 60 FPS 需要支持高帧率的接收端，旧接收端会拒绝；协议布局不变。Android 选择声明支持对应尺寸和帧率的硬件解码器，手机刷新率选项不会改变 Host 的视频速率。

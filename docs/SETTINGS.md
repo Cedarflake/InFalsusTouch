@@ -1,218 +1,88 @@
-# Settings and calibration
+# 设置与使用
 
-Android preferences remain on the phone. Windows Field and video preferences
-remain on the PC; neither side uploads configuration to a service.
+连续点两次左上角按钮进入设置。设置自动保存，右上角“恢复默认”需要确认。进入设置或校准会释放全部输入，退出后需要重新触摸。
 
-## Phone
+## 连接
 
-On the tested Xiaomi phone, **three-finger swipe to screenshot** cancels all held
-game controls when a third finger slides. The user confirmed that turning off
-that system shortcut restores two held ground keys plus Field sliding. A screenshot
-does not have to appear for the gesture to intercept touches. Keeping this shortcut
-enabled still causes cancellation on the tested phone; the controller does not change
-the user's system preference.
+先打开游戏和 Windows Host，再连接已开启 USB 调试的手机。Host 自动为已授权设备维护端口转发；在手机“连接”页查看状态和日志，点击“连接 USB”。
 
-Tap the small **Settings** entry twice within two seconds. The first tap uses an
-Android system Toast for “Tap again to open settings”; expiration resets the guard.
-The return control stays at the top left; **Defaults** is at the top right.
-Settings apply and save automatically, with no Save/Cancel footer. Slider changes
-are coalesced while dragging and flushed on release, exit or backgrounding.
-Writes are serialized so incoming status updates cannot overwrite newer edits.
-A failed write uses an Android system Toast and pending edits remain available for retry;
-session settings remain usable. Invalid stored values fall back to defaults
-with a localized system Toast. Immediate feedback for unavailable video, invalid
-settings, invalid calibration and failed actions also uses the same native Toast
-path. These messages do not add banners or alter the connection log. A message
-generated while backgrounded waits until the Activity resumes. Defaults asks for confirmation before resetting phone
-controls and calibration while retaining the chosen language and theme. Canceling
-or dismissing the dialog leaves settings unchanged.
-The sidebar order is **Connection, Touch, Controls, Picture, Other**.
-**Other** holds English/Chinese and Light/Dark/System appearance; changes take effect immediately.
-The app fills the physical screen. Settings transitions keep a fixed Flutter surface;
-only controls and text avoid the camera cutout. USB actions and connection details
-live in **Connection**, which opens first when disconnected. The latest transport
-log is inside the USB card; automatic discovery remains in a separate section. The
-status and action share a row, with connected devices in a small header badge.
-The action keeps fixed bounds and centered text. The inset log retains the latest
-connection outcome during retries; progress appears in the status row. Real content
-changes resize the card smoothly, honoring reduced-motion settings. Empty metrics
-have no reserved height; RTT remains in performance statistics. Gameplay shows only
-a 48 dp settings entry with equal 8 dp edge margins;
-it switches corners only if the actual cutout overlaps. UI buttons/chips use full
-pill shapes, the settings entry is circular, and cards have larger 32 dp corners.
-Gameplay lane shapes are unchanged. In Aligned mode, a partial key selection keeps
-each button at its calibrated video track position, leaving hidden lanes empty.
-Fixed and Reserved modes pack selected keys in lane order and center the group.
-Drawing and hit testing share the same regions; key numbers and bindings retain
-their original lane identity. Showing all six keys keeps the original chart layout.
-Field and video placement remain independent. Settings use the full screen
-width; only controls intersecting an actual cutout receive local padding.
+“自动寻找 USB Host”开启后，会在应用处于前台时尝试恢复连接，重试间隔从 0.5 秒逐步增加到 4 秒。手动断开会停止本次重试。切到后台会关闭输入和视频，回到前台时按自动连接设置处理。
 
-| Setting | Default / bounds |
+连不上时依次检查：
+
+1. 数据线是否支持数据传输，手机是否已确认 USB 调试授权。
+2. Host 是否仍在运行，是否选中了 In Falsus。
+3. Windows 压缩包是否完整解压，`platform-tools` 是否仍在 Host 旁边。
+4. Host 与游戏是否使用相同权限等级，手机和 Host 是否为配套版本。
+
+开发者可用 `platform-tools/adb.exe devices -l` 检查设备：`device` 表示已授权，`unauthorized` 表示仍需确认。USB 底层设备已消失时，应用重连无法替代线缆或设备恢复。
+
+## 触控与校准
+
+Field 默认使用**相对移动**：按下建立起点，水平滑动产生位移，抬手后可以换位置继续滑。灵敏度在 In Falsus 中调整，Host 不添加额外倍数、加速或平滑。
+
+实验性**绝对定位**会尝试在按下时移动到手指对应位置，随后跟随手指。目前仅适配校验通过的 In Falsus 1.0.4b；其他版本使用相对模式。它只读游戏状态并发送普通鼠标输入，不修改游戏内存或灵敏度。
+
+在“触控”中可以调整按钮高度、透明度、亮度、间距及按键震动。震动仅在一条轨道从未按下变为按下时触发，遵循系统触觉反馈设置；长按、抬手及 Field 滑动不重复震动。
+
+布局选择：
+
+| 布局 | 行为 |
 | --- | --- |
-| Language | System initially; English or 中文 can be chosen and persisted |
-| Theme | Dark initially; Light, Dark or System can be chosen and persisted |
-| Visible controls | All six lanes and Field; any subset including none is valid and saved per phone |
-| Field mode | Relative; Absolute remains experimental |
-| Layout | Aligned Field + Floor; fixed Overlay and Reserved are also available |
-| Video scaling | Fit: complete, centered, undistorted image; Stretch changes proportions; Crop hides edges |
-| Prefer 120 Hz display | On; requests 120 Hz for the controller window, subject to system policy |
-| Button touch height | 40%; 10–50%; extends aligned keys upward without moving judgment lines |
-| Field height | 65%; 10–100%, clipped above the lane region |
-| Phone Field left / right | 0% / 100%; left must be smaller than right |
-| Lane opacity | 45%; 0–100% |
-| Lane gap | 2 dp; 0–20 dp; hit regions remain contiguous |
-| Lane brightness | 100%; 10–100% |
-| Labels | On |
-| Button vibration | Off; optional native feedback on game-key press |
-| Video statistics / Field outline | Off |
-| Find USB Host automatically | Off; opt in for foreground retry |
-| Settings entry | Two taps within two seconds; no expanded gameplay toolbar |
+| 轨道对齐 | 按钮沿游戏判定线排列；只显示部分按键时，仍保留各自的轨道位置 |
+| 固定布局 | 所选按钮作为一组居中 |
+| 预留按键区域 | 画面显示在按钮上方的区域，所选按钮居中 |
 
-Field uses horizontal relative movement by default. Adjust mouse sensitivity in
-In Falsus. Touch-down establishes a new origin without moving Field, so lifting
-and touching elsewhere does not reposition it. On upgrade, preferences written
-before this change switch to Relative without resetting language, theme, visible
-keys or calibration. Explicitly selecting experimental Absolute afterward is
-persisted normally. Absolute now targets the game Field directly in the supported
-In Falsus 1.0.4b build: touch-down repositions it, movement follows the finger and
-lift completes the final position. Host reads effective sensitivity on every
-correction, so no particular game sensitivity is required. Other game builds need
-Relative until their state layout is verified. Physical picture-to-finger alignment
-still depends on the phone's judgment-line calibration.
+轨道对齐需要与实际游戏画面一致。在谱面判定线清晰可见时，连接视频并打开“校准游戏判定线”，依次选择 Field 左右端点、中间地键左右端点、两侧外端点。坐标相对于画面保存；这是手动校准，并非动态识别轨道。
 
-**Button vibration**, under Touch, uses Android's native virtual-key feedback on
-the first press of each lane. Held keys, additional fingers on an already-held lane,
-release and Field sliding do not generate extra pulses. It saves automatically and
-does not wait for Host acknowledgements. It follows the phone's system haptic setting;
-see [Android haptic feedback](https://developer.android.com/develop/ui/views/haptics/haptic-feedback).
+Field 的下边界与按钮上沿相接，包括两侧斜线。按钮绘制和触摸命中使用同一套区域；画面之外的留黑区域不能获得轨道对齐触点。固定布局的 Field 范围校准用于设置左右端点，最小跨度为控制区域宽度的 5%。
 
-Fit is the recommended reading mode. A 16:9 game occupies 1920 x 1080 pixels on
-a 2400 x 1080 phone, with 240-pixel side bars. App UI insets do not resize this
-picture. Video, lane controls and Field calibration share physical screen coordinates.
-The default Aligned layout centers video on the screen; Reserved centers it in
-the smaller area above the lanes. Crop would hide 135 pixels at each of the top
-and bottom edges when filling this phone, potentially obscuring notes or the
-judgment line. It is available only as an explicit choice.
+## 按键显示与多人合作
 
-Display refresh and video FPS are independent. The high-refresh preference
-requests 120 Hz for touch feedback; the video Surface still reports the source
-FPS. Gameplay statistics use one right-aligned, translucent line for presented
-video FPS, actual panel Hz and input RTT. The Picture settings page retains the
-detailed statistics in a separate card: a responsive grid aligns metric labels,
-tabular numbers and units, with queue depth and session drops below. The card header
-shows the PC source resolution and configured video FPS from the received stream.
-Turning the preference off returns the
-window to system selection, not a forced 60 Hz mode. Device policy and power
-saving may override the request; no global display settings are changed.
+每台设备独立选择六个按键与 Field，也可以只显示画面。最多连接 7 台设备，不要求各台选择的操作总数等于 7；允许重叠，剩余操作也可以由电脑键鼠承担。
 
-Aligned layout follows the upper Field line, the four central Floor lanes and
-the two slanted side judgment lines. Coordinates are stored relative to the
-encoded picture, so Fit/Stretch/Crop share the same transform for video and touch.
-Invisible crop regions and letterbox bars cannot acquire a pointer. Buttons grow
-upward to the selected height; Field accepts horizontal movement above the buttons.
-Its touch boundary and optional outline meet the buttons' actual upper edges,
-including the side slopes, so lowering the buttons does not leave an unresponsive
-strip below Field. Judgment-line calibration does not limit this touch height.
-The default 40% button height is independent of the lower judgment-line height.
-Pressed fills and judgment highlights are rendered locally and stay active until
-the last finger on that lane lifts. The Field marker shows the local touch position,
-not a confirmation of the PC game's cursor position.
-Each lane places a large bold number above a smaller synchronized IF key name.
-Both lines are centered, with consistent type sizes and fitting for long key names.
+多台设备按住同一按键时，最后一台松手才释放。Field 由先触摸的设备控制，松手后交给等待中的设备；等待时本机显示不同颜色的反馈。多人连接已通过模拟测试，真实多机协作仍待验证。
 
-**Controls / 按键显示** uses seven independent chips with current IF key names.
-A top information card combines the seven-device cooperative play explanation
-with key synchronization and IME guidance. The selection card follows without additional help text.
-Hidden lanes cannot acquire a touch. Selected keys keep their track positions in
-Aligned mode and center as a group in Fixed and Reserved modes; widths are preserved.
-All / Keys only / Field only / View only presets affect only this device. In Field-only
-mode the gesture region extends farther down the picture. Other phones can overlap
-these choices, and unassigned operations may be handled by the PC keyboard/mouse.
-There is no forced sum across devices. The connection count includes view-only phones.
-If another phone currently owns Field, local feedback is amber until ownership passes.
+Host 只读游戏保存的键位文件：
 
-**Align game judgment lines** records six taps: Field left/right, central Floor
-left/right, then the outer left/right side-line endpoints. Points use video
-coordinates and are rejected when reversed or overlapping. Calibrate with visible
-gameplay lines. The preset was observed in the installed game's 16:9 tutorial;
-it is not automatic chart recognition. Existing saved layouts remain selected.
+```text
+%USERPROFILE%\AppData\LocalLow\lowiro\infalsus\userV2.prefs
+```
 
-The fixed-layout Field calibration screen covers the same usable display area as the
-controller; its toolbar separately avoids the cutout. Tap the comfortable left
-edge, then the right edge, within the Field region. The minimum calibrated span
-is 5% of the controller width. Save commits the range; Cancel leaves it unchanged.
-Opening calibration first saves any pending settings. Editing an
-unrelated setting preserves the full precision of calibrated endpoints.
+支持已验证的键盘绑定格式；遇到未知绑定会暂停输入。更换绑定后会释放旧键，并要求重新按下。建议使用英语（美国）键盘布局，中文输入法的英文输入状态仍可能被 Shift 切换。
 
-All input is released and disabled during settings/calibration. After closing,
-fresh pointer-down events are required; old held fingers are never replayed.
+## 画面与性能
 
-Automatic discovery uses only the fixed localhost control endpoint provided by
-ADB reverse. Start Host and run `scripts/setup-adb.ps1` first. Failed connections
-retry at 0.5, 1, 2, then 4 seconds while the app is foregrounded. Manual Disconnect
-stops retries. Backgrounding closes both input and video sessions. Reopening
-the app connects again if automatic discovery is enabled. Unplugging USB or
-restarting ADB may require running the PC setup script again.
+默认完整、居中显示游戏画面。拉伸会改变比例，裁剪可能遮住音符或判定线，需要自行选择。音频仍由电脑播放。
 
-## PC
+“优先 120 Hz”请求手机使用高刷新率，但不改变 Host 的视频帧率；系统省电与设备策略也可能影响实际刷新率。游玩时统计显示在右侧半透明单行，详细数据位于“画面”页。
 
-Host loads `%LOCALAPPDATA%\InFalsusTouch\host.ini` if it exists. `--profile PATH`
-selects another file. Explicit CLI settings override loaded values regardless
-of argument order. `--save-profile` writes Field/video settings and exits;
-it does not start capture or input injection. `--no-profile` ignores defaults.
-Dry-run tests ignore the default file, but can load an explicitly named profile.
-
-| Option | Default / bounds |
+| 统计 | 含义 |
 | --- | --- |
-| `--field-left`, `--field-right` | 0.05 / 0.95; normalized selected client, left < right |
-| `--field-y` | 0.5; normalized fixed client Y |
-| `--resolution` | `720p`; also `1080p` |
-| `--fps` | 60; 24–120 |
-| `--bitrate` | 8000000; 500000–40000000 bits/second |
+| 呈现 / 接收 FPS | 手机呈现回调及视频接收的统计速率 |
+| 屏幕 Hz | 系统报告的屏幕刷新率 |
+| 输入 RTT | 输入协议发送到收到 ACK 的往返时间 |
+| 接收至呈现、解码、采集至编码 | 对应处理阶段在同一设备上的时间 |
+| 队列、会话丢帧 | 当前排队数量及本次视频会话的丢弃计数 |
 
-For a 120 Hz phone, `--resolution 720p --fps 120` requests an experimental 120 FPS stream.
-Use the updated Host and APK together. The phone display preference is independent
-of this setting; actual capture, encoding and presentation must keep up with the
-requested rate. The default remains 60 FPS. Compare delivered FPS and latency
-before saving a higher rate, especially at 1080p or with multiple viewers. The
-connected phone has not passed the 120 FPS presentation gate; see the measured
-results in [STATUS.md](STATUS.md#high-frame-rate-probe-2026-09-29).
+这些数值不是完整的触控到发光延迟。呈现回调也不等于物理屏幕测量。排查卡顿时应同时对照接收、呈现、队列和丢帧变化，不能仅凭平均 FPS 或 RTT 判断。高帧率模式预留少量送显余量来减少突发覆盖；实际表现取决于设备和运行负载。
 
-Relative Field preserves horizontal View-pixel displacement as mouse movement
-units. Calibration no longer changes the amount of movement, and a swipe can
-continue beyond the calibrated Field edges. This conversion does not depend on
-game window size, video resolution or packet arrival times. Fractional units carry into subsequent movements within
-the gesture. Host adds no sensitivity multiplier, acceleration, smoothing or speed
-cap; adjust gameplay sensitivity in In Falsus. The Windows input path remains
-SendInput, and the app does not change system mouse settings.
+Host 默认发送 720p / 60 FPS / 8 Mbps。退出 Host 后，可在其目录用 PowerShell 修改并保存配置，再重新打开：
 
-`--calibrate` controls OS cursor mapping for menus and diagnostic targets. It does
-not change direct gameplay positioning. It selects a game window and
-records the PC cursor at three prompts:
-left endpoint, right endpoint, and fixed height. Keep the console focused and
-the game visible beside it, move the mouse without clicking, then press Enter.
-Type `q` to cancel. Points outside the game client, reversed endpoints, or a
-window that moves/resizes/closes invalidate the calibration without saving.
-The result uses physical client coordinates and does not affect relative input.
-Restart Host after calibration to use the saved values.
+```powershell
+.\InFalsusTouchHost.exe --resolution 720p --fps 60 --bitrate 8000000 --save-profile
+```
 
-The earlier OS-absolute approach failed normal-chart probes. The replacement reads
-game Field state through a read-only process handle, checks the supported binary's
-SHA-256, and sends ordinary relative mouse input. It never writes game memory or
-changes game sensitivity. Repeated targets and a 120-events/second sweep passed
-game-state checks; complete physical phone-to-picture acceptance remains open.
-Phone judgment alignment and PC cursor calibration are separate. Do not infer
-in-game alignment from GetCursorPos alone.
-See [the Field investigation](FIELD-MAPPING.md) for the current evidence.
+`--fps 120` 可以请求实验性高帧率。它是目标上限，不保证实际达到；先观察运行效果，再决定是否保存。视频分辨率支持 `720p`、`1080p`，帧率范围 24–120，码率范围 500000–40000000 bits/s。
 
-Profiles are a bounded UTF-8/ASCII `key=value` format, saved with `version=2`.
-Version 1 files still load: valid legacy sensitivity/acceleration/smoothing/speed
-values are ignored with a console notice, while calibration and video settings
-are preserved. Saving rewrites them as version 2 without those retired values.
-The old CLI flags are rejected with guidance to use In Falsus's sensitivity setting.
-Unknown, duplicate, malformed or unsupported values are errors. Save flushes a temporary
-file then replaces the destination; a failed validation leaves the existing
-file unchanged. Window handles, diagnostic flags, port overrides and trace paths
-are session options and are not persisted. Copying the default profile to a
-named path is sufficient for keeping multiple game/window calibrations.
+默认配置保存于 `%LOCALAPPDATA%\InFalsusTouch\host.ini`。`--profile PATH` 使用另一份配置，命令行值覆盖文件值，`--no-profile` 忽略默认文件。`--save-profile` 保存后退出，不启动控制或采集。
+
+## 其他与已知限制
+
+“其他”包含语言和主题，可以选择中文、英语及系统、浅色、深色主题。
+
+系统三指截屏等快捷手势可能在没有显示截屏界面时就取消应用触摸。本机验证中关闭“三指滑动截屏”后恢复正常；目前应用无法在该手势开启时保证三指不断触，也不会自行修改系统设置。
+
+输入仅在游戏处于前台时生效。正常断线会释放该设备的输入，静默断线由约 500 ms 心跳超时检测；强制杀进程或系统崩溃不能保证执行清理。
+
+发布签名与此前开发包不同，首次迁移不能直接覆盖安装。卸载旧包会清除设置，请先自行记录；后续发行版使用相同发布签名更新。

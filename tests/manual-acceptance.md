@@ -1,162 +1,36 @@
-# Physical-device and game acceptance
+# 实机验收清单
 
-Status: physical gameplay checklist not executed. Android 14 device instrumentation
-and real USB transport to a dry-run Windows host passed on 2026-09-29; see
-`docs/STATUS.md`. These automated checks do not replace physical gameplay tests.
+自动化测试不能替代手指操作与完整谱面验证。记录应用版本、Host 版本、手机型号、Android 版本、游戏版本和视频配置；仅保留本次需要的日志，不将个人设备信息提交到仓库。
 
-## Setup
+## 连接与输入
 
-- Build both artifacts, connect an authorized USB phone and run setup-adb.ps1.
-- Select the running In Falsus window, open the app and focus the game.
-- Check that the six labels match IF's saved bindings (defaults: Shift, A, S, D, F, Space).
-- Select the plain US English keyboard layout for the game. Merely toggling an
-  IME to English typing mode is insufficient when Shift itself is a lane key.
-  Record the layout reported by Host before testing; restore the previous layout afterward.
+- 首次授权、手动连接、自动重连、拔插数据线和 Host 重启。
+- 长按一个地键，另一指反复短按其他地键，长按不被释放。
+- 两指长按地键，第三指滑动 Field，确认触点归属和抬手行为。
+- 六键及 Field 的实际多指能力，不能用合成事件代替。
+- 失焦、进入设置、切后台和断线后释放按键；恢复后旧手指不重放输入。
+- 三指截屏开启时的系统拦截单独记录，不更改用户系统设置。
 
-## Touch and input
+## 布局与设置
 
-- Each lane triggers its matching key; release ends that key immediately.
-- Two-, three- and six-key chords work; long holds survive other fingers tapping.
-- Put two fingers on one lane, lift one, confirm the remaining hold continues.
-- Slide a lane finger across all other lanes: ownership must stay on the origin.
-- Slide a Field finger continuously while other fingers hold and tap lanes.
-- Add a second Field finger: it must not steal control. Lift the owner: the
-  second finger must not be promoted until it is lifted and pressed again.
-- Rapidly tap the same lane and alternating lanes; confirm no missed UP/stuck key.
-- Use Relative Field and tune sensitivity in In Falsus. Compare slow/fast swipes,
-  tiny corrections, direction reversals and simultaneous six-key holds.
-- In Relative mode, lift and re-touch at another position: Field must not jump. Test ownership
-  handoff between devices without replaying the waiting device's movements.
-- Compare the same swipe with different game window positions, sizes and DPI.
-  Host uses a fixed conversion; record any game-dependent differences separately.
-- Confirm fresh installs and upgraded preferences select Relative, and that
-  language, theme, visible controls and calibrated coordinates survive upgrade.
-- In Absolute mode on the supported build, touch-down must immediately reposition
-  Field and sliding must follow the finger. Repeat left/center/right targets,
-  lift and re-touch elsewhere, then change IF sensitivity and repeat. Game-state
-  tests passed; physical touch/video alignment remains a separate check.
-- Enable Button vibration in Touch settings: each new game-key press should give
-  one brief system pulse. Holding, release, a second finger on the same held lane
-  and Field sliding must not add pulses. Disable it and repeat; confirm the choice
-  survives relaunch and respects the system haptic preference.
-- In Aligned mode, verify four central keys and two side keys at both the enlarged
-  upper button area and the judgment line. Fit bars must not trigger input.
-- Adjust button height without moving the picture or judgment references. Field
-  starts above the buttons; its Y coordinate does not move the PC pointer vertically.
-- At 30% and 10% button heights, start Field touches just above central and slanted
-  key edges. The visible Field outline must meet those edges without a dead strip;
-  a touch just below the edge must still belong to the key.
-- Verify immediate pressed fills, last-finger release and a distinct local Field marker.
-- Use six-point judgment calibration with actual gameplay visible; verify rescaling
-  keeps the touch geometry attached to the same chart positions.
+- 轨道对齐模式下只选部分按钮，位置仍与原轨道对应；其他布局居中。
+- Field 与按钮边界没有触摸空隙，视觉反馈和实际命中一致。
+- 中英文、深浅主题、长键名、全面屏与刘海区域无溢出或跳动。
+- 自动保存、恢复默认确认、连续两次进入设置及原生提示正常。
 
-## Lifecycle and failure
+## 画面与游玩
 
-- Hold all six lanes, disconnect in the app: verify all keys are released.
-- Repeat while unplugging USB, closing the Host with Ctrl+C and backgrounding
-  the app. Record detection times; silent dead links use the 500 ms watchdog.
-- Hold keys, switch PC foreground window: no input should continue there.
-- Return to the game: old fingers must be lifted before fresh input is accepted.
-- Reconnect, including after restarting ADB/reverses: no old holds are replayed.
-- Rotate between the two landscape orientations while holding: state clears.
-- Open Android system UI / lose Activity focus: held input is cleared.
-- Close or minimize the selected game: release occurs and no new input is injected.
-- Try mismatched process privileges: failures must produce explicit diagnostics.
+- 完整显示、裁剪与拉伸的画面坐标和触控坐标一致。
+- 60 FPS 与 120 FPS 分别记录接收、呈现、队列、丢帧及帧间隔。
+- 记录间歇性掉帧发生时刻，区分短时卡顿和平均速率不足。
+- 进行完整谱面及持续游玩，分别关注输入、画面和声音同步。
+- 独立验证相对 Field 与支持版本的实验性绝对 Field。
 
-## Interface and cooperative play
+## 多设备与发行包
 
-- Open and close settings repeatedly: app backgrounds must fill the screen and
-  neither the settings nor the underlying game picture should briefly stretch.
-- Check Chinese and English, consistent corners and large numbers above smaller
-  synchronized key names. Long key names must fit without moving adjacent controls.
-- Connect with Host absent, start Host, cancel a pending retry and disconnect.
-  Feedback must be immediate; button positions must remain fixed through every state.
-- The gameplay screen must show only the small settings entry with equal edge
-  margins, avoiding the actual cutout. First tap shows an Android system Toast without
-  opening settings; the second within two seconds opens it. A late second tap
-  must start a new confirmation. USB controls belong only in the Connection page.
-- Check that the return control stays at the top left. The confirmed opening tap
-  must not activate it; an intentional return tap must close settings.
-- Change settings and leave without a Save action: changes must persist. Defaults
-  must first show a confirmation; Cancel or system Back must preserve all values,
-  and confirming must retain language and theme while resetting controls/calibration.
-- During repeated failed USB retries, the last result remains readable in the log.
-  The status/action row stays in place; actual content changes resize smoothly.
-- Try judgment calibration without video and invalid calibration points. Immediate
-  feedback must be a native Android Toast in the selected language, without changing
-  connection details or adding a page banner. A failed settings save retains edits
-  for retry and its Toast remains visible across page changes.
-- Connect two or more physical phones with setup-adb.ps1 -AllDevices. Each can
-  select any subset of the six keys and Field, including no controls. Saving on one
-  phone must not alter another phone's choices, and relaunch must preserve choices.
-- Select one key, nonadjacent keys, and five keys. The visible group must be centered,
-  preserve key shapes and labels, and trigger the original lane IDs at the new positions.
-  Empty space must not send hidden-key input. Restoring six keys restores the chart layout.
-- Hold a shared key on two phones and release or unplug one. The remaining phone's
-  hold must continue. PC keyboard/mouse participation has no required coverage sum.
-- Touch Field on two phones. The first owner retains control; release hands it to
-  the waiting phone. A spectator or hidden control must never produce input.
-- Change IF bindings while connected, then press fresh touches: the old keys must
-  be released, all labels updated, and the new physical keys used. Unsupported
-  binding states must pause input with an explanation.
-- Seven simulated clients passed automated checks; seven physical phones still
-  require a hardware acceptance run, including hub bandwidth and power behavior.
+- 真实多台设备同时操作、重叠按键、Field 交接、仅看画面与单台断连。
+- 从发行 ZIP 完整解压后启动 Host，确认随包 ADB 可用。
+- 验证发布 APK 的签名、版本及安装；更新保留设置。
+- 开发包转发布包前先记录设置，未经用户同意不卸载应用。
 
-## Record
-
-| Item | Evidence |
-| --- | --- |
-| Phone / simultaneous pointer capacity | Not tested |
-| Android / Windows / In Falsus version | Android 14/API 34; In Falsus 1.0.4b |
-| Six-key + Field simultaneous operation | Not tested |
-| USB disconnect release timing | Not tested |
-| Real SendInput accepted by game | USB Shift+Space starts tutorial; full six-key gameplay remains open |
-| Absolute Field touch-to-marker alignment | Replacement passed game-state repeated targets and 120-event/s sweep; physical phone/video alignment remains open; see [investigation](../docs/FIELD-MAPPING.md) |
-| Measured control RTT (method/sample count) | Four end-of-run USB software-input samples during video: 6.50/3.19/3.53/2.84 ms; physical finger-to-game latency remains unmeasured |
-
-## Video and sustained gameplay
-
-The automated video test covers a Direct3D color pattern, WGC, hardware H.264,
-real USB, MediaCodec output pixels, seven synthetic pointers and reconnect. It
-does not substitute for the following checks with In Falsus:
-
-- Use an AOT profile build for performance measurements and record the app build
-  mode with the video profile. Debug/JIT measurements are a separate baseline.
-- Play varied, visually busy charts for at least 15 minutes at 720p60. Record
-  receive/decode/present FPS, phone drops, queue depth, input RTT and thermals.
-- Confirm long holds and rapid chords remain reliable while video is busy.
-- Minimize, restore, resize and move the game between monitors; the capture must
-  recover and Field coordinates must continue matching the selected client area.
-- Disconnect/reconnect USB with both video and keys active; re-run ADB setup if
-  the reverse mapping is gone. No held input may be replayed.
-- Background/resume, rotate and recreate the phone Surface repeatedly. Confirm
-  codec resources and socket counts stay bounded. The 2026-09-29 profile
-  instrumentation passed three rounds each of Activity recreation, task
-  background/resume and Surface destruction/recreation during 720p60 playback,
-  including six held keys and no stale gesture replay. Scoped I/O workers cleaned
-  up and socket counts were stable by phase; physical rotation and long-session
-  memory behavior remain untested.
-- Test 1080p60 and bitrate/FPS alternatives during actual charts. Short 720p60 and
-  1080p60 pattern runs passed on the connected Android 14 phone on 2026-09-29.
-- Host accepts experimental rates up to 120 FPS, but this phone's corrected
-  720p120 interaction probe reported only 93.27 presentation callbacks/s. The
-  subsequent Surface-hint comparison reported 43.28–98.38 across its phases,
-  with irregular presentation also visible in compositor history. Both failed
-  their throughput gates. Keep the 60 FPS baseline until presentation and latency improve;
-  display refresh rate and decoder format support are not throughput results.
-- Test unsupported codecs and GPU/device-loss failures: video errors should be
-  explicit and must not block input cleanup.
-- Use high-speed external recording for physical touch-to-photon latency. Do not
-  infer it by adding timestamps from unsynchronized PC and phone clocks.
-- Keep codec-reported and compositor-reported presentation times distinct. Exact
-  same-frame matching found a 5.35–5.72 ms difference in ten sampled frames on this
-  phone; this is not a global correction or a measured reduction in actual delay.
-- For Late-heavy play, compare the same chart segment using phone controls while
-  watching the PC and then the phone. Keep game offsets and sound setup unchanged
-  during comparison; separately record muted visual play and PC-audio play.
-- Distinguish measured pipeline delay from in-game calibration. The inspected
-  1.0.4b audio offset changes the clock shared by input and track rendering; it
-  cannot independently compensate delayed video during muted visual play. Follow
-  [the timing comparison procedure](../docs/TIMING-CALIBRATION.md#practical-verification)
-  and verify direction again for other binaries before suggesting a value.
-  Retest after any video optimization; a constant offset does not correct jitter.
+真实多机协作与完整谱面的持续表现仍需实机验证。帧率与停顿应记录实际测量值，不能把目标 120 FPS 写成所有设备都能恒定呈现。

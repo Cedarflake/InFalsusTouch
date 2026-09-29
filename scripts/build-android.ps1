@@ -2,10 +2,17 @@ param(
   [switch]$SkipLint,
   [switch]$DeviceTests,
   [switch]$SkipFlutterChecks,
-  [ValidateSet('debug', 'profile')][string]$Mode = 'debug'
+  [switch]$Offline,
+  [ValidateSet('debug', 'profile', 'release')][string]$Mode = 'debug'
 )
 $ErrorActionPreference = 'Stop'
 $Mode = $Mode.ToLowerInvariant()
+if ($Mode -eq 'release') {
+  if ($DeviceTests) { throw 'Use profile mode for device instrumentation tests.' }
+  foreach ($name in @('IFT_SIGNING_STORE_FILE', 'IFT_SIGNING_STORE_PASSWORD', 'IFT_SIGNING_KEY_ALIAS', 'IFT_SIGNING_KEY_PASSWORD')) {
+    if (-not [Environment]::GetEnvironmentVariable($name, 'Process')) { throw "Missing release signing environment variable: $name" }
+  }
+}
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $flutterCommand = Get-Command flutter -ErrorAction Stop
 $flutterSdk = Split-Path -Parent (Split-Path -Parent $flutterCommand.Source)
@@ -32,7 +39,7 @@ try {
 $env:JAVA_TOOL_OPTIONS = "$env:JAVA_TOOL_OPTIONS `"-Djdk.net.unixdomain.tmpdir=$javaSocketDir`"".Trim()
 $gradle = Join-Path $repoRoot '.tools\gradle-8.11.1\bin\gradle.bat'
 if (-not (Test-Path -LiteralPath $gradle)) { $gradle = Join-Path $repoRoot 'android\gradlew.bat' }
-$variant = if ($Mode -eq 'profile') { 'Profile' } else { 'Debug' }
+$variant = (Get-Culture).TextInfo.ToTitleCase($Mode)
 $tasks = @(':settings:test', ':touch:test', ':transport:test', ':video:testDebugUnitTest', ":app:assemble$variant")
 $hostExecutable = Join-Path $repoRoot 'build\windows\windows\Release\InFalsusTouchHost.exe'
 if (Test-Path -LiteralPath $hostExecutable) { $env:IFT_HOST_EXE = $hostExecutable }
@@ -41,13 +48,17 @@ if ($DeviceTests) { $tasks += ":app:assemble${variant}AndroidTest" }
 Push-Location (Join-Path $repoRoot 'android')
 try {
   $ErrorActionPreference = 'Continue'
-  & $gradle --no-daemon --console=plain "-PiftTestBuildType=$Mode" @tasks
+  $testMode = if ($Mode -eq 'release') { 'debug' } else { $Mode }
+  $gradleOptions = @('--no-daemon', '--console=plain', '--max-workers=1',
+    '-Dorg.gradle.jvmargs=-Xms32m -Xmx512m -XX:+UseSerialGC -XX:ReservedCodeCacheSize=64m -Dfile.encoding=UTF-8')
+  if ($Offline) { $gradleOptions += '--offline' }
+  & $gradle @gradleOptions "-PiftTestBuildType=$testMode" @tasks
   $buildExit = $LASTEXITCODE
   $ErrorActionPreference = 'Stop'
   if ($buildExit -ne 0) { throw 'Android build or verification failed' }
   $dist = Join-Path $repoRoot 'dist'
   New-Item -ItemType Directory -Force -Path $dist | Out-Null
-  $apkName = if ($Mode -eq 'profile') { 'InFalsusTouch-profile.apk' } else { 'InFalsusTouch.apk' }
+  $apkName = if ($Mode -eq 'debug') { 'InFalsusTouch.apk' } else { "InFalsusTouch-$Mode.apk" }
   Copy-Item -LiteralPath "app\build\outputs\apk\$Mode\app-$Mode.apk" -Destination (Join-Path $dist $apkName)
 } finally {
   Pop-Location

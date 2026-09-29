@@ -1,58 +1,40 @@
 # InFalsusTouch
 
-通过 USB，把 Android 手机变成 **In Falsus 的触控控制器**。
-在手机上看游戏画面、左右滑动操作 Field，用六个触控按键点按和长按。
+用 Android 手机或平板，通过 USB 游玩电脑上的 **In Falsus**：在手机上看谱，滑动操作 Field，点按或长按六个触控按键。
 
-这是一个非官方项目，为 In Falsus 提供一种可选的触屏玩法。
+这是一个非官方触控控制器，为游戏提供一种可选的玩法。电脑仍负责运行游戏和播放声音。
 
-> **目前是测试原型。** 游戏画面传输和多点输入已实现，游戏内 Field 的绝对位置对齐、
-> 完整谱面实玩尚未完成验收。具体进度见 [验证记录](docs/STATUS.md)。
+[下载预览版](https://github.com/Cedarflake/InFalsusTouch/releases/tag/v0.5.0-preview.1) · [设置说明](docs/SETTINGS.md) · [开发指南](docs/DEVELOPMENT.md)
 
-## 可以怎么玩
+## 能做什么
 
-- 多指点按和长按，按下时显示反馈，按键名称自动跟随游戏保存的键位。
-- 自由选择显示哪些按键，调整触区高度、透明度和布局；游戏画面默认完整、居中显示。
-- 最多 7 台设备连接同一台电脑，各自负责不同按键或 Field，合作玩同一局；电脑键鼠也能参与。多人功能已通过模拟设备测试，真机协作仍待验证。
-- 界面支持中文、英语及深浅主题，设置自动保存。
+- 多指点按、长按与 Field 滑动，按下有视觉反馈，可选按键震动。
+- 按键名称跟随游戏保存的键位；支持轨道对齐、触区调整和判定线校准。
+- 自由选择本机显示的按键，最多连接 7 台设备，分工合作游玩同一局，电脑键鼠也能参与。
+- 游戏画面默认完整、居中显示；界面支持中文、英语、深浅主题，设置自动保存。
 
-## 安装与连接
+## 安装与使用
 
-需要 Windows 11 电脑、支持多点触控的 Android 8.0 及以上手机，以及支持数据传输的 USB 线。
-手机需要开启 USB 调试；视频还需要电脑和手机支持硬件编解码。
+需要 Windows 11、Android 8.0 或更新版本，以及支持数据传输的 USB 线。电脑和手机需要支持 H.264 硬件编解码。
 
-**目前需要自行构建，尚未提供正式发行包。**
-按 [开发指南](docs/DEVELOPMENT.md) 构建后，会得到
-`dist/InFalsusTouchHost.exe` 和 `dist/InFalsusTouch.apk`。
+1. 从发行页下载 Android APK 和 Windows x64 压缩包，将 APK 安装到手机，完整解压 Windows 压缩包。
+2. 手机开启开发者选项和 USB 调试，连接电脑，在手机上确认调试授权。
+3. 电脑打开 In Falsus，再运行 `InFalsusTouchHost.exe`。如出现窗口列表，选择游戏。
+4. 打开手机应用，连续点两次左上角设置按钮，在“连接”中点击“连接 USB”，随后返回游玩界面。
+5. 将电脑焦点切回游戏。建议使用**英语（美国）键盘布局**，避免 Shift 触发中文输入法切换。
 
-1. 手机开启 USB 调试，连接电脑，确认手机上的授权提示。
-2. 在项目根目录运行 `.\scripts\setup-adb.ps1 -Install`，安装应用并配置 USB 连接。
-3. 电脑打开 In Falsus，再运行 `dist/InFalsusTouchHost.exe`；如提示选择窗口，选择游戏。
-4. 打开手机应用，连续点两次（防误触）左上角设置按钮，在“连接”页点击“连接 USB”，连接后返回游戏界面。
-5. 将电脑焦点切回游戏，并选择**英语（美国）键盘布局**，避免 Shift 触发输入法切换。
+Host 会自动维护 USB 转发，请保留压缩包内的 `platform-tools` 文件夹。普通使用无需安装开发环境或运行脚本。多台手机分别连接，在各自的“按键显示”中选择要负责的操作即可。
 
-重新插拔数据线后，可再次运行连接脚本。
-多台设备使用 `.\scripts\setup-adb.ps1 -AllDevices -Install`，然后分别在“按键显示”中选择各自的操作。
+## 预览版须知
 
-## 文档与开发
+当前版本为 **v0.5.0-preview.1**，仍有以下限制：
 
-- [设置与校准](docs/SETTINGS.md)
-- [构建、测试和故障排查](docs/DEVELOPMENT.md)
-- [架构与模块说明](ARCHITECTURE.md)
-- [当前进度与验证记录](docs/STATUS.md)
+- 视频最高支持 120 FPS，实际呈现取决于设备和运行负载。手机的 120 Hz 开关与电脑视频帧率独立，Host 默认发送 60 FPS。
+- 系统三指截屏等快捷手势可能中断多指输入，应用暂时无法绕过。是否关闭由用户自行决定。
+- Field 默认使用相对移动，灵敏度在游戏里调整。实验性绝对定位目前仅适配已验证的 In Falsus 1.0.4b。
+- 多设备连接通过了模拟测试，真实多机协作与完整谱面的持续游玩仍需验证。
+- 声音由电脑播放，暂不传输到手机。性能统计中的 RTT 不代表触控到画面的完整延迟。
 
-<details>
-<summary>技术架构概览</summary>
+曾安装开发签名 APK 的设备无法直接覆盖安装此发布签名版本；请先记录设置，再自行卸载旧包并安装。卸载会清除应用设置。后续发行版将沿用同一发布签名。
 
-```mermaid
-flowchart LR
-  Game[In Falsus] --> Capture[Windows Graphics Capture]
-  Capture --> Encoder[H.264 编码]
-  Encoder -- USB --> Screen[Android 解码与显示]
-  Touch[Android 多点触控] -- USB --> Host[Windows Host]
-  Host --> Input[SendInput]
-  Input --> Game
-```
-
-输入与视频使用独立通道。详细约定见 [输入协议](protocol/INPUT_PROTOCOL.md) 和 [视频协议](protocol/VIDEO_PROTOCOL.md)。
-
-</details>
+使用与校准见 [设置说明](docs/SETTINGS.md)。参与开发可从 [开发指南](docs/DEVELOPMENT.md) 和 [架构说明](ARCHITECTURE.md) 开始。

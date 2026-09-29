@@ -1,179 +1,111 @@
 # 开发指南
 
-界面使用 Flutter Material 3，Android 触控和视频由原生 Kotlin 处理；
-Windows Host 使用 C++20 / Win32。模块和线程职责见 [架构说明](../ARCHITECTURE.md)。
+项目使用 Flutter Material 3、原生 Kotlin 和 C++20，职责见 [架构说明](../ARCHITECTURE.md)。普通玩家直接使用 [发行包](https://github.com/Cedarflake/InFalsusTouch/releases)，无需以下环境。
 
-## 准备环境
+## 环境与构建
 
-- Windows 11。
-- Visual Studio 2022 Build Tools：Desktop development with C++、Windows SDK、CMake。
-- JDK 17 或 21；项目使用 Gradle 8.11.1、Android Gradle Plugin 8.9.2、Kotlin 2.1.20。
+- Windows 11；Visual Studio 2022 C++ Build Tools、Windows SDK、CMake。
+- JDK 17 或 21；Gradle 8.11.1、Android Gradle Plugin 8.9.2、Kotlin 2.1.20。
 - Android SDK Platform 35、Build Tools 35.0.0、platform-tools。
-- Flutter 3.44.x / Dart 3.12.2 及以上（以 `pubspec.yaml` 为准）。
+- Flutter 3.44.x，Dart 版本以 `pubspec.yaml` 为准。
 - 集成测试使用 `uv` 管理的 Python 3.13。
 
-在项目根目录的 PowerShell 中运行：
+在 `android/local.properties` 配置 `sdk.dir`，将 Flutter 加入 PATH。可选的 `scripts/bootstrap-android.ps1 -AcceptAndroidSdkLicense` 会安装项目内工具并接受 SDK 许可。
+
+在项目根目录运行：
 
 ```powershell
-# 已有 Android SDK 时，直接在 android/local.properties 中配置 sdk.dir。
-# 此可选脚本接受 Android SDK 许可，将工具安装到项目内 .tools。
-.\scripts\bootstrap-android.ps1 -AcceptAndroidSdkLicense
-
 flutter pub get
 .\scripts\build-windows.ps1
 .\scripts\build-android.ps1
 ```
 
-Android 构建脚本使用已缓存的 Flutter 依赖。Windows 脚本构建 Release 并运行 CTest；
-Android 脚本运行 Flutter 分析、界面测试、Kotlin 测试和 lint，然后生成 debug APK。
-先构建 Windows 时，Android 测试会额外启动真实 Host 的 dry-run 模式，
-验证 Kotlin/C++ 握手、六押、Field、断线释放与重连。
+Windows 脚本构建 Release 并运行 CTest，输出 `dist/InFalsusTouchHost.exe` 及配套 ADB。已有 Host 正在使用该文件时，可用 `-SkipDistCopy` 仅更新构建目录。
 
-产物是 `dist/InFalsusTouchHost.exe` 和 `dist/InFalsusTouch.apk`。
-APK 使用开发签名。SDK、依赖缓存与构建输出不提交到 Git。
-Java 临时套接字目录由脚本设在项目内，只对当前进程生效。
-
-性能测量使用 Flutter AOT 的 profile 构建，避免将调试模式的 JIT 和额外检查
-混入发布性能结论，见 [Flutter 性能测量指南](https://docs.flutter.dev/perf/ui-performance)。
-它保留开发签名和诊断能力，不是正式发布包：
+Android 脚本使用已缓存的 Flutter 依赖，Gradle 按需下载依赖，串行运行 Flutter 分析与测试、Kotlin 测试及 lint。缓存完整后可加 `-Offline` 离线构建。默认输出开发签名的 `dist/InFalsusTouch.apk`。版本统一读取 `pubspec.yaml`。
 
 ```powershell
 .\scripts\build-android.ps1 -Mode profile -DeviceTests
-uv run --python 3.13 tests/video-device.py --build-mode profile
-uv run --python 3.13 tests/video-device.py --build-mode profile --lifecycle-cycles 3 --skip-install
-uv run --python 3.13 tests/video-composition.py --build-mode profile --probe surface-hints --fps 120 --skip-install
 ```
 
-产物 `dist/InFalsusTouch-profile.apk` 与调试 APK 分开保存。两个包使用相同应用 ID，
-可以覆盖安装并保留设置。视频测试会安装对应的应用与测试包，核对实际构建模式，
-并在结果中记录模式；`--skip-install` 同样要求手机上的包与所选模式一致。
+profile 模式使用 Flutter AOT，输出 `dist/InFalsusTouch-profile.apk`，用于性能和设备调试。它与 debug 包使用同一开发签名；二者均不作为 GitHub 发行包。
 
-## 测试
+## 自动化与实机验证
 
 ```powershell
-uv run --python 3.13 tests/tcp-integration.py --host dist/InFalsusTouchHost.exe
+uv run --python 3.13 tests/tcp-integration.py --host build/windows/windows/Release/InFalsusTouchHost.exe
 uv run --python 3.13 tests/multiplayer-integration.py
 uv run --python 3.13 tests/profile-integration.py
-
-# 安装应用及测试 APK，使用 dry-run Host 验证真机 USB 输入。
 .\scripts\test-device.ps1
+```
 
-# 仅验证原生触控、USB 输入与设置迁移，不操作设置页面。
-.\scripts\test-device.ps1 -SkipBuild -InputOnly
+先构建 Windows 后，Android 测试还会通过真实 Host 的 dry-run 模式验证 Kotlin/C++ 互通。常规集成测试不会向游戏注入输入。
 
-# 使用项目自己的 Direct3D 测试窗口验证视频，不注入游戏输入。
+视频测试使用项目自带的 Direct3D 窗口：
+
+```powershell
 uv run --python 3.13 tests/video-integration.py
-uv run --python 3.13 tests/video-integration.py --resolution 1080p --seconds 10 --min-fps 58
 uv run --python 3.13 tests/video-recovery.py
-.\scripts\build-android.ps1 -DeviceTests
-uv run --python 3.13 tests/video-device.py
-uv run --python 3.13 tests/video-device.py --resolution 1080p --skip-install
+uv run --python 3.13 tests/video-device.py --build-mode profile
+uv run --python 3.13 tests/video-device.py --build-mode profile --lifecycle-cycles 3 --skip-install
 uv run --python 3.13 tests/multiplayer-video.py
 ```
 
-视频测试使用与目标分辨率一致的原生 Direct3D 窗口，并核对接收端分辨率。
-每次结果保存在 `build/video-test/` 或 `build/video-device-test/` 下带分辨率与时间的子目录。
-`--skip-install` 仅用于手机已经安装本次构建的应用与测试 APK 时。
-PC 视频测试另存 `frame-timestamps.csv`，并统计采集、发送、接收的帧间隔；
-这些间隔用于检查送帧是否均匀，不代表端到端延迟。
+恢复测试需要 ffmpeg。`--skip-install` 仅在设备已安装对应应用和测试 APK 时使用。设备测试可能重建 Activity、切换后台及重建 Surface，不应在正在游玩时运行。结果保存在忽略的 `build/` 目录。
 
-`--lifecycle-cycles 3` 使用 720p60，重复三轮 Activity 重建、后台返回和视频 Surface 重建。
-每次持有六键及 Field，恢复后发送旧触点的移动和抬起，再由 Host 核对按键释放与无旧输入重放。
-结果保存各阶段的恢复时间、输入与视频工作线程数，以及进程套接字、文件描述符和编解码线程快照。
-工作线程会检查清理及重复创建；其余资源计数用于对照分析，不代表完整内存泄漏检测。
-测试结束会核对原设置及 ADB 映射，并重新打开应用；自动连接仍遵循原设置。
+检查间歇性卡顿时，使用帧间隔采样；默认采集测试窗口，`--window` 可指定 `InFalsusTouchHost.exe --list` 列出的游戏窗口句柄：
 
-进一步定位 Android 显示等待时，可在同一次 USB 测试中采集 Perfetto：
+```powershell
+uv run --python 3.13 tests/video-cadence.py --fps 120 --seconds 60 --skip-install
+uv run --python 3.13 tests/video-cadence.py --fps 120 --seconds 60 --skip-install --window <窗口句柄>
+```
+
+该测试使用已安装的 profile 应用和测试 APK，不发送游戏输入。它分别记录接收、解码和呈现的最大间隔、每秒帧率及解码链恢复次数，结束后恢复连接与应用设置。
+
+进一步分析帧时间可用：
 
 ```powershell
 uv run --python 3.13 tests/video-system-trace.py --fps 60 --build-mode profile --skip-install
 uv run --python 3.13 tests/analyze-video-trace.py build/video-system-trace/<本次目录> --processor <trace_processor_shell.exe路径>
-uv run --python 3.13 tests/test-video-trace-analysis.py
 ```
 
-采集脚本默认使用 profile 包，省略 `--skip-install` 时先安装对应应用与测试包。
-跟踪最长 60 秒，保存在手机本地，测试后取回；原视频测试的失败退出码会保留。
-结果包含测试日志、跟踪配置、设置恢复核对和电池状态。采集完成后重新打开应用，
-是否自动连接遵循原设置。
-跟踪有额外开销，不能拿其吞吐量替代关闭跟踪时的性能验收。
+跟踪有额外开销，不能将其吞吐量作为关闭跟踪后的性能结论。电脑和手机时钟不能直接相减；帧呈现回调不代表物理屏幕发光时间。
 
-分析使用 [Perfetto 官方 Trace Processor](https://perfetto.dev/docs/reference/trace-processor-cli)。
-本次验证版本为 v58.2，Windows x64 程序的 SHA-256 为
-`adfa6bad3d72be3ba9b83fa2b17b69fa13b3ab1cad0f42e52b86188bd5f0f997`；
-工具放在忽略目录 `.tools/perfetto/trace_processor_shell.exe` 时可省略 `--processor`。
-脚本保留 SQL、原始事件 CSV、完整帧 CSV 和 `analysis.json`，按同一图层与帧号匹配
-Queue、Latch、PresentFenceSignaled。三段延迟只统计完整且顺序正确的同一批帧，
-缺失事件单独计数；呈现围栏仍是系统时间戳，不是物理屏幕测量。
+带有 `native-input`、`game-input`、`game-field` 名称的工具及 `tests/direct-field-game.py` 会发送实际输入，运行前必须核对目标窗口。合成 MotionEvent 无法证明真实多指或完整谱面表现，实机检查见 [验收清单](../tests/manual-acceptance.md)。
 
-`video-recovery.py` 需要 `ffmpeg`，使用独立 PC 端口和自己的后台测试窗口验证
-缩放、比例变化、最小化恢复及视频重连。它检查实际解码颜色、居中留边、画面运动
-和持续输入心跳，不修改手机 USB 转发，也不向游戏发送输入。
+## 发布
 
-常规自动化使用 dry-run 输入接收端。`native-input`、`game-input` 和 `game-field`
-验收工具会向指定前台窗口发送实际输入，运行前应核对目标窗口。
-`tests/direct-field-game.py --window 0xHANDLE` 验证新版绝对 Field：重复落点、
-立即抬手和每秒 120 次连续目标更新。它仅支持已校验的游戏版本，读取游戏状态
-但不写入内存，要求正常谱面在前台且鼠标锁定。详情见 [Field 调查](FIELD-MAPPING.md)。
-真机测试注入的 MotionEvent 是合成事件，不能证明物理七指能力或完整谱面的操作效果。
+发布 Android 包必须使用独立签名，通过当前进程的环境变量提供：
 
-RTT 是控制协议往返耗时，视频统计是各个处理阶段的测量；
-两端时钟未经同步，不能直接相减或当作屏幕端到端延迟。
-当前结果见 [STATUS](STATUS.md)，待测项目见 [实机验收清单](../tests/manual-acceptance.md)。
+| 变量 | 内容 |
+| --- | --- |
+| `IFT_SIGNING_STORE_FILE` | 发布密钥库绝对路径 |
+| `IFT_SIGNING_STORE_PASSWORD` | 密钥库密码 |
+| `IFT_SIGNING_KEY_ALIAS` | 密钥别名 |
+| `IFT_SIGNING_KEY_PASSWORD` | 密钥密码 |
 
-## 连接与运行排查
-
-- `adb devices -l` 应显示 `device`；`unauthorized` 需要在手机上确认授权。
-- Host 自动为已授权的 USB 手机建立视频端口 27183、输入端口 27184 的转发，
-  并在转发丢失或 ADB 重启后重新建立。手机仍需启用自动连接；底层 USB 设备不可用时无法恢复。
-  分发时保留 `dist/platform-tools`，其中包含构建脚本复制的 ADB、DLL 和许可证。
-- Host 自行启动 ADB 时默认使用 Windows 原生 USB 后端（`ADB_USB_LEGACY=1`），
-  避免本机在 37.0.1 新后端下反复发生的 USB 读取中断。它不会重启已有 ADB 服务，
-  也不会改写系统环境变量；显式设置该变量时尊重用户选择。
-  该兼容选项见 [Android 平台工具版本说明](https://developer.android.com/tools/releases/platform-tools)。
-- `setup-adb.ps1` 仍支持 `-Serial`、`-AdbPath`、`-AllDevices` 和 `-Install`。
-  需要外部工具管理端口时使用 Host 的 `--no-usb`；自动恢复不会覆盖映射到其他 Host 的端口。
-- 电脑需支持 Windows Graphics Capture 和同一 GPU 上的 D3D11 硬件 H.264 编码器，
-  手机需支持目标分辨率与帧率的硬件 H.264 解码器。不支持时会报错，不静默改用软件编解码。
-- 同时六押和操作 Field 需要至少七个触点，实际触点上限取决于手机硬件。
-- 如果第三指按下或滑动时所有按键一起松开，检查手机的“三指滑动截屏”快捷手势。
-  本次小米手机实测中，用户关闭该手势后，两指按住地键、第三指滑动 Field 恢复正常。
-  即使没有出现截屏界面，系统也可能已经抢走触控；是否关闭由用户在系统设置中决定。
-- Host 与游戏应使用相同权限等级。Host 只向选定的前台游戏窗口发送输入。
-- 使用英语（美国）键盘布局。中文输入法切到英文输入模式，仍可能被 Shift 切回中文。
-- Host 和 APK 必须一起更新；当前输入协议为 v2，不接受 v1 客户端。
+不要将密钥、密码或签名配置提交到仓库。版本及 Android versionCode 在 `pubspec.yaml` 更新；正式升级必须保留签名并递增 versionCode。
 
 ```powershell
-.\dist\InFalsusTouchHost.exe --list
-.\dist\InFalsusTouchHost.exe --title "In Falsus"
-.\dist\InFalsusTouchHost.exe --video-diagnostics
-.\dist\InFalsusTouchHost.exe --no-video
-.\dist\InFalsusTouchHost.exe --resolution 1080p --fps 60 --bitrate 12000000
+.\scripts\build-windows.ps1 -SkipDistCopy
+.\scripts\build-android.ps1 -Mode release
+.\scripts\package-release.ps1
 ```
 
-`--window` 可精确选择窗口，句柄应取自本次 `--list` 输出。
-视频默认 720p60 / 8 Mbps / H.264 Baseline / 半秒 GOP，仅捕获所选窗口客户区。
-手机的 120 Hz 显示偏好与视频帧率相互独立，实际刷新率由设备和系统决定。
-配置文件、视频选项和 Field 校准见 [设置文档](SETTINGS.md)。
+release 模式运行同样的源码检查，启用 Flutter AOT 与 Android release 构建，并输出 `dist/InFalsusTouch-release.apk`。打包脚本验证签名、版本、ABI 和非调试属性，使用本次 Windows 构建产物，生成 APK、Windows x64 ZIP 和 SHA-256 校验文件。
 
-## 多设备与键位同步
+真机检查发行模式时，可用 `tests/release-smoke.init.gradle` 作为 Gradle init script 构建临时应用，应用 ID 为 `dev.cedarflake.iftreleasecheck`。它沿用 release 优化与签名配置，独立验证启动、设置和 USB 视频，避免替换正在使用的应用。该临时包不作为发行资产；打包脚本只接受正式应用 ID。
 
-一个 Host 最多接收 7 台设备，所有设备共享一次游戏窗口采集和编码。
-每台设备可以选择任意操作，包括只看画面，不要求合计覆盖所有按键。
-共同按住同一键时，最后一台设备松手才抬键；断开只释放本设备的输入。
-Field 由先触摸的设备持有，松手后交给等待中的设备。
+维护者本机的首次发布密钥保存在 `%LOCALAPPDATA%\InFalsusTouch\release-signing`，密码凭据由当前 Windows 用户保护；它不是仓库内容。发布前应妥善备份密钥及可恢复的密码，不能只复制受当前用户保护的凭据文件到另一台机器。后续更新必须复用同一密钥。
 
-Host 只读监测 `%USERPROFILE%/AppData/LocalLow/lowiro/infalsus/userV2.prefs`，
-同步游戏保存的六轨键名和扫描码，不修改存档。
-当前支持已观察到的 `keybind_state=0` 键盘绑定；未知键或其他绑定状态会暂停输入。
-`--bindings PATH` 指定配置位置，`--no-key-sync` 使用默认键位。
-绑定变更时先释放旧键，并要求新的触摸按下。
+确认测试及资产后，以对应提交建立 `v版本号` 标签，在 GitHub 创建发布。预览版本标记为 prerelease，发行说明使用中文。开发签名包不能直接覆盖安装发布签名包，不要在验证过程中擅自卸载用户设备上的旧应用。
 
-正常断连会释放对应设备的按键；静默断线使用约 500 ms 的心跳超时，加上系统调度开销。
-强制杀进程或系统崩溃不保证执行清理。协议只面向本机和已授权 USB 设备，没有额外身份认证。
+## 维护约定
 
-## 进一步阅读
+- 使用 Conventional Commits，英文摘要不超过 20 个单词。
+- 保持输入与视频分离，输入状态必须在失焦、取消、断线时释放。
+- 不提交 SDK、构建缓存、安装包、诊断日志、密钥或游戏资源。
+- 修改协议需同步 Android、Host、协议文档和测试向量。
+- 不把模拟测试、平均帧率或局部延迟当作实机游玩验收。
 
-- [输入协议](../protocol/INPUT_PROTOCOL.md)
-- [视频协议](../protocol/VIDEO_PROTOCOL.md)
-- [原始需求](requirements.md)
-- [架构说明](../ARCHITECTURE.md)
+[输入协议](../protocol/INPUT_PROTOCOL.md) · [视频协议](../protocol/VIDEO_PROTOCOL.md)
