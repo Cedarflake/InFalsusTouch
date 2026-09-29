@@ -40,5 +40,22 @@ class FrameCorrelationTest(unittest.TestCase):
         self.assertIsNone(analysis.distribution([]))
 
 
+class CadenceTest(unittest.TestCase):
+    def test_duplicates_do_not_inflate_rate_or_hide_a_missed_interval(self):
+        result = analysis.cadence([32_000_000, 8_000_000, 0, 8_000_000, 24_000_000])
+        self.assertEqual(5, result["events"])
+        self.assertEqual(4, result["uniqueTimestamps"])
+        self.assertAlmostEqual(93.75, result["uniqueEventRateHz"])
+        self.assertEqual(3, result["intervals"]["samples"])
+        self.assertEqual(8, result["intervals"]["medianMs"])
+        self.assertEqual(16, result["intervals"]["p95Ms"])
+
+    def test_insufficient_events_do_not_claim_zero_delay_or_a_frame_rate(self):
+        for timestamps in ([], [10], [10, 10]):
+            result = analysis.cadence(timestamps)
+            self.assertIsNone(result["intervals"])
+            self.assertIsNone(result["uniqueEventRateHz"])
+
+
 if __name__ == "__main__":
     unittest.main()

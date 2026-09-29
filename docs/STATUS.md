@@ -535,6 +535,63 @@ Evidence: `build/async-codec-baseline/video-60/` and, under
 `candidate-120-20260929T002741916259Z/` and
 `candidate-1080p60-20260929T003117081032Z/`.
 
+### Presentation cadence experiments, 2026-09-29
+
+A fresh trace of the callback-driven decoder matched 1346 complete presentations
+from 1807 queued buffers over its 16.40-second analysis window. Queue-to-present
+averaged 15.75 ms, including 11.48 ms after latch. Queue interval P5/median/P95
+was approximately 1.83/7.53/16.81 ms; complete presentation intervals were
+approximately 8.20/8.27/16.57 ms. Burst delivery and missed refresh intervals
+remain visible. Missing frame events are not counted as physical drops.
+
+Two presentation candidates were built and tested, then **reverted**:
+
+| 720p120 candidate, untraced | Receive / decode FPS | Present callbacks/s | Receive to callback timestamp mean / P95 |
+| --- | --- | --- | --- |
+| Zero render timestamp | 119.99 / 119.91 | 90.36 | 29.72 / 34.76 ms |
+| Choreographer release, at most two decoded frames waiting | 119.96 / 119.96 | 89.69 | 37.66 / 46.33 ms |
+
+Both steady intervals lasted 14.04 seconds; latency uses each run's final 240
+matched callbacks. Neither passed the unchanged >=110 presentation gate. The
+second candidate added waiting without achieving the required throughput.
+Decoded colors, settings/calibration interaction and reconnect completed; separate
+inspection of both saved Host traces confirmed six balanced key holds and exactly
+the expected +600/-300 relative Field deltas. All device preferences and ADB mappings
+were restored. No physical gameplay improvement is inferred from these tests.
+
+The zero-timestamp experiment follows an alternative in
+[Moonlight's renderer](https://github.com/moonlight-stream/moonlight-android/blob/master/app/src/main/java/com/limelight/binding/video/MediaCodecDecoderRenderer.java).
+It is not a general way to disable SurfaceView frame loss: Android documents
+[excess-frame dropping for View surfaces](https://developer.android.com/reference/android/media/MediaCodec#using-an-output-surface).
+The synchronization candidate used the callback thread's Choreographer and one
+submission per consumed pulse; its timestamp was not corrected for the display's
+1 ms app-vsync offset. This tests that implementation, not all possible pacing policies.
+
+The latter candidate's trace recorded 2463 Choreographer callback entries at
+120.97/s over a 20.35-second callback span. Entry interval P95 was 9.89 ms, so
+the trace does not prove every deadline was met. In the separate 20.36-second
+buffer window, 1356 of 1765 queued buffers had complete presentation chains.
+A nearby display dump reported 120 Hz rendering and no frame-rate overrides.
+These observations do not support a fixed 90 FPS application cap in this run.
+The buffer window includes interaction/recovery and must not be compared directly
+with the test's 14.04-second steady FPS interval. Tracing also adds overhead.
+Import diagnostics retained one/eight negative-timestamp drops for the baseline/
+paced trace respectively, and 35 ftrace setup notices each.
+
+`analyze-video-trace.py` now retains queue/presentation interval distributions and
+per-thread Choreographer callback entry cadence, together with the raw callback
+CSV/SQL. Duplicate timestamps cannot inflate these rates; missing/single events
+report no interval or rate. All four analysis regression tests passed.
+The previously verified profile APK was reinstalled and its SHA-256 matched
+the restored delivery file. Production decoder code and the default 60 FPS profile
+remain at the callback-driven implementation above.
+
+Evidence under `build/async-codec-test/`: `sequential-120-20260929T004334913441Z/`
+and `paced-120-20260929T005153962140Z/`. Traces under `build/video-system-trace/`:
+`120fps-profile-20260929T003904916026Z/` and `120fps-profile-20260929T005343760156Z/`.
+The display snapshot is `build/paced-display-state.txt`; discarded source patches
+and APKs are retained under `build/surface-sequential-*` and `build/surface-paced-*`.
+
 ### PC window recovery, 2026-09-29
 
 `tests/video-recovery.py` controls only its own background D3D test window and

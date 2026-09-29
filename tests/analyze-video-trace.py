@@ -23,6 +23,18 @@ def distribution(values):
             "p95Ms": ordered[math.ceil(len(ordered) * 0.95) - 1], "maxMs": ordered[-1]}
 
 
+def cadence(timestamps):
+    ordered = sorted(set(timestamps))
+    intervals = [(last - first) / 1e6 for first, last in zip(ordered, ordered[1:])]
+    summary = distribution(intervals)
+    if summary is not None:
+        summary["p5Ms"] = sorted(intervals)[math.ceil(len(intervals) * 0.05) - 1]
+        summary["medianMs"] = statistics.median(intervals)
+    span = (ordered[-1] - ordered[0]) / 1e9 if len(ordered) > 1 else 0.0
+    return {"events": len(timestamps), "uniqueTimestamps": len(ordered), "spanSeconds": span,
+            "uniqueEventRateHz": (len(ordered) - 1) / span if span else None, "intervals": summary}
+
+
 def match_frames(events, start, end):
     frames = {}
     for event in events:
@@ -89,12 +101,23 @@ ORDER BY ts""")
         raise ValueError("No video buffer events in the codec window; enable android.surfaceflinger.frame")
     layer = max(layer_counts, key=layer_counts.get)
     counts, matched = match_frames([event for event in events if event["layer_name"] == layer], start, end)
+    queued = [int(event["ts"]) for event in events if event["layer_name"] == layer and
+              event["name"] == "Queue" and start <= int(event["ts"]) < end]
     with (directory / "matched-video-frames.csv").open("w", newline="", encoding="utf-8") as output:
         writer = csv.DictWriter(output, fieldnames=("layer", "frame", "queueNs", "latchNs", "presentNs",
                                                    "queueToLatchMs", "latchToPresentMs", "queueToPresentMs"))
         writer.writeheader()
         writer.writerows(matched)
     upid = int(session["upid"])
+    pulse_events = query("choreographer-events", f"""SELECT t.tid,t.name thread,s.ts,s.dur,s.name
+FROM slice s JOIN thread_track tr ON tr.id=s.track_id JOIN thread t USING(utid)
+WHERE t.upid={upid} AND s.name LIKE 'Choreographer#doFrame%' AND s.ts>={start} AND s.ts<{end}
+ORDER BY s.ts""")
+    pulse_threads = {}
+    for event in pulse_events:
+        pulse_threads.setdefault((int(event["tid"]), event["thread"]), []).append(int(event["ts"]))
+    pulses = [{"tid": tid, "thread": name, **cadence(timestamps)}
+              for (tid, name), timestamps in sorted(pulse_threads.items())]
     scheduling = query("video-runnable-waits", f"""WITH spans AS (
 SELECT t.tid,t.name,st.state,MIN(st.ts+st.dur,{end})-MAX(st.ts,{start}) dur
 FROM thread_state st JOIN thread t USING(utid)
@@ -114,11 +137,16 @@ FROM values_in_time WHERE next_ts>{start} GROUP BY id,value""")
               "queueToLatch": distribution([frame["queueToLatchMs"] for frame in matched]),
               "latchToPresent": distribution([frame["latchToPresentMs"] for frame in matched]),
               "queueToPresent": distribution([frame["queueToPresentMs"] for frame in matched]),
+              "queueCadence": cadence(queued),
+              "completePresentCadence": cadence([frame["presentNs"] for frame in matched]),
+              "choreographerCallbacks": pulses,
               "schedulingWaits": scheduling, "displayWorkDurations": budgets,
               "limitations": ["Tracing adds overhead; this is not an untraced throughput benchmark",
                               "PresentFenceSignaled is an OS timestamp, not a physical screen measurement",
                               "All three latency distributions use the same complete buffer frames",
-                              "Missing Latch/Present events stay missing; they are not zero latency"]}
+                              "Missing Latch/Present events stay missing; they are not zero latency",
+                              "Cadence uses distinct timestamps; missing events can lengthen observed gaps",
+                              "Choreographer callback entry cadence is not physical screen refresh"]}
     (directory / "analysis.json").write_text(json.dumps(result, indent=2), encoding="utf-8")
     if not matched:
         raise ValueError("No complete video frame chains were matched")
